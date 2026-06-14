@@ -1,0 +1,42 @@
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Open Sans", system-ui, sans-serif;
+  background: #f8f9fa;
+  color: #1a1a1a;
+}
+
+.btn-primary {
+  @apply bg-edeka-blue text-white px-6 py-3 rounded-lg font-semibold
+    hover:bg-edeka-darkblue transition-colors duration-200;
+}
+
+.btn-primary:disabled {
+  @apply bg-gray-400 cursor-not-allowed hover:bg-gray-400;
+}
+
+.btn-secondary {
+  @apply bg-edeka-yellow text-edeka-blue px-6 py-3 rounded-lg font-bold
+    hover:brightness-90 transition-colors duration-200;
+}
+
+.btn-secondary:disabled {
+  @apply bg-gray-300 text-gray-500 cursor-not-allowed hover:brightness-100;
+}
+
+.card {
+  @apply bg-white rounded-xl shadow-md p-6;
+}
+
+.input-field {
+  @apply w-full px-4 py-3 border border-gray-300 rounded-lg
+    focus:ring-2 focus:ring-edeka-blue focus:border-transparent outline-none;
+}
+
+.input-field:disabled {
+  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+}
