@@ -1,10 +1,13 @@
-import os
+import os, sys
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
 
 def _is_vercel() -> bool:
     return os.environ.get("VERCEL") == "1"
+
+
+_APP_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
@@ -18,21 +21,33 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
 
-    base_dir: Path = Path(__file__).resolve().parent.parent
+    @property
+    def base_dir(self) -> Path:
+        if getattr(sys, "frozen", False):
+            return Path(sys._MEIPASS)
+        return _APP_DIR.parent
 
     @property
     def output_dir(self) -> Path:
-        p = Path("/tmp/output") if _is_vercel() else self.base_dir / "output"
+        if _is_vercel():
+            p = Path("/tmp/output")
+        elif getattr(sys, "frozen", False):
+            p = self.base_dir / "output"
+        else:
+            p = self.base_dir / "output"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
     @property
     def assets_dir(self) -> Path:
-        return self.base_dir / "assets"
+        return _APP_DIR / "assets"
 
     @property
     def backgrounds_dir(self) -> Path:
-        p = Path("/tmp/backgrounds") if _is_vercel() else self.base_dir / "assets" / "backgrounds"
+        if _is_vercel():
+            p = Path("/tmp/backgrounds")
+        else:
+            p = self.assets_dir / "backgrounds"
         p.mkdir(parents=True, exist_ok=True)
         return p
 

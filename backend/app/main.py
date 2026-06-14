@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,10 @@ async def health_check():
     return {"status": "ok", "model": settings.openrouter_model}
 
 
-frontend_static = Path(__file__).resolve().parent.parent.parent / "frontend" / "out"
+if getattr(sys, "frozen", False):
+    base_dir = Path(sys._MEIPASS)
+else:
+    base_dir = Path(__file__).resolve().parent.parent.parent
+frontend_static = base_dir / "frontend" / "out"
 if frontend_static.exists():
     app.mount("/", StaticFiles(directory=str(frontend_static), html=True), name="frontend")

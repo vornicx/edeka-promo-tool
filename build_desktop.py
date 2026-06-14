@@ -1,85 +1,83 @@
 #!/usr/bin/env python3
 """
-Build script for EDEKA Promo Tool desktop executable.
-Run from project root: python build_desktop.py
+Build EDEKA Promo Tool desktop executable (.exe).
+Run: python build_desktop.py
+
+Requires Docker installed.
 """
 
-import subprocess
-import sys
-import shutil
+import subprocess, sys, shutil
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-DIST_DIR = PROJECT_ROOT / "dist"
-FRONTEND_DIR = PROJECT_ROOT / "frontend"
-BACKEND_DIR = PROJECT_ROOT / "backend"
+ROOT = Path(__file__).resolve().parent
+FRONTEND = ROOT / "frontend"
+BACKEND = ROOT / "backend"
+DIST = ROOT / "dist"
 
 
 def build_frontend():
     print("=== Building frontend (Next.js static export) ===")
     result = subprocess.run(
-        ["npm", "run", "build"],
-        cwd=str(FRONTEND_DIR),
-        capture_output=True,
-        text=True,
+        ["npm", "run", "build"], cwd=str(FRONTEND), capture_output=True, text=True
     )
     if result.returncode != 0:
-        print("Frontend build failed:")
-        print(result.stderr)
+        print("FAILED:", result.stderr)
         sys.exit(1)
-    print("Frontend build OK")
-    out_dir = FRONTEND_DIR / "out"
-    if not out_dir.exists():
-        print("ERROR: frontend/out/ not found after build")
-        sys.exit(1)
-    return out_dir
+    print("OK")
+    return FRONTEND / "out"
 
 
-def build_exe(frontend_out: Path):
-    print("=== Building executable with PyInstaller ===")
-    dist_dir = PROJECT_ROOT / "dist"
-    if dist_dir.exists():
-        shutil.rmtree(dist_dir)
+def build_exe():
+    print("=== Building Windows .exe (Docker PyInstaller) ===")
+    if DIST.exists():
+        shutil.rmtree(DIST)
 
-    cmd = [
-        "pyinstaller",
-        "--onefile",
-        "--name", "edeka-promo-tool",
-        "--add-data", f"{frontend_out}{':' if sys.platform != 'win32' else ';'}frontend/out",
-        "--add-data", f"{BACKEND_DIR / 'app' / 'assets'}{':' if sys.platform != 'win32' else ';'}app/assets",
-        "--hidden-import", "openai",
-        "--hidden-import", "PIL",
-        "--hidden-import", "PIL._imagingft",
-        "--hidden-import", "pydantic",
-        "--hidden-import", "pydantic_settings",
-        "--hidden-import", "httpx",
-        "--hidden-import", "uvicorn",
-        "--hidden-import", "uvicorn.logging",
-        "--hidden-import", "uvicorn.loops",
-        "--hidden-import", "uvicorn.loops.auto",
-        "--hidden-import", "uvicorn.protocols",
-        "--hidden-import", "uvicorn.protocols.http",
-        "--hidden-import", "uvicorn.protocols.http.auto",
-        "--hidden-import", "uvicorn.protocols.websockets",
-        "--hidden-import", "uvicorn.protocols.websockets.auto",
-        "--hidden-import", "uvicorn.middleware",
-        "--hidden-import", "fastapi",
-        "--collect-all", "app",
-        str(BACKEND_DIR / "run.py"),
+    data = [
+        f"{ROOT / 'frontend' / 'out'}{';'}frontend{';'}out",
+        f"{BACKEND / 'app' / 'assets'}{';'}app{';'}assets",
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(PROJECT_ROOT))
+    hidden = [
+        "openai", "PIL", "PIL._imagingft",
+        "pydantic", "pydantic_settings",
+        "httpx", "uvicorn", "uvicorn.logging",
+        "uvicorn.loops", "uvicorn.loops.auto",
+        "uvicorn.protocols", "uvicorn.protocols.http",
+        "uvicorn.protocols.http.auto",
+        "uvicorn.protocols.websockets",
+        "uvicorn.protocols.websockets.auto",
+        "uvicorn.middleware",
+        "fastapi",
+    ]
+
+    cmd = [
+        "docker", "run", "--rm",
+        "-v", f"{ROOT}:/src",
+        "-w", "/src",
+        "marcelotduarte/pyinstaller-windows:python3.12",
+        "pyinstaller", "--onefile", "--name", "edeka-promo-tool",
+    ]
+    for d in data:
+        cmd += ["--add-data", d]
+    for h in hidden:
+        cmd += ["--hidden-import", h]
+    cmd += ["--collect-all", "app", "backend/run.py"]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print("PyInstaller failed:")
-        print(result.stderr)
+        print("FAILED:", result.stderr)
         sys.exit(1)
     print(result.stdout)
-    print("Executable created in dist/edeka-promo-tool.exe")
+    exe = DIST / "edeka-promo-tool.exe"
+    if exe.exists():
+        print(f"SUCCESS: {exe}")
+    else:
+        print("WARNING: .exe not found")
 
 
 def main():
-    frontend_out = build_frontend()
-    build_exe(frontend_out)
+    build_frontend()
+    build_exe()
     print("=== DONE ===")
 
 
