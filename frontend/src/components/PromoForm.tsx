@@ -90,14 +90,14 @@ export default function PromoForm({ onCreated }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card space-y-6">
-      <div className="flex items-center gap-3 pb-2 border-b-2 border-edeka-blue/10">
+    <form onSubmit={handleSubmit} className="glass-card-strong space-y-6">
+      <div className="flex items-center gap-3 pb-2 border-b border-white/40">
         <div className="w-10 h-10 rounded-xl bg-edeka-blue/10 flex items-center justify-center">
           <svg className="w-5 h-5 text-edeka-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
         </div>
-        <h2 className="text-xl font-extrabold text-edeka-blue">Nueva Promoción</h2>
+        <h2 className="text-xl font-extrabold text-edeka-blue drop-shadow-sm">Nueva Promoción</h2>
       </div>
 
       <div className="space-y-3">
@@ -256,8 +256,8 @@ export default function PromoForm({ onCreated }: Props) {
                   onClick={() => update("format", f.value)}
                   className={`p-3 rounded-xl border-2 text-left transition-all duration-200 ${
                     form.format === f.value
-                      ? "border-edeka-blue bg-edeka-lightblue shadow-sm ring-1 ring-edeka-blue/20"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? "border-edeka-blue/50 bg-edeka-lightblue/60 backdrop-blur-sm shadow-sm ring-1 ring-edeka-blue/20"
+                      : "border-white/40 bg-white/30 backdrop-blur-sm hover:bg-white/50 hover:border-white/60"
                   }`}
                 >
                   <div className="text-sm font-bold">{f.label}</div>
@@ -276,8 +276,8 @@ export default function PromoForm({ onCreated }: Props) {
                   onClick={() => update("tone", t.value)}
                   className={`p-3 rounded-xl border-2 text-left transition-all duration-200 ${
                     form.tone === t.value
-                      ? "border-edeka-blue bg-edeka-lightblue shadow-sm ring-1 ring-edeka-blue/20"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? "border-edeka-blue/50 bg-edeka-lightblue/60 backdrop-blur-sm shadow-sm ring-1 ring-edeka-blue/20"
+                      : "border-white/40 bg-white/30 backdrop-blur-sm hover:bg-white/50 hover:border-white/60"
                   }`}
                 >
                   <div className="text-sm font-bold">{t.label}</div>
@@ -290,7 +290,7 @@ export default function PromoForm({ onCreated }: Props) {
       </div>
 
       {error && (
-        <div className="animate-shake bg-red-50 border-2 border-red-200 rounded-xl p-4 text-red-700 text-sm font-medium flex items-center gap-3">
+        <div className="animate-shake glass-strong border-red-300/40 text-red-700 text-sm font-medium flex items-center gap-3 p-4 rounded-xl">
           <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
           </svg>

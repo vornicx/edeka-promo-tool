@@ -52,17 +52,17 @@ function ToastItem({ item, onDismiss }: { item: ToastItem; onDismiss: (id: strin
 
   const colorMap = {
     success: {
-      bg: "bg-green-50 border-green-300",
+      bg: "bg-green-50/80 backdrop-blur-xl border-green-300/50",
       icon: "text-green-500",
       svg: "M5 13l4 4L19 7",
     },
     error: {
-      bg: "bg-red-50 border-red-300",
+      bg: "bg-red-50/80 backdrop-blur-xl border-red-300/50",
       icon: "text-red-500",
       svg: "M6 18L18 6M6 6l12 12",
     },
     info: {
-      bg: "bg-edeka-lightblue border-edeka-blue/30",
+      bg: "bg-edeka-lightblue/80 backdrop-blur-xl border-edeka-blue/30",
       icon: "text-edeka-blue",
       svg: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     },
@@ -72,7 +72,7 @@ function ToastItem({ item, onDismiss }: { item: ToastItem; onDismiss: (id: strin
 
   return (
     <div
-      className={`toast flex items-start gap-3 px-4 py-3 rounded-xl border-2 shadow-elevated backdrop-blur-sm
+      className={`toast flex items-start gap-3 px-4 py-3 rounded-xl border-2 shadow-glass-lg backdrop-blur-2xl
         min-w-[300px] max-w-[420px] cursor-pointer
         ${exiting ? "animate-toast-out" : "animate-toast-in"}
         ${style.bg}`}

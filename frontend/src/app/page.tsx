@@ -81,35 +81,42 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
       <Confetti active={showConfetti} />
       <ToastContainer />
 
-      <header className="bg-gradient-to-r from-edeka-blue via-edeka-darkblue to-edeka-blue text-white shadow-lg relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,214,0,0.1),transparent_50%)]" />
+      {/* Floating glass blobs decoration */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-gradient-to-br from-edeka-blue/8 to-edeka-lightblue/30 animate-blob-float blur-3xl" />
+        <div className="absolute top-1/3 -right-32 w-80 h-80 rounded-full bg-gradient-to-bl from-edeka-yellow/10 to-orange-200/20 animate-blob-float-2 blur-3xl" />
+        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-gradient-to-tr from-edeka-lightblue/30 to-edeka-blue/5 animate-blob-float-3 blur-3xl" />
+      </div>
+
+      <header className="relative z-10 bg-edeka-blue/85 backdrop-blur-xl text-white shadow-lg border-b border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,214,0,0.08),transparent_50%)]" />
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-5 relative">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-edeka-yellow flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-edeka-yellow/50">
+            <div className="w-12 h-12 rounded-full bg-edeka-yellow flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-white/30">
               <span className="text-edeka-blue text-xl font-extrabold">EM</span>
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
                 EDEKA Mühlenbein
               </h1>
-              <p className="text-edeka-yellow/90 text-sm md:text-base font-medium">
+              <p className="text-edeka-yellow/80 text-sm md:text-base font-medium">
                 Promo Tool — Creador de promociones con IA
               </p>
             </div>
-            <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm">
+            <div className="hidden md:flex items-center gap-2 bg-white/10 backdrop-blur-md rounded-xl px-4 py-2 border border-white/10">
               <span className="text-xs font-medium text-edeka-yellow/80">Paso</span>
               <span className="text-lg font-extrabold text-white">{currentStep}</span>
-              <span className="text-xs text-white/60">/ 4</span>
+              <span className="text-xs text-white/50">/ 4</span>
             </div>
           </div>
         </div>
       </header>
 
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+      <nav className="relative z-10 bg-white/50 backdrop-blur-xl border-b border-white/30 sticky top-0 shadow-glass">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-3">
           <div className="flex items-center justify-between max-w-xl mx-auto">
             {STEPS.map((step, i) => (
@@ -118,10 +125,10 @@ export default function Home() {
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
                       currentStep === step.id
-                        ? "bg-edeka-blue text-white shadow-md scale-110 ring-2 ring-edeka-blue/30"
+                        ? "bg-edeka-blue/90 backdrop-blur-md text-white shadow-md scale-110 ring-2 ring-white/50"
                         : currentStep > step.id
-                          ? "bg-green-500 text-white"
-                          : "bg-gray-200 text-gray-500"
+                          ? "bg-green-500/80 backdrop-blur-sm text-white"
+                          : "bg-white/40 backdrop-blur-sm text-gray-500 border border-white/40"
                     }`}
                   >
                     {currentStep > step.id ? (
@@ -143,7 +150,9 @@ export default function Home() {
                 {i < STEPS.length - 1 && (
                   <div
                     className={`flex-1 h-0.5 mx-2 rounded transition-all duration-500 ${
-                      currentStep > step.id ? "bg-green-400" : "bg-gray-200"
+                      currentStep > step.id
+                        ? "bg-gradient-to-r from-green-400/60 to-green-500/60"
+                        : "bg-white/30"
                     }`}
                   />
                 )}
@@ -153,7 +162,7 @@ export default function Home() {
         </div>
       </nav>
 
-      <main ref={mainRef} className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10 space-y-6 md:space-y-8">
+      <main ref={mainRef} className="relative z-10 max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10 space-y-6 md:space-y-8">
         <div className={`transition-all duration-500 ${currentStep === 1 ? "animate-fade-in" : "opacity-60"}`}>
           <PromoForm onCreated={handleCreated} />
         </div>
@@ -199,7 +208,7 @@ export default function Home() {
             )}
 
             {error && (
-              <div className="animate-shake mt-4 bg-red-50 border-2 border-red-200 rounded-xl p-4 text-red-700 text-sm font-medium flex items-center gap-3">
+              <div className="animate-shake mt-4 glass-strong border-red-300/40 text-red-700 text-sm font-medium flex items-center gap-3 p-4 rounded-xl">
                 <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
@@ -220,7 +229,7 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="border-t border-gray-200 bg-white/50 backdrop-blur-sm mt-12">
+      <footer className="relative z-10 border-t border-white/30 bg-white/30 backdrop-blur-md mt-12">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 text-center text-sm text-gray-500">
           EDEKA Mühlenbein Promo Tool &copy; {new Date().getFullYear()}
         </div>

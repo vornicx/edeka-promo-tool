@@ -47,8 +47,8 @@ export default function ExportPanel({ sessionId, composed }: Props) {
   };
 
   return (
-    <div className="card animate-slide-up">
-      <div className="flex items-center gap-3 pb-2 border-b-2 border-edeka-blue/10 mb-5">
+    <div className="glass-card-strong animate-slide-up">
+      <div className="flex items-center gap-3 pb-2 border-b border-white/40 mb-5">
         <div className="w-10 h-10 rounded-xl bg-edeka-yellow/20 flex items-center justify-center">
           <svg className="w-5 h-5 text-edeka-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -61,7 +61,7 @@ export default function ExportPanel({ sessionId, composed }: Props) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4 text-red-700 text-sm font-medium flex items-center gap-3 animate-fade-in">
+        <div className="glass-strong border-red-300/40 rounded-xl p-4 mb-4 text-red-700 text-sm font-medium flex items-center gap-3 animate-fade-in">
           <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
           </svg>
@@ -75,11 +75,11 @@ export default function ExportPanel({ sessionId, composed }: Props) {
             key={fmt.value}
             onClick={() => handleExport(fmt.value)}
             disabled={exporting !== null}
-            className={`relative p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
-              success === fmt.value
-                ? "border-green-400 bg-green-50"
-                : "border-gray-200 hover:border-edeka-yellow hover:bg-edeka-yellow/5 bg-white"
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`relative p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                success === fmt.value
+                  ? "border-green-400/50 bg-green-50/60 backdrop-blur-sm"
+                  : "border-white/40 bg-white/30 backdrop-blur-sm hover:bg-white/50 hover:border-edeka-yellow/50"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {success === fmt.value && (
               <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center shadow animate-bounce-in">

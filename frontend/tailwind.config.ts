@@ -13,15 +13,11 @@ const config: Config = {
           "blue-20": "rgba(0, 76, 150, 0.2)",
           "yellow-20": "rgba(255, 214, 0, 0.2)",
         },
-        confetti: {
-          "1": "#FFD600",
-          "2": "#FF6B6B",
-          "3": "#4ECDC4",
-          "4": "#45B7D1",
-          "5": "#96CEB4",
-          "6": "#FFEAA7",
-          "7": "#DDA0DD",
-          "8": "#98D8C8",
+        glass: {
+          white: "rgba(255, 255, 255, 0.6)",
+          "white-heavy": "rgba(255, 255, 255, 0.8)",
+          border: "rgba(255, 255, 255, 0.3)",
+          "border-light": "rgba(255, 255, 255, 0.15)",
         },
       },
       fontFamily: {
@@ -31,6 +27,10 @@ const config: Config = {
         card: "0 2px 12px rgba(0, 0, 0, 0.08)",
         "card-hover": "0 8px 30px rgba(0, 0, 0, 0.12)",
         elevated: "0 4px 24px rgba(0, 76, 150, 0.15)",
+        glass: "0 8px 32px rgba(0, 0, 0, 0.08)",
+        "glass-lg": "0 16px 48px rgba(0, 0, 0, 0.12)",
+        "glass-blue": "0 8px 32px rgba(0, 76, 150, 0.12)",
+        inner: "inset 0 2px 4px rgba(0, 0, 0, 0.04)",
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-out",
@@ -43,6 +43,10 @@ const config: Config = {
         "toast-in": "toastIn 0.4s ease-out",
         "toast-out": "toastOut 0.3s ease-in forwards",
         "stagger-in": "staggerIn 0.5s ease-out",
+        "blob-float": "blobFloat 20s ease-in-out infinite",
+        "blob-float-2": "blobFloat2 25s ease-in-out infinite",
+        "blob-float-3": "blobFloat3 18s ease-in-out infinite",
+        "glass-shimmer": "glassShimmer 3s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -82,6 +86,25 @@ const config: Config = {
         staggerIn: {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        blobFloat: {
+          "0%, 100%": { transform: "translate(0, 0) scale(1) rotate(0deg)" },
+          "25%": { transform: "translate(30px, -40px) scale(1.1) rotate(5deg)" },
+          "50%": { transform: "translate(-20px, 20px) scale(0.95) rotate(-3deg)" },
+          "75%": { transform: "translate(40px, 30px) scale(1.05) rotate(4deg)" },
+        },
+        blobFloat2: {
+          "0%, 100%": { transform: "translate(0, 0) scale(1) rotate(0deg)" },
+          "33%": { transform: "translate(-50px, 30px) scale(1.15) rotate(-8deg)" },
+          "66%": { transform: "translate(30px, -50px) scale(0.9) rotate(6deg)" },
+        },
+        blobFloat3: {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "50%": { transform: "translate(40px, 40px) scale(1.2)" },
+        },
+        glassShimmer: {
+          "0%, 100%": { opacity: "0.5" },
+          "50%": { opacity: "0.8" },
         },
       },
     },
