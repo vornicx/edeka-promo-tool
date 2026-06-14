@@ -24,7 +24,7 @@ def _resolve_font(name: str) -> str:
 FONT_PATH_REGULAR = _resolve_font("OpenSans-Regular.ttf")
 FONT_PATH_BOLD = _resolve_font("OpenSans-Bold.ttf")
 FONT_PATH_SEMIBOLD = _resolve_font("OpenSans-Semibold.ttf")
-FONT_PATH_EXTRABOLD = _resolve_font("OpenSans-ExtraBold.ttf")"
+FONT_PATH_EXTRABOLD = _resolve_font("OpenSans-ExtraBold.ttf")
 
 WASCHBAER_LOGO_PATH = Path(__file__).parent / "waschbaer_logo.png"
 

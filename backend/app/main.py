@@ -1,5 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.routes.promo import router as promo_router
 
@@ -11,7 +13,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,3 +25,8 @@ app.include_router(promo_router)
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "model": settings.openrouter_model}
+
+
+frontend_static = Path(__file__).resolve().parent.parent.parent / "frontend" / "out"
+if frontend_static.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_static), html=True), name="frontend")
