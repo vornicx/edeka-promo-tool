@@ -1,0 +1,23 @@
+{
+  "name": "edeka-promo-tool",
+  "version": "1.0.0",
+  "description": "Herramienta de creación de promociones con IA para EDEKA Mühlenbein.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vornicx/edeka-promo-tool.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vornicx/edeka-promo-tool/issues"
+  },
+  "homepage": "https://github.com/vornicx/edeka-promo-tool#readme",
+  "dependencies": {
+    "vercel": "^54.14.0"
+  }
+}
