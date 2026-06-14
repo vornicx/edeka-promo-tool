@@ -7,10 +7,24 @@ BRAND_BLACK = "#1A1A1A"
 BRAND_LIGHT_GRAY = "#F5F5F5"
 BRAND_DARK_GRAY = "#333333"
 
-FONT_PATH_REGULAR = "/usr/share/fonts/truetype/open-sans/OpenSans-Regular.ttf"
-FONT_PATH_BOLD = "/usr/share/fonts/truetype/open-sans/OpenSans-Bold.ttf"
-FONT_PATH_SEMIBOLD = "/usr/share/fonts/truetype/open-sans/OpenSans-Semibold.ttf"
-FONT_PATH_EXTRABOLD = "/usr/share/fonts/truetype/open-sans/OpenSans-ExtraBold.ttf"
+_FONTS_DIR = Path(__file__).parent / "fonts"
+_SYSTEM_FONTS_DIR = Path("/usr/share/fonts/truetype/open-sans")
+
+
+def _resolve_font(name: str) -> str:
+    bundled = _FONTS_DIR / name
+    if bundled.exists():
+        return str(bundled)
+    fallback = _SYSTEM_FONTS_DIR / name
+    if fallback.exists():
+        return str(fallback)
+    return str(bundled)
+
+
+FONT_PATH_REGULAR = _resolve_font("OpenSans-Regular.ttf")
+FONT_PATH_BOLD = _resolve_font("OpenSans-Bold.ttf")
+FONT_PATH_SEMIBOLD = _resolve_font("OpenSans-Semibold.ttf")
+FONT_PATH_EXTRABOLD = _resolve_font("OpenSans-ExtraBold.ttf")"
 
 WASCHBAER_LOGO_PATH = Path(__file__).parent / "waschbaer_logo.png"
 
