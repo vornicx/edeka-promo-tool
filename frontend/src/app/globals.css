@@ -1,42 +1,70 @@
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: "Open Sans", system-ui, sans-serif;
-  background: #f8f9fa;
-  color: #1a1a1a;
+@layer base {
+  body {
+    font-family: "Open Sans", system-ui, sans-serif;
+    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #004c96 #e2e8f0;
+  }
 }
 
-.btn-primary {
-  @apply bg-edeka-blue text-white px-6 py-3 rounded-lg font-semibold
-    hover:bg-edeka-darkblue transition-colors duration-200;
+@layer components {
+  .btn-primary {
+    @apply bg-edeka-blue text-white px-8 py-3.5 rounded-xl font-bold text-base
+      hover:bg-edeka-darkblue active:scale-[0.98]
+      transition-all duration-200 shadow-md hover:shadow-lg
+      disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .btn-secondary {
+    @apply bg-edeka-yellow text-edeka-blue px-6 py-3 rounded-xl font-bold text-sm
+      hover:brightness-95 active:scale-[0.98]
+      transition-all duration-200 shadow-sm
+      disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .card {
+    @apply bg-white/95 backdrop-blur-sm rounded-2xl shadow-card p-6 md:p-8
+      border border-white/50;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl
+      text-gray-800 text-sm font-medium
+      focus:ring-2 focus:ring-edeka-blue focus:border-edeka-blue
+      outline-none transition-all duration-200
+      placeholder:text-gray-400;
+  }
+
+  .input-field:disabled {
+    @apply bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200;
+  }
+
+  .input-label {
+    @apply block text-sm font-semibold text-gray-700 mb-1.5;
+  }
+
+  .section-title {
+    @apply text-lg font-bold text-edeka-blue mb-4 flex items-center gap-2;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
 }
 
-.btn-primary:disabled {
-  @apply bg-gray-400 cursor-not-allowed hover:bg-gray-400;
-}
-
-.btn-secondary {
-  @apply bg-edeka-yellow text-edeka-blue px-6 py-3 rounded-lg font-bold
-    hover:brightness-90 transition-colors duration-200;
-}
-
-.btn-secondary:disabled {
-  @apply bg-gray-300 text-gray-500 cursor-not-allowed hover:brightness-100;
-}
-
-.card {
-  @apply bg-white rounded-xl shadow-md p-6;
-}
-
-.input-field {
-  @apply w-full px-4 py-3 border border-gray-300 rounded-lg
-    focus:ring-2 focus:ring-edeka-blue focus:border-transparent outline-none;
-}
-
-.input-field:disabled {
-  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
