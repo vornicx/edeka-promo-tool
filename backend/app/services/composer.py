@@ -71,6 +71,66 @@ def _darken(rgb: tuple[int, int, int], t: float) -> tuple[int, int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Gradients / glows (small build + upscale for speed)
+# ---------------------------------------------------------------------------
+
+def _vertical_gradient(size: tuple[int, int], top: tuple[int, int, int], bottom: tuple[int, int, int]) -> Image.Image:
+    w, h = size
+    strip = Image.new("RGB", (1, h))
+    px = strip.load()
+    for y in range(h):
+        px[0, y] = _mix(top, bottom, y / max(1, h - 1))
+    return strip.resize((w, h))
+
+
+def _diagonal_gradient(size: tuple[int, int], c1: tuple[int, int, int], c2: tuple[int, int, int]) -> Image.Image:
+    """Smooth top-left -> bottom-right gradient via a small upscaled tile."""
+    n = 64
+    tile = Image.new("RGB", (n, n))
+    px = tile.load()
+    for y in range(n):
+        for x in range(n):
+            t = (x + y) / (2 * (n - 1))
+            px[x, y] = _mix(c1, c2, t)
+    return tile.resize(size, Image.BILINEAR)
+
+
+def _radial_alpha(diam: int, inner: int, outer: int, falloff: float = 1.0) -> Image.Image:
+    g = Image.new("L", (diam, diam), 0)
+    px = g.load()
+    c = diam / 2
+    for y in range(diam):
+        for x in range(diam):
+            d = min(1.0, (((x - c) ** 2 + (y - c) ** 2) ** 0.5) / c)
+            px[x, y] = int(inner + (outer - inner) * (d ** falloff))
+    return g
+
+
+def _draw_spotlight(canvas: Image.Image, cx: int, cy: int, radius: int, color: tuple[int, int, int], max_alpha: int, falloff: float = 1.7):
+    size = radius * 2
+    mask = _radial_alpha(220, max_alpha, 0, falloff).resize((size, size))
+    layer = Image.new("RGBA", (size, size), (*color, 0))
+    layer.putalpha(mask)
+    canvas.alpha_composite(layer, (cx - radius, cy - radius))
+
+
+def _fill_gradient_shape(canvas: Image.Image, points, top: tuple[int, int, int], bottom: tuple[int, int, int], scale: int = 4):
+    """Fill a polygon with a vertical gradient (anti-aliased mask)."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    minx, miny = int(min(xs)) - 1, int(min(ys)) - 1
+    maxx, maxy = int(max(xs)) + 1, int(max(ys)) + 1
+    w, h = max(1, maxx - minx), max(1, maxy - miny)
+    grad = _vertical_gradient((w, h), top, bottom).convert("RGBA")
+    mask = Image.new("L", (w * scale, h * scale), 0)
+    md = ImageDraw.Draw(mask)
+    sp = [((px - minx) * scale, (py - miny) * scale) for px, py in points]
+    md.polygon(sp, fill=255)
+    grad.putalpha(mask.resize((w, h), Image.LANCZOS))
+    canvas.alpha_composite(grad, (minx, miny))
+
+
+# ---------------------------------------------------------------------------
 # Font / text helpers
 # ---------------------------------------------------------------------------
 
@@ -505,10 +565,15 @@ def _draw_price_star(
                fill=(0, 20, 50, 70))
     canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
 
-    # Layered star: blue rim -> white -> yellow core.
+    # Layered star: blue rim -> white -> gradient-yellow core (depth).
     _aa_polygon(canvas, _star_points(cx, cy, radius, radius * 0.80, n, rot), fill=primary)
     _aa_polygon(canvas, _star_points(cx, cy, radius * 0.93, radius * 0.74, n, rot), fill=white)
-    _aa_polygon(canvas, _star_points(cx, cy, radius * 0.86, radius * 0.68, n, rot), fill=accent)
+    _fill_gradient_shape(
+        canvas, _star_points(cx, cy, radius * 0.86, radius * 0.68, n, rot),
+        top=_lighten(accent, 0.30), bottom=_darken(accent, 0.18),
+    )
+    # Inner glossy highlight (upper third) for a 3D pop.
+    _draw_spotlight(canvas, cx, cy - int(radius * 0.22), int(radius * 0.55), (255, 255, 255), 90, falloff=1.6)
     draw = ImageDraw.Draw(canvas)
 
     inner = int(radius * 0.66)
@@ -626,93 +691,85 @@ INSTAGRAM = "@waschbaer_edeka"
 GREEN = (60, 140, 46)  # BIO tag
 
 
-def _paint_background(canvas: Image.Image, primary: tuple[int, int, int]):
+def _paint_background(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+    w, h = canvas.size
+    # Saturated EDEKA-blue diagonal gradient base.
+    top = _lighten(primary, 0.10)
+    bottom = _darken(primary, 0.35)
+    canvas.paste(_diagonal_gradient((w, h), top, bottom), (0, 0))
+
+    # Faint darker burst rays from the upper area for texture/energy.
+    _draw_sunburst_rays(canvas, int(w * 0.5), int(h * 0.30), int(max(w, h) * 0.95),
+                        36, _darken(primary, 0.18), 60, rot_deg=5)
+
+
+def _load_mascot(target_h: int) -> Image.Image | None:
+    if not WASCHBAER_LOGO_PATH.exists():
+        return None
+    logo = _trim_alpha(Image.open(WASCHBAER_LOGO_PATH).convert("RGBA"))
+    ratio = target_h / max(1, logo.height)
+    return logo.resize((max(1, int(logo.width * ratio)), target_h), Image.Resampling.LANCZOS)
+
+
+def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accent: tuple[int, int, int]):
+    """The Waschbär mascot + EDEKA wordmark — the store's brand mark, top-left."""
+    draw = ImageDraw.Draw(canvas)
+    text_x = x
+    mascot = _load_mascot(mascot_h)
+    if mascot is not None:
+        # soft halo so the dark mascot reads on the blue background
+        _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(mascot_h * 0.75), (255, 255, 255), 70)
+        canvas.alpha_composite(mascot, (x, y))
+        text_x = x + mascot.width + int(mascot_h * 0.14)
+
+    ed_h = int(mascot_h * 0.48)
+    ed_font = _load_font(FONT_PATH_EXTRABOLD, ed_h)
+    eb = draw.textbbox((0, 0), "EDEKA", font=ed_font)
+    sub = "Mühlenbein"
+    sub_font = _load_font(FONT_PATH_BOLD, int(mascot_h * 0.27))
+    sbb = draw.textbbox((0, 0), sub, font=sub_font)
+    gap = int(mascot_h * 0.10)
+    block_h = (eb[3] - eb[1]) + gap + (sbb[3] - sbb[1])
+    ty = y + (mascot_h - block_h) // 2
+    draw.text((text_x - eb[0], ty - eb[1]), "EDEKA", fill=accent, font=ed_font)
+    ty2 = ty + (eb[3] - eb[1]) + gap
+    draw.text((text_x - sbb[0], ty2 - sbb[1]), sub, fill=(255, 255, 255), font=sub_font)
+
+
+def _draw_angebot_badge(canvas: Image.Image, cx: int, cy: int, height: int, accent: tuple[int, int, int], primary: tuple[int, int, int]):
+    _draw_tag(canvas, "ANGEBOT", cx, cy, height, accent, primary, angle=-7.0)
+
+
+def _draw_footer_text(canvas: Image.Image, accent: tuple[int, int, int], margin: int):
+    """Store name + slogan + IG handle, centred near the bottom on the blue bg."""
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
-    draw.rectangle((0, 0, w, h), fill=_lighten(primary, 0.93))
-    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gr = int(max(w, h) * 0.5)
-    gcx, gcy = w // 2, int(h * 0.40)
-    gd.ellipse((gcx - gr, gcy - gr, gcx + gr, gcy + gr), fill=(255, 255, 255, 215))
-    canvas.alpha_composite(glow.filter(ImageFilter.GaussianBlur(radius=max(w, h) // 7)))
+    band_top = h - int(h * 0.085)
+    draw.line((margin, band_top, w - margin, band_top), fill=accent, width=max(2, h // 650))
+    avail = h - band_top
 
-
-def _draw_wordmark(draw: ImageDraw.ImageDraw, x: int, y: int, height: int, color: tuple[int, int, int]) -> int:
-    font = _load_font(FONT_PATH_EXTRABOLD, height)
-    b = draw.textbbox((0, 0), "EDEKA", font=font)
-    draw.text((x - b[0], y - b[1]), "EDEKA", fill=color, font=font)
-    return b[2] - b[0]
-
-
-def _draw_header_band(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int], band_l: int, band_r: int):
-    """Diagonal brand band with the EDEKA wordmark and an 'ANGEBOT' kicker."""
-    w, h = canvas.size
-    margin = int(w * 0.05)
-    _draw_diagonal_band(canvas, band_l, band_r, 0, primary)
-    draw = ImageDraw.Draw(canvas)
-    edge = min(band_l, band_r)
-    wm_h = int(edge * 0.42)
-    wm_y = (edge - wm_h) // 2
-    _draw_wordmark(draw, margin, wm_y, wm_h, accent)
-    af = _fit_font_height(draw, "ANGEBOT", FONT_PATH_EXTRABOLD, int(edge * 0.34), int(edge * 0.4), int(edge * 0.2))
-    ab = draw.textbbox((0, 0), "ANGEBOT", font=af)
-    aw = ab[2] - ab[0]
-    draw.text((w - margin - aw - ab[0], (band_r - (ab[3] - ab[1])) // 2 - ab[1] + int(edge * 0.04)),
-              "ANGEBOT", fill=accent, font=af)
-
-
-def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int], band_h: int, slant: int):
-    w, h = canvas.size
-    _draw_diagonal_band(canvas, 0, slant, band_h, primary, at_bottom=True)
-    draw = ImageDraw.Draw(canvas)
-    top = h - band_h + slant
-    avail = h - top
-
-    name_font = _fit_font_width(draw, STORE_NAME, FONT_PATH_EXTRABOLD, int(w * 0.82), int(avail * 0.40), int(avail * 0.22))
+    name_font = _fit_font_width(draw, STORE_NAME, FONT_PATH_EXTRABOLD, int(w * 0.82), int(avail * 0.38), int(avail * 0.22))
     nb = draw.textbbox((0, 0), STORE_NAME, font=name_font)
     nh = nb[3] - nb[1]
     sub = f"{SLOGAN}   ·   {INSTAGRAM}"
-    slogan_font = _fit_font_width(draw, sub, FONT_PATH_BOLD, int(w * 0.86), int(avail * 0.26), int(avail * 0.12))
-    sb = draw.textbbox((0, 0), sub, font=slogan_font)
-    sh = sb[3] - sb[1]
-
-    gap = int(avail * 0.10)
-    block_h = nh + gap + sh
-    ny = top + (avail - block_h) // 2
+    sub_font = _fit_font_width(draw, sub, FONT_PATH_BOLD, int(w * 0.88), int(avail * 0.24), int(avail * 0.12))
+    sbb = draw.textbbox((0, 0), sub, font=sub_font)
+    sh = sbb[3] - sbb[1]
+    gap = int(avail * 0.14)
+    ny = band_top + (avail - (nh + gap + sh)) // 2
     draw.text(((w - (nb[2] - nb[0])) // 2 - nb[0], ny - nb[1]), STORE_NAME, fill=(255, 255, 255), font=name_font)
     sy = ny + nh + gap
-    draw.text(((w - (sb[2] - sb[0])) // 2 - sb[0], sy - sb[1]), sub, fill=accent, font=slogan_font)
+    draw.text(((w - (sbb[2] - sbb[0])) // 2 - sbb[0], sy - sbb[1]), sub, fill=accent, font=sub_font)
 
 
-def _draw_corner_mascot(canvas: Image.Image, target_h: int, margin: int, footer_h: int):
-    """Place the Waschbär mascot peeking from the bottom-right corner.
-
-    No-op until backend/app/assets/waschbaer_logo.png is provided.
-    """
-    if not WASCHBAER_LOGO_PATH.exists():
-        return
-    w, h = canvas.size
-    logo = _trim_alpha(Image.open(WASCHBAER_LOGO_PATH).convert("RGBA"))
-    ratio = target_h / max(1, logo.height)
-    logo = logo.resize((max(1, int(logo.width * ratio)), target_h), Image.Resampling.LANCZOS)
-    x = w - margin - logo.width
-    y = (h - footer_h) - logo.height + int(target_h * 0.16)
-    # Soft contact shadow.
-    sw, sh = int(logo.width * 0.8), int(logo.height * 0.12)
-    _draw_soft_shadow(canvas, x + (logo.width - sw) // 2, y + logo.height - sh, sw, sh,
-                      blur=max(10, logo.width // 18), intensity=60)
-    canvas.alpha_composite(logo, (x, y))
-
-
-def _draw_product_or_name(canvas, draw, spec, product_zone, primary):
+def _draw_product_or_name(canvas, draw, spec, product_zone, name_color):
     product = _load_product_image(spec, (int(product_zone.w * 0.96), int(product_zone.h * 0.96)))
     if product:
         _draw_product(canvas, product, product_zone.cx, product_zone.cy, angle=0.0)
     else:
         ph = int(product_zone.w * 0.16)
         f = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(product_zone.w * 0.85), ph, int(ph * 0.55))
-        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, f, primary)
+        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, f, name_color)
 
 
 def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
@@ -754,95 +811,102 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 # Format-specific layouts (German 'Knaller' style)
 # ---------------------------------------------------------------------------
 
+CLAIM_LIGHT = (205, 222, 245)
+
+
 def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
     margin = int(w * 0.05)
-    _paint_background(canvas, primary)
-    _draw_header_band(canvas, primary, accent, int(h * 0.150), int(h * 0.112))
+    white = (255, 255, 255)
+    _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Contextual flyer badges (BIO / Aus der Region) top-left.
-    _draw_context_tags(canvas, spec, margin, int(h * 0.185), int(w * 0.05))
+    # Burst rays behind everything in the star area.
+    star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.46), int(w * 0.24)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.65), 24, _lighten(accent, 0.18), 150, rot_deg=4)
 
-    # Product hero on the left.
-    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.00), int(h * 0.21), int(w * 0.58), int(h * 0.45)), primary)
+    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
+    _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary)
 
-    # Price star on the right, overlapping, with subtle burst rays behind it.
-    star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.45), int(w * 0.235)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.55), 24, accent, 55, rot_deg=4)
+    # Product hero on the left, lifted by a warm spotlight.
+    _draw_spotlight(canvas, int(w * 0.31), int(h * 0.43), int(w * 0.36), _lighten(accent, 0.5), 165)
+    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.02), int(h * 0.20), int(w * 0.56), int(h * 0.44)), white)
+
+    # Contextual badges over the product corner.
+    _draw_context_tags(canvas, spec, margin, int(h * 0.205), int(w * 0.052))
+
+    # Price star on the right (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.74), int(star_cy - star_r * 0.86), int(star_r * 0.46))
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.88), int(star_r * 0.46))
+    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.0), int(w * 0.052), accent, primary)
 
-    # Headline + claim, bottom-left.
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.64), int(h * 0.16)), primary, align="left")
-
-    # Validity tag near the star, footer band at the bottom.
-    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.04), int(w * 0.052), accent, primary)
-    footer_h = int(h * 0.095)
-    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.028))
-    _draw_corner_mascot(canvas, int(h * 0.17), margin, footer_h)
+    # Headline + claim, bottom-left, white on blue.
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.62), int(h * 0.14)), white, align="left", claim_color=CLAIM_LIGHT)
+    _draw_footer_text(canvas, accent, margin)
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
-    margin = int(w * 0.07)
-    _paint_background(canvas, primary)
-    _draw_header_band(canvas, primary, accent, int(h * 0.105), int(h * 0.078))
+    margin = int(w * 0.06)
+    white = (255, 255, 255)
+    _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Contextual flyer badges (BIO / Aus der Region) top-left.
-    _draw_context_tags(canvas, spec, margin, int(h * 0.135), int(w * 0.058))
+    # Burst rays behind everything in the star area.
+    star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.75), 28, _lighten(accent, 0.18), 150, rot_deg=4)
+
+    _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.072), accent)
+    _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary)
 
     # Product hero, upper area.
-    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.34)), primary)
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.31), int(w * 0.52), _lighten(accent, 0.5), 165)
+    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.32)), white)
+    _draw_context_tags(canvas, spec, margin, int(h * 0.12), int(w * 0.06))
 
-    # Price star, mid-right overlapping the product base.
-    star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.7), 28, accent, 55, rot_deg=4)
+    # Price star, mid-right (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.84), int(star_r * 0.42))
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.80), int(star_cy - star_r * 0.86), int(star_r * 0.42))
 
     # Headline + claim, lower-left.
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.58), int(h * 0.14)), primary, align="left")
-    _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.86), int(w * 0.058), accent, primary)
-
-    footer_h = int(h * 0.072)
-    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.02))
-    _draw_corner_mascot(canvas, int(h * 0.12), margin, footer_h)
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.60), int(h * 0.13)), white, align="left", claim_color=CLAIM_LIGHT)
+    _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.85), int(w * 0.058), accent, primary)
+    _draw_footer_text(canvas, accent, margin)
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
     margin = int(w * 0.06)
-    _paint_background(canvas, primary)
-    _draw_header_band(canvas, primary, accent, int(h * 0.090), int(h * 0.066))
+    white = (255, 255, 255)
+    _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Contextual flyer badges (BIO / Aus der Region) top-left.
-    _draw_context_tags(canvas, spec, margin, int(h * 0.115), int(w * 0.05))
+    # Burst rays behind everything in the star area.
+    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 2.0), 32, _lighten(accent, 0.18), 150, rot_deg=4)
+
+    _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.060), accent)
+    _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary)
 
     # Product hero, upper-center.
-    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.42)), primary)
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.32), int(w * 0.46), _lighten(accent, 0.5), 165)
+    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.11), w - margin * 2, int(h * 0.40)), white)
+    _draw_context_tags(canvas, spec, margin, int(h * 0.10), int(w * 0.05))
 
-    # Price star, lower-right overlapping, with large burst rays to fill the page.
-    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.95), 32, accent, 60, rot_deg=4)
+    # Price star, lower-right overlapping (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.84), int(star_r * 0.44))
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.80), int(star_cy - star_r * 0.86), int(star_r * 0.44))
 
     # Headline + claim, lower-left.
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.16)), primary, align="left")
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.15)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
-
-    footer_h = int(h * 0.075)
-    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.022))
-    _draw_corner_mascot(canvas, int(h * 0.13), margin, footer_h)
+    _draw_footer_text(canvas, accent, margin)
 
 
 # ---------------------------------------------------------------------------
