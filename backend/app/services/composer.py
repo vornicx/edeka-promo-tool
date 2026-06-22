@@ -621,6 +621,7 @@ def _draw_sunburst_rays(
 
 STORE_NAME = "EDEKA MÜHLENBEIN"
 SLOGAN = "Wir lieben Lebensmittel."
+INSTAGRAM = "@waschbaer_edeka"
 GREEN = (60, 140, 46)  # BIO tag
 
 
@@ -670,8 +671,9 @@ def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], acc
     name_font = _fit_font_width(draw, STORE_NAME, FONT_PATH_EXTRABOLD, int(w * 0.82), int(avail * 0.40), int(avail * 0.22))
     nb = draw.textbbox((0, 0), STORE_NAME, font=name_font)
     nh = nb[3] - nb[1]
-    slogan_font = _fit_font_width(draw, SLOGAN, FONT_PATH_BOLD, int(w * 0.7), int(avail * 0.26), int(avail * 0.13))
-    sb = draw.textbbox((0, 0), SLOGAN, font=slogan_font)
+    sub = f"{SLOGAN}   ·   {INSTAGRAM}"
+    slogan_font = _fit_font_width(draw, sub, FONT_PATH_BOLD, int(w * 0.86), int(avail * 0.26), int(avail * 0.12))
+    sb = draw.textbbox((0, 0), sub, font=slogan_font)
     sh = sb[3] - sb[1]
 
     gap = int(avail * 0.10)
@@ -679,7 +681,7 @@ def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], acc
     ny = top + (avail - block_h) // 2
     draw.text(((w - (nb[2] - nb[0])) // 2 - nb[0], ny - nb[1]), STORE_NAME, fill=(255, 255, 255), font=name_font)
     sy = ny + nh + gap
-    draw.text(((w - (sb[2] - sb[0])) // 2 - sb[0], sy - sb[1]), SLOGAN, fill=accent, font=slogan_font)
+    draw.text(((w - (sb[2] - sb[0])) // 2 - sb[0], sy - sb[1]), sub, fill=accent, font=slogan_font)
 
 
 def _draw_product_or_name(canvas, draw, spec, product_zone, primary):
