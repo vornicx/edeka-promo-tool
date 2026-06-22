@@ -41,10 +41,10 @@ class Settings(BaseSettings):
     def output_dir(self) -> Path:
         if _is_vercel():
             p = Path("/tmp/output")
-        elif getattr(sys, "frozen", False):
-            p = _user_data_dir() / "output"
         else:
-            p = self.base_dir / "output"
+            # Always use the per-user data directory (also in dev) so uploaded
+            # products and settings live outside the repo and persist safely.
+            p = _user_data_dir() / "output"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
