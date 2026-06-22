@@ -101,6 +101,34 @@ export default function PromoForm({ onCreated }: Props) {
     loadMotifs();
   }, [loadMotifs]);
 
+  // Debounced snapshot of the briefing so example thumbnails mirror the real
+  // promotion without re-fetching on every keystroke.
+  const [exampleCtx, setExampleCtx] = useState({
+    product: "",
+    price: "",
+    old_price: "",
+    validity: "",
+    claim: "",
+    origin: "",
+    category: "",
+    product_image: "",
+  });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setExampleCtx({
+        product: form.product,
+        price: form.price,
+        old_price: form.old_price || "",
+        validity: form.validity,
+        claim: form.claim || "",
+        origin: form.origin || "",
+        category: form.category || "",
+        product_image: form.product_image || "",
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image]);
+
   const builtinMotifs = motifs.filter((m) => m.source === "builtin");
   const customMotifs = motifs.filter((m) => m.source === "custom");
   const selectedMotif = motifs.find((m) => m.value === form.product_image);
@@ -125,6 +153,7 @@ export default function PromoForm({ onCreated }: Props) {
     onPick: (value: string) => void,
     urlFor: (value: string) => string,
     cols: string,
+    fit: "cover" | "contain" = "cover",
   ) => (
     <div className={`grid gap-2.5 ${cols}`}>
       {options.map((o) => {
@@ -143,7 +172,12 @@ export default function PromoForm({ onCreated }: Props) {
           >
             <div className="aspect-square w-full bg-slate-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={urlFor(o.value)} alt={o.label} loading="lazy" className="h-full w-full object-cover" />
+              <img
+                src={urlFor(o.value)}
+                alt={o.label}
+                loading="lazy"
+                className={`h-full w-full ${fit === "contain" ? "object-contain p-1" : "object-cover"}`}
+              />
             </div>
             <div className="px-2.5 py-2">
               <p className="text-xs font-bold text-slate-900">{o.label}</p>
@@ -268,24 +302,6 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label">Hauptformat</label>
-            <div className="segmented">
-              {FORMATS.map((format) => (
-                <button
-                  key={format.value}
-                  type="button"
-                  aria-pressed={form.format === format.value}
-                  onClick={() => update("format", format.value)}
-                  className={`segment ${form.format === format.value ? "segment-active" : ""}`}
-                >
-                  <span className="font-bold">{format.label}</span>
-                  <span className="text-[11px] text-slate-500">{format.meta}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <label className="label" htmlFor="price">Preis</label>
             <input
               id="price"
@@ -353,7 +369,7 @@ export default function PromoForm({ onCreated }: Props) {
 
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
             <p className="text-xs leading-5 text-slate-500">
-              Wähle visuell – jede Option zeigt ein Beispiel, damit du sicher entscheidest.
+              Wähle visuell – jede Option zeigt ein Beispiel mit deinen Eingaben, damit du sicher entscheidest.
             </p>
 
             <div>
@@ -362,7 +378,7 @@ export default function PromoForm({ onCreated }: Props) {
                 STYLES,
                 form.style,
                 (v) => update("style", v),
-                (v) => exampleImageUrl({ style: v, tone: form.tone, level: form.differentiation_level }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: v, tone: form.tone, level: form.differentiation_level, format: "post" }),
                 "grid-cols-2",
               )}
             </div>
@@ -373,7 +389,7 @@ export default function PromoForm({ onCreated }: Props) {
                 TONES,
                 form.tone,
                 (v) => update("tone", v),
-                (v) => exampleImageUrl({ style: form.style, tone: v, level: form.differentiation_level }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: v, level: form.differentiation_level, format: "post" }),
                 "grid-cols-2 sm:grid-cols-4",
               )}
             </div>
@@ -384,8 +400,20 @@ export default function PromoForm({ onCreated }: Props) {
                 LEVELS,
                 form.differentiation_level,
                 (v) => update("differentiation_level", v),
-                (v) => exampleImageUrl({ style: form.style, tone: form.tone, level: v }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: v, format: "post" }),
                 "grid-cols-3",
+              )}
+            </div>
+
+            <div>
+              <label className="label">Format</label>
+              {renderExampleCards(
+                FORMATS,
+                form.format,
+                (v) => update("format", v),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: form.differentiation_level, format: v }),
+                "grid-cols-2 sm:grid-cols-4",
+                "contain",
               )}
             </div>
           </div>

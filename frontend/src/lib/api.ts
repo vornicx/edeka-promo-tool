@@ -200,9 +200,27 @@ export function getMotifImageUrl(motif: Motif): string {
   return `${API_ROOT}${motif.image_url}`;
 }
 
-export function exampleImageUrl(p: { style: string; tone: string; level: string }): string {
-  const q = new URLSearchParams({ style: p.style, tone: p.tone, level: p.level }).toString();
-  return `${API_ROOT}/api/examples?${q}`;
+export interface ExampleParams {
+  style: string;
+  tone: string;
+  level: string;
+  format?: string;
+  product?: string;
+  price?: string;
+  old_price?: string;
+  validity?: string;
+  claim?: string;
+  origin?: string;
+  category?: string;
+  product_image?: string;
+}
+
+export function exampleImageUrl(p: ExampleParams): string {
+  const params = new URLSearchParams();
+  Object.entries(p).forEach(([k, v]) => {
+    if (v) params.set(k, String(v));
+  });
+  return `${API_ROOT}/api/examples?${params.toString()}`;
 }
 
 export async function createProduct(data: CreateProductPayload): Promise<CustomProduct> {
