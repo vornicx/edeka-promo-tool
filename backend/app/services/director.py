@@ -7,29 +7,28 @@ from app.schemas.promotion import (
 )
 
 
-SYSTEM_PROMPT = """Actúa como director creativo para promociones de retail alimentario de EDEKA Mühlenbein.
-Tu tarea es convertir una ficha comercial en hasta 3 direcciones visuales distintas pero coherentes con la marca.
+SYSTEM_PROMPT = """Du bist Kreativdirektor fuer Food-Retail-Promotionen von EDEKA Muehlenbein.
+Deine Aufgabe ist es, ein Handelsbriefing in bis zu 3 unterschiedliche, markenkonforme visuelle Richtungen zu verwandeln.
 
-Contexto de marca:
-- Mercado local EDEKA Mühlenbein en Kassel
-- Identidad diferencial, cercana, innovadora
-- Posibilidad de guiño Waschbér (mapache)
-- La pieza debe ser comercial y legible
+Markenkontext:
+- Lokaler EDEKA Muehlenbein Markt in Kassel
+- Nahbare, moderne und eigenstaendige Identitaet
+- Die Umsetzung muss kommerziell, hochwertig und gut lesbar sein
 
-Restricciones:
-- No generes copy largo
-- Deja espacio visual para precio y producto
-- Cada dirección debe ser visualmente distinta
-- Colores en formato hex (#XXXXXX)
-- Devuelve SOLO JSON válido
+Vorgaben:
+- Keine langen Copytexte erzeugen
+- Visuell Platz fuer Preis und Produkt lassen
+- Jede Richtung muss klar unterscheidbar sein
+- Farben im Hexformat (#XXXXXX)
+- Nur gueltiges JSON zurueckgeben
 
-Estructura requerida:
+Erforderliche Struktur:
 {
   "directions": [
     {
-      "name": "nombre_corto",
-      "intent": "descripción de la intención visual",
-      "composition": "descripción de la composición",
+      "name": "kurzer_name",
+      "intent": "Beschreibung der visuellen Absicht",
+      "composition": "Beschreibung der Komposition",
       "palette": ["#color1", "#color2", "#color3"],
       "text_safe_area": "top_left | top_right | bottom_left | bottom_right | center",
       "boldness": "low | medium | high",
@@ -38,27 +37,27 @@ Estructura requerida:
   ]
 }
 
-Genera exactamente 3 direcciones distintas."""
+Erzeuge genau 3 unterschiedliche Richtungen."""
 
 
 def build_user_prompt(spec: PromotionSpec, enrichment: EnrichmentSpec) -> str:
     parts = [
-        f"Producto: {spec.product}",
-        f"Precio: {spec.price}",
-        f"Vigencia: {spec.validity}",
+        f"Produkt: {spec.product}",
+        f"Preis: {spec.price}",
+        f"Aktionszeitraum: {spec.validity}",
     ]
     if spec.claim:
         parts.append(f"Claim: {spec.claim}")
     if spec.origin:
-        parts.append(f"Origen: {spec.origin}")
-    parts.append(f"Formato: {spec.format.value}")
-    parts.append(f"Tono solicitado: {spec.tone.value}")
-    parts.append(f"Tipo de campaña: {enrichment.campaign_type}")
-    parts.append(f"Familia: {enrichment.product_family}")
-    parts.append(f"Estilo: {enrichment.communication_style}")
-    parts.append(f"Energía visual: {enrichment.visual_energy}")
-    parts.append(f"Prioridad precio: {enrichment.price_priority}")
-    parts.append(f"Presencia Waschbär: {enrichment.waschbaer_presence}")
+        parts.append(f"Herkunft: {spec.origin}")
+    parts.append(f"Format: {spec.format.value}")
+    parts.append(f"Gewuenschte Tonalitaet: {spec.tone.value}")
+    parts.append(f"Kampagnentyp: {enrichment.campaign_type}")
+    parts.append(f"Produktfamilie: {enrichment.product_family}")
+    parts.append(f"Stil: {enrichment.communication_style}")
+    parts.append(f"Visuelle Energie: {enrichment.visual_energy}")
+    parts.append(f"Preisprioritaet: {enrichment.price_priority}")
+    parts.append(f"Waschbaer-Praesenz: {enrichment.waschbaer_presence}")
     return "\n".join(parts)
 
 

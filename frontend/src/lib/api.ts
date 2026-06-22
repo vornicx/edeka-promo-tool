@@ -1,4 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/promo";
+const API_ROOT = API_BASE.replace(/\/api\/promo\/?$/, "");
+const SETTINGS_API_BASE = `${API_ROOT}/api/settings`;
 
 export interface PromotionData {
   product: string;
@@ -28,12 +30,30 @@ export interface CreatePromoResponse {
   spec: Record<string, unknown>;
   enrichment: Record<string, unknown>;
   directions: CreativeDirection[];
+  generation_mode: "ai" | "local" | "local_fallback";
+  generation_note: string;
 }
 
 export interface ComposeResponse {
   session_id: string;
   image_url: string;
   direction: string;
+}
+
+export interface AISettings {
+  provider: string;
+  base_url: string;
+  model: string;
+  has_api_key: boolean;
+  masked_api_key: string;
+  settings_path: string;
+}
+
+export interface SaveAISettingsPayload {
+  provider: string;
+  api_key?: string;
+  base_url: string;
+  model: string;
 }
 
 async function handleResponse<T>(res: Response, errorMsg: string): Promise<T> {
@@ -43,50 +63,76 @@ async function handleResponse<T>(res: Response, errorMsg: string): Promise<T> {
       const err = await res.json();
       detail = err.detail || err.message || errorMsg;
     } catch {
-      detail = `Error HTTP ${res.status}`;
+      detail = `HTTP-Fehler ${res.status}`;
     }
     throw new Error(detail);
   }
   return res.json() as Promise<T>;
 }
 
+function getNetworkErrorMessage() {
+  return "Die lokale App konnte nicht erreicht werden. Bitte EDEKA Promo Tool schließen und erneut öffnen; der interne Server ist nicht aktiv.";
+}
+
 export async function createPromo(data: PromotionData): Promise<CreatePromoResponse> {
-  const res = await fetch(`${API_BASE}/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleResponse<CreatePromoResponse>(res, "Error al crear promoción");
+  try {
+    const res = await fetch(`${API_BASE}/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse<CreatePromoResponse>(res, "Promotion konnte nicht erstellt werden");
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(getNetworkErrorMessage());
+    }
+    throw error;
+  }
 }
 
 export async function composePromo(
   sessionId: string,
   directionIndex: number
 ): Promise<ComposeResponse> {
-  const res = await fetch(`${API_BASE}/compose`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, direction_index: directionIndex }),
-  });
-  return handleResponse<ComposeResponse>(res, "Error al componer");
+  try {
+    const res = await fetch(`${API_BASE}/compose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, direction_index: directionIndex }),
+    });
+    return handleResponse<ComposeResponse>(res, "Promotion konnte nicht gestaltet werden");
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(getNetworkErrorMessage());
+    }
+    throw error;
+  }
 }
 
 export async function exportPromo(
   sessionId: string,
   format: string
 ): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/export`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, format }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, format }),
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(getNetworkErrorMessage());
+    }
+    throw error;
+  }
   if (!res.ok) {
-    let detail = "Error al exportar";
+    let detail = "Export konnte nicht erstellt werden";
     try {
       const err = await res.json();
       detail = err.detail || err.message || detail;
     } catch {
-      detail = `Error HTTP ${res.status}`;
+      detail = `HTTP-Fehler ${res.status}`;
     }
     throw new Error(detail);
   }
@@ -95,4 +141,18 @@ export async function exportPromo(
 
 export function getImageUrl(sessionId: string): string {
   return `${API_BASE}/image/${sessionId}`;
+}
+
+export async function getAISettings(): Promise<AISettings> {
+  const res = await fetch(SETTINGS_API_BASE);
+  return handleResponse<AISettings>(res, "KI-Einstellungen konnten nicht geladen werden");
+}
+
+export async function saveAISettings(data: SaveAISettingsPayload): Promise<AISettings> {
+  const res = await fetch(SETTINGS_API_BASE, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<AISettings>(res, "KI-Einstellungen konnten nicht gespeichert werden");
 }

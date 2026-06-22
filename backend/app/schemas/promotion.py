@@ -42,22 +42,22 @@ class PromotionSpec(BaseModel):
 class EnrichmentSpec(BaseModel):
     campaign_type: str = Field(..., description="Tipo de campaña")
     product_family: str = Field(..., description="Familia del producto")
-    seasonality: str = Field(..., description="Estacionalidad detectada")
-    communication_style: str = Field(..., description="Estilo de comunicación")
-    price_priority: str = Field(..., description="Prioridad del precio (high/medium/low)")
-    visual_energy: str = Field(..., description="Energía visual (low/medium_low/medium/medium_high/high)")
-    brand_mode: str = Field(..., description="Modo de marca")
-    waschbaer_presence: str = Field(..., description="Presencia del Waschbär")
+    seasonality: str = Field(..., description="Erkannte Saisonalitaet")
+    communication_style: str = Field(..., description="Kommunikationsstil")
+    price_priority: str = Field(..., description="Preisprioritaet (high/medium/low)")
+    visual_energy: str = Field(..., description="Visuelle Energie (low/medium_low/medium/medium_high/high)")
+    brand_mode: str = Field(..., description="Markenmodus")
+    waschbaer_presence: str = Field(..., description="Waschbaer-Praesenz")
 
 
 class CreativeDirection(BaseModel):
-    name: str = Field(..., description="Nombre de la dirección")
-    intent: str = Field(..., description="Intención visual")
-    composition: str = Field(..., description="Descripción de la composición")
-    palette: list[str] = Field(..., description="Colores dominantes en hex")
-    text_safe_area: str = Field(..., description="Zona segura para texto")
-    boldness: str = Field(..., description="Nivel de atrevimiento")
-    waschbaer_presence: str = Field(..., description="Presencia del Waschbär")
+    name: str = Field(..., description="Name der Richtung")
+    intent: str = Field(..., description="Visuelle Absicht")
+    composition: str = Field(..., description="Beschreibung der Komposition")
+    palette: list[str] = Field(..., description="Dominante Farben als Hexwerte")
+    text_safe_area: str = Field(..., description="Sicherer Textbereich")
+    boldness: str = Field(..., description="Mutigkeitsgrad")
+    waschbaer_presence: str = Field(..., description="Waschbaer-Praesenz")
 
 
 class CreativeDirectionsResponse(BaseModel):

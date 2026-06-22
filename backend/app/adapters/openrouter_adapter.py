@@ -2,18 +2,21 @@ import json
 import logging
 from openai import AsyncOpenAI
 from app.adapters.base import AIAdapter
-from app.config import settings
+from app.user_settings import get_effective_ai_settings
 
 logger = logging.getLogger(__name__)
 
 
 class OpenRouterAdapter(AIAdapter):
     def __init__(self):
+        ai_settings = get_effective_ai_settings()
+        if not ai_settings.api_key:
+            raise ValueError("Keine API-Key hinterlegt. Der lokale Profi-Modus erstellt die Promotion ohne KI-Kosten.")
         self.client = AsyncOpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url=settings.openrouter_base_url,
+            api_key=ai_settings.api_key,
+            base_url=ai_settings.base_url,
         )
-        self.model = settings.openrouter_model
+        self.model = ai_settings.model
 
     async def chat(
         self,
@@ -32,10 +35,10 @@ class OpenRouterAdapter(AIAdapter):
             max_tokens=max_tokens,
         )
         if not response.choices:
-            raise ValueError("La API de IA devolvió una respuesta vacía")
+            raise ValueError("Die KI-API hat eine leere Antwort geliefert")
         content = response.choices[0].message.content
         if not content:
-            raise ValueError("La API de IA devolvió contenido vacío")
+            raise ValueError("Die KI-API hat keinen Inhalt geliefert")
         return content
 
     def _parse_json_response(self, text: str) -> dict:
@@ -49,8 +52,8 @@ class OpenRouterAdapter(AIAdapter):
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError as e:
-            logger.error("JSON inválido recibido de IA: %s", cleaned[:200])
-            raise ValueError(f"La IA devolvió JSON inválido: {e}") from e
+            logger.error("Ungueltiges JSON von KI erhalten: %s", cleaned[:200])
+            raise ValueError(f"Die KI hat ungueltiges JSON geliefert: {e}") from e
 
     async def chat_json(
         self,

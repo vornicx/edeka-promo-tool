@@ -1,35 +1,50 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { PromotionData, CreativeDirection, createPromo } from "@/lib/api";
+import { useCallback, useMemo, useState } from "react";
 import { showToast } from "@/components/Toast";
+import { CreativeDirection, PromotionData, createPromo } from "@/lib/api";
 
 interface Props {
-  onCreated: (sessionId: string, directions: CreativeDirection[]) => void;
+  onCreated: (sessionId: string, directions: CreativeDirection[], mode: string, note: string) => void;
 }
 
-const CATEGORIES = ["Fruta", "Verdura", "Panadería", "Lácteos", "Carnes", "Pescados", "Bebidas", "Hogar"];
+const CATEGORIES = [
+  { value: "obst", label: "Obst" },
+  { value: "gemuese", label: "Gemüse" },
+  { value: "baeckerei", label: "Bäckerei" },
+  { value: "milchprodukte", label: "Milchprodukte" },
+  { value: "fleisch", label: "Fleisch" },
+  { value: "fisch", label: "Fisch" },
+  { value: "getraenke", label: "Getränke" },
+  { value: "haushalt", label: "Haushalt" },
+];
 
-const TONE = [
-  { value: "fresco", label: "Fresco" },
+const TONES = [
+  { value: "fresco", label: "Frisch" },
   { value: "premium", label: "Premium" },
-  { value: "atrevido", label: "Atrevido" },
-  { value: "local", label: "Local" },
+  { value: "atrevido", label: "Mutig" },
+  { value: "local", label: "Lokal" },
 ];
 
 const FORMATS = [
-  { value: "post", label: "Post" },
-  { value: "story", label: "Story" },
-  { value: "poster_a4", label: "A4" },
-  { value: "poster_a5", label: "A5" },
+  { value: "post", label: "Post", meta: "1:1" },
+  { value: "story", label: "Story", meta: "9:16" },
+  { value: "poster_a4", label: "A4", meta: "Plakat" },
+  { value: "poster_a5", label: "A5", meta: "Plakat" },
+];
+
+const LEVELS = [
+  { value: "bajo", label: "Dezent" },
+  { value: "medio", label: "Ausgewogen" },
+  { value: "alto", label: "Auffällig" },
 ];
 
 function validate(f: PromotionData) {
   const e: Record<string, string> = {};
-  if (!f.product.trim()) e.product = "Campo obligatorio";
-  if (!f.price.trim()) e.price = "Campo obligatorio";
-  else if (!/^[\d,.\s€$]+$/.test(f.price)) e.price = "Formato inválido";
-  if (!f.validity.trim()) e.validity = "Campo obligatorio";
+  if (!f.product.trim()) e.product = "Produkt eintragen";
+  if (!f.price.trim()) e.price = "Preis eintragen";
+  else if (!/^[\d,.\s€$]+$/.test(f.price)) e.price = "Bitte ein gültiges Preisformat verwenden";
+  if (!f.validity.trim()) e.validity = "Aktionszeitraum eintragen";
   return e;
 }
 
@@ -37,124 +52,232 @@ export default function PromoForm({ onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<PromotionData>({
-    product: "", category: "", price: "", old_price: "",
-    validity: "", origin: "", claim: "", format: "post",
-    tone: "fresco", differentiation_level: "medio",
+    product: "",
+    category: "",
+    price: "",
+    old_price: "",
+    validity: "",
+    origin: "",
+    claim: "",
+    format: "post",
+    tone: "fresco",
+    differentiation_level: "medio",
   });
 
   const errors = useMemo(() => validate(form), [form]);
   const valid = Object.keys(errors).length === 0;
 
-  const upd = useCallback((f: keyof PromotionData, v: string) => setForm((p) => ({ ...p, [f]: v })), []);
-  const cls = (f: keyof PromotionData) => `input${touched.has(f) && errors[f] ? " input-error" : ""}`;
+  const update = useCallback((field: keyof PromotionData, value: string) => {
+    setForm((previous) => ({ ...previous, [field]: value }));
+  }, []);
+
+  const markTouched = (field: keyof PromotionData) => {
+    setTouched((previous) => new Set(previous).add(field));
+  };
+
+  const inputClass = (field: keyof PromotionData) => `input${touched.has(field) && errors[field] ? " input-error" : ""}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(new Set(["product", "price", "validity"]));
-    if (!valid) { showToast("error", "Revisa los campos"); return; }
+    if (!valid) {
+      showToast("error", "Bitte Pflichtfelder prüfen");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await createPromo(form);
-      onCreated(res.session_id, res.directions);
+      onCreated(res.session_id, res.directions, res.generation_mode, res.generation_note);
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Error");
+      showToast("error", err instanceof Error ? err.message : "Promotion konnte nicht erstellt werden");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card space-y-5">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-        <div className="col-span-2">
-          <label className="label">Producto</label>
-          <input className={cls("product")} placeholder="ej. Fresas de la región"
-            value={form.product} onChange={(e) => upd("product", e.target.value)}
-            onBlur={() => setTouched((p) => new Set(p).add("product"))} />
-        </div>
-
-        <div>
-          <label className="label">Categoría</label>
-          <select className="input" value={form.category} onChange={(e) => upd("category", e.target.value)}>
-            <option value="">Seleccionar</option>
-            {CATEGORIES.map((c) => <option key={c} value={c.toLowerCase()}>{c}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="label">Formato</label>
-          <div className="flex gap-1.5">
-            {FORMATS.map((f) => (
-              <button key={f.value} type="button" onClick={() => upd("format", f.value)}
-                className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                  form.format === f.value
-                    ? "border-edeka-blue/30 bg-edeka-lightblue text-edeka-blue"
-                    : "border-gray-100 text-gray-400 hover:border-gray-200"
-                }`}>{f.label}</button>
-            ))}
+    <form onSubmit={handleSubmit} className="panel overflow-hidden">
+      <div className="border-b border-slate-200 bg-white p-5 sm:p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Aktionsbriefing</p>
+        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-950">Angebot definieren</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+              Trage die wichtigsten Aktionsdaten ein. Je klarer das Briefing, desto besser die kreativen Vorschläge.
+            </p>
           </div>
-        </div>
-
-        <div>
-          <label className="label">Precio</label>
-          <input className={cls("price")} placeholder="2,99 €"
-            value={form.price} onChange={(e) => upd("price", e.target.value)}
-            onBlur={() => setTouched((p) => new Set(p).add("price"))} />
-        </div>
-
-        <div>
-          <label className="label">Antes</label>
-          <input className="input" placeholder="4,99 €" value={form.old_price}
-            onChange={(e) => upd("old_price", e.target.value)} />
-        </div>
-
-        <div>
-          <label className="label">Vigencia</label>
-          <input className={cls("validity")} placeholder="Solo hoy"
-            value={form.validity} onChange={(e) => upd("validity", e.target.value)}
-            onBlur={() => setTouched((p) => new Set(p).add("validity"))} />
-        </div>
-
-        <div>
-          <label className="label">Origen</label>
-          <input className="input" placeholder="España" value={form.origin}
-            onChange={(e) => upd("origin", e.target.value)} />
-        </div>
-
-        <div className="col-span-2">
-          <label className="label">Claim</label>
-          <input className="input" placeholder="ej. Dulces y frescas como ninguna"
-            value={form.claim} onChange={(e) => {
-              if (e.target.value.length <= 80) upd("claim", e.target.value);
-            }} />
-        </div>
-
-        <div>
-          <label className="label">Tono</label>
-          <div className="flex gap-1.5">
-            {TONE.map((t) => (
-              <button key={t.value} type="button" onClick={() => upd("tone", t.value)}
-                className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                  form.tone === t.value
-                    ? "border-edeka-blue/30 bg-edeka-lightblue text-edeka-blue"
-                    : "border-gray-100 text-gray-400 hover:border-gray-200"
-                }`}>{t.label}</button>
-            ))}
-          </div>
+          <span className="rounded-lg bg-edeka-lightblue px-3 py-2 text-xs font-bold text-edeka-blue">
+            {Object.keys(errors).length === 0 ? "Briefing vollständig" : "3 Pflichtfelder"}
+          </span>
         </div>
       </div>
 
-      <div className="flex justify-end pt-1 border-t border-gray-50">
-        <button type="submit" className="btn-primary mt-3" disabled={loading}>
+      <div className="grid gap-6 p-5 sm:p-6">
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="label" htmlFor="product">Produkt</label>
+            <input
+              id="product"
+              className={inputClass("product")}
+              placeholder="z. B. Erdbeeren aus der Region"
+              value={form.product}
+              onChange={(e) => update("product", e.target.value)}
+              onBlur={() => markTouched("product")}
+            />
+            {touched.has("product") && errors.product && <p className="field-error">{errors.product}</p>}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="category">Kategorie</label>
+            <select
+              id="category"
+              className="input"
+              value={form.category}
+              onChange={(e) => update("category", e.target.value)}
+            >
+              <option value="">Kategorie auswählen</option>
+              {CATEGORIES.map((category) => (
+                <option key={category.value} value={category.value}>{category.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Hauptformat</label>
+            <div className="segmented">
+              {FORMATS.map((format) => (
+                <button
+                  key={format.value}
+                  type="button"
+                  aria-pressed={form.format === format.value}
+                  onClick={() => update("format", format.value)}
+                  className={`segment ${form.format === format.value ? "segment-active" : ""}`}
+                >
+                  <span className="font-bold">{format.label}</span>
+                  <span className="text-[11px] text-slate-500">{format.meta}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="price">Preis</label>
+            <input
+              id="price"
+              className={inputClass("price")}
+              placeholder="2,99 €"
+              value={form.price}
+              onChange={(e) => update("price", e.target.value)}
+              onBlur={() => markTouched("price")}
+            />
+            {touched.has("price") && errors.price && <p className="field-error">{errors.price}</p>}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="old-price">Statt</label>
+            <input
+              id="old-price"
+              className="input"
+              placeholder="4,99 €"
+              value={form.old_price}
+              onChange={(e) => update("old_price", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="validity">Aktionszeitraum</label>
+            <input
+              id="validity"
+              className={inputClass("validity")}
+              placeholder="Nur heute"
+              value={form.validity}
+              onChange={(e) => update("validity", e.target.value)}
+              onBlur={() => markTouched("validity")}
+            />
+            {touched.has("validity") && errors.validity && <p className="field-error">{errors.validity}</p>}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="origin">Herkunft</label>
+            <input
+              id="origin"
+              className="input"
+              placeholder="Deutschland"
+              value={form.origin}
+              onChange={(e) => update("origin", e.target.value)}
+            />
+          </div>
+        </section>
+
+        <section className="grid gap-4 border-t border-slate-200 pt-6">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <label className="label mb-0" htmlFor="claim">Claim</label>
+              <span className="text-xs font-semibold text-slate-400">{form.claim?.length || 0}/80</span>
+            </div>
+            <input
+              id="claim"
+              className="input mt-1.5"
+              placeholder="z. B. Süß und frisch"
+              value={form.claim}
+              onChange={(e) => {
+                if (e.target.value.length <= 80) update("claim", e.target.value);
+              }}
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <label className="label">Tonalität</label>
+              <div className="segmented">
+                {TONES.map((tone) => (
+                  <button
+                    key={tone.value}
+                    type="button"
+                    aria-pressed={form.tone === tone.value}
+                    onClick={() => update("tone", tone.value)}
+                    className={`segment ${form.tone === tone.value ? "segment-active" : ""}`}
+                  >
+                    {tone.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Kreativniveau</label>
+              <div className="segmented">
+                {LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    aria-pressed={form.differentiation_level === level.value}
+                    onClick={() => update("differentiation_level", level.value)}
+                    className={`segment ${form.differentiation_level === level.value ? "segment-active" : ""}`}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <p className="text-sm font-medium text-slate-600">
+          Wir erstellen mehrere visuelle Richtungen zum Vergleichen.
+        </p>
+        <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? (
             <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Generando...
+              <span className="spinner" />
+              Wird erstellt
             </span>
-          ) : "Crear promoción"}
+          ) : (
+            "Richtungen erstellen"
+          )}
         </button>
       </div>
     </form>

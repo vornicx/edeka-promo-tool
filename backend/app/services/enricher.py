@@ -2,18 +2,18 @@ from app.adapters.base import AIAdapter
 from app.schemas.promotion import PromotionSpec, EnrichmentSpec
 
 
-SYSTEM_PROMPT = """Actúa como analista de marketing retail para EDEKA Mühlenbein en Kassel.
-Tu tarea es analizar una ficha de producto y devolver un enriquecimiento semántico estructurado.
+SYSTEM_PROMPT = """Du bist Retail-Marketing-Analyst fuer EDEKA Muehlenbein in Kassel.
+Deine Aufgabe ist es, ein Produktbriefing zu analysieren und eine strukturierte semantische Einordnung zurueckzugeben.
 
-Contexto de marca:
-- Mercado local EDEKA Mühlenbein en Kassel
-- Identidad diferencial, cercana, innovadora
-- Posible uso del personaje Waschbér (mapache) como elemento de marca
+Markenkontext:
+- Lokaler EDEKA Muehlenbein Markt in Kassel
+- Nahbare, moderne und eigenstaendige Identitaet
+- Hochwertige, kommerzielle Promotionen fuer den lokalen Markt
 
-Devuelve SOLO JSON válido con esta estructura:
+Gib nur gueltiges JSON mit dieser Struktur zurueck:
 {
   "campaign_type": "fresh_product_offer | daily_special | seasonal_campaign | brand_story",
-  "product_family": "fruta | verdura | panaderia | lacteos | carnes | pescados | bebidas | limpieza | hogar | otros",
+  "product_family": "fruit | vegetable | bakery | dairy | meat | fish | drinks | cleaning | household | other",
   "seasonality": "spring_summer | autumn_winter | all_year | holiday_specific",
   "communication_style": "close_and_fresh | elegant_restrained | bold_direct | warm_community",
   "price_priority": "high | medium | low",
@@ -24,19 +24,19 @@ Devuelve SOLO JSON válido con esta estructura:
 
 
 def build_user_prompt(spec: PromotionSpec) -> str:
-    parts = [f"Producto: {spec.product}"]
+    parts = [f"Produkt: {spec.product}"]
     if spec.category:
-        parts.append(f"Categoría: {spec.category}")
-    parts.append(f"Precio: {spec.price}")
+        parts.append(f"Kategorie: {spec.category}")
+    parts.append(f"Preis: {spec.price}")
     if spec.old_price:
-        parts.append(f"Precio anterior: {spec.old_price}")
-    parts.append(f"Vigencia: {spec.validity}")
+        parts.append(f"Alter Preis: {spec.old_price}")
+    parts.append(f"Aktionszeitraum: {spec.validity}")
     if spec.origin:
-        parts.append(f"Origen: {spec.origin}")
+        parts.append(f"Herkunft: {spec.origin}")
     if spec.claim:
         parts.append(f"Claim: {spec.claim}")
-    parts.append(f"Tono: {spec.tone.value}")
-    parts.append(f"Nivel de diferenciación: {spec.differentiation_level.value}")
+    parts.append(f"Tonalitaet: {spec.tone.value}")
+    parts.append(f"Differenzierungsgrad: {spec.differentiation_level.value}")
     return "\n".join(parts)
 
 

@@ -2,3 +2,15 @@ node_modules/
 package-lock.json
 npm-debug.log*
 .yarn/
+
+# Build artifacts and local environments
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+.venv-build-linux/
+.commandcode/
+
+# Generated promo samples
+test_outputs/

@@ -13,14 +13,15 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Open Sans", "system-ui", "sans-serif"],
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         pill: "9999px",
       },
       boxShadow: {
-        card: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
-        elevated: "0 8px 24px rgba(0,76,150,0.10)",
+        card: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.04)",
+        elevated: "0 16px 40px rgba(0,76,150,0.14)",
+        brand: "0 10px 24px rgba(0,76,150,0.18)",
         modal: "0 20px 60px rgba(0,0,0,0.12)",
       },
       animation: {

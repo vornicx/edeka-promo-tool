@@ -13,16 +13,13 @@ from app.schemas.promotion import (
     EXPORT_FORMATS,
 )
 from app.services.intake import validate_and_create_spec
-from app.services.enricher import enrich_promotion
-from app.services.director import generate_directions
+from app.services.planner import build_local_plan, generate_ai_plan
 from app.services.composer import compose_promotion
 from app.services.exporter import export_promotion
 from app.adapters.openrouter_adapter import OpenRouterAdapter
 from app.config import settings
 
 router = APIRouter(prefix="/api/promo", tags=["promo"])
-
-ai_adapter = OpenRouterAdapter()
 
 MAX_SESSIONS = 50
 sessions: dict[str, dict] = {}
@@ -33,6 +30,10 @@ def _cleanup_old_sessions():
         oldest_keys = list(sessions.keys())[: len(sessions) // 2]
         for key in oldest_keys:
             del sessions[key]
+
+
+def _get_ai_adapter() -> OpenRouterAdapter:
+    return OpenRouterAdapter()
 
 
 class CreatePromoRequest(BaseModel):
@@ -63,31 +64,34 @@ async def create_promo(request: CreatePromoRequest):
     try:
         spec = validate_and_create_spec(request.model_dump())
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error en datos de entrada: {e}")
+        raise HTTPException(status_code=400, detail=f"Eingabedaten konnten nicht verarbeitet werden: {e}")
 
     session_id = str(uuid.uuid4())[:8]
 
     _cleanup_old_sessions()
 
     try:
-        enrichment = await enrich_promotion(ai_adapter, spec)
+        ai_adapter = _get_ai_adapter()
     except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Error en enriquecimiento IA: {e}"
-        )
-
-    try:
-        directions = await generate_directions(ai_adapter, spec, enrichment)
-    except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Error en dirección creativa IA: {e}"
-        )
+        enrichment, directions = build_local_plan(spec)
+        generation_mode = "local"
+        generation_note = str(e)
+    else:
+        try:
+            enrichment, directions = await generate_ai_plan(ai_adapter, spec)
+            generation_mode = "ai"
+            generation_note = "Plan mit einem einzigen KI-Aufruf erstellt, um Kosten niedrig zu halten"
+        except Exception as e:
+            enrichment, directions = build_local_plan(spec)
+            generation_mode = "local_fallback"
+            generation_note = f"KI-Anbieter nicht verfuegbar. Lokaler Profi-Modus wurde verwendet: {e}"
 
     sessions[session_id] = {
         "spec": spec,
         "enrichment": enrichment,
         "directions": directions,
         "composed_path": None,
+        "generation_mode": generation_mode,
     }
 
     return {
@@ -95,6 +99,8 @@ async def create_promo(request: CreatePromoRequest):
         "spec": spec.model_dump(),
         "enrichment": enrichment.model_dump(),
         "directions": [d.model_dump() for d in directions],
+        "generation_mode": generation_mode,
+        "generation_note": generation_note,
     }
 
 
@@ -102,12 +108,12 @@ async def create_promo(request: CreatePromoRequest):
 async def compose_selected(request: SelectDirectionRequest):
     session = sessions.get(request.session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+        raise HTTPException(status_code=404, detail="Sitzung nicht gefunden")
 
     if request.direction_index < 0 or request.direction_index >= len(
         session["directions"]
     ):
-        raise HTTPException(status_code=400, detail="Índice de dirección inválido")
+        raise HTTPException(status_code=400, detail="Ungueltige Kreativrichtung")
 
     spec = session["spec"]
     direction = session["directions"][request.direction_index]
@@ -120,7 +126,7 @@ async def compose_selected(request: SelectDirectionRequest):
     try:
         compose_promotion(spec, direction, fmt, output_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en composición: {e}")
+        raise HTTPException(status_code=500, detail=f"Gestaltung konnte nicht erstellt werden: {e}")
 
     session["composed_path"] = output_path
 
@@ -135,11 +141,11 @@ async def compose_selected(request: SelectDirectionRequest):
 async def get_image(session_id: str):
     session = sessions.get(session_id)
     if not session or not session["composed_path"]:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+        raise HTTPException(status_code=404, detail="Bild nicht gefunden")
 
     path = session["composed_path"]
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
+        raise HTTPException(status_code=404, detail="Bilddatei nicht gefunden")
 
     return FileResponse(str(path), media_type="image/png")
 
@@ -148,19 +154,19 @@ async def get_image(session_id: str):
 async def export_to_format(request: ExportRequest):
     session = sessions.get(request.session_id)
     if not session or not session["composed_path"]:
-        raise HTTPException(status_code=404, detail="Promoción no compuesta aún")
+        raise HTTPException(status_code=404, detail="Promotion wurde noch nicht gestaltet")
 
     try:
         fmt = FormatType(request.format)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato inválido")
+        raise HTTPException(status_code=400, detail="Ungueltiges Format")
 
     try:
         exported_path = export_promotion(
             session["composed_path"], fmt, settings.output_dir / request.session_id
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en exportación: {e}")
+        raise HTTPException(status_code=500, detail=f"Export konnte nicht erstellt werden: {e}")
 
     return FileResponse(
         str(exported_path),

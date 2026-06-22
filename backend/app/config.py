@@ -10,6 +10,16 @@ def _is_vercel() -> bool:
 _APP_DIR = Path(__file__).resolve().parent
 
 
+def _user_data_dir() -> Path:
+    app_name = "EDEKA Promo Tool"
+    if sys.platform.startswith("win"):
+        root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        return Path(root or Path.home() / "AppData" / "Local") / app_name
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "edeka-promo-tool"
+
+
 class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -32,7 +42,7 @@ class Settings(BaseSettings):
         if _is_vercel():
             p = Path("/tmp/output")
         elif getattr(sys, "frozen", False):
-            p = self.base_dir / "output"
+            p = _user_data_dir() / "output"
         else:
             p = self.base_dir / "output"
         p.mkdir(parents=True, exist_ok=True)
@@ -51,7 +61,10 @@ class Settings(BaseSettings):
         p.mkdir(parents=True, exist_ok=True)
         return p
 
-    model_config = {"env_file": "env.local", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": str(_APP_DIR.parent / "env.local"),
+        "env_file_encoding": "utf-8",
+    }
 
 
 settings = Settings()

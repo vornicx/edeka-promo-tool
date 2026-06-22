@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "EDEKA Mühlenbein - Promo Tool",
-  description: "Herramienta de creación de promociones con IA",
+  description: "Promotionen mit KI und lokalem Profi-Modus erstellen",
 };
 
 export default function RootLayout({
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="de">
       <body>{children}</body>
     </html>
   );

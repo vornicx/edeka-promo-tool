@@ -9,11 +9,19 @@ interface Props {
 }
 
 const FORMATS = [
-  { value: "post", label: "Post 1:1", dim: "1080×1080" },
-  { value: "story", label: "Story 9:16", dim: "1080×1920" },
-  { value: "poster_a4", label: "A4", dim: "2480×3508" },
-  { value: "poster_a5", label: "A5", dim: "1748×2480" },
+  { value: "post", label: "Post 1:1", dim: "1080 x 1080", use: "Feed" },
+  { value: "story", label: "Story 9:16", dim: "1080 x 1920", use: "Instagram" },
+  { value: "poster_a4", label: "Plakat A4", dim: "2480 x 3508", use: "Druck" },
+  { value: "poster_a5", label: "Plakat A5", dim: "1748 x 2480", use: "Markt" },
 ];
+
+function DownloadIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" />
+    </svg>
+  );
+}
 
 export default function ExportPanel({ sessionId, composed }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -33,45 +41,49 @@ export default function ExportPanel({ sessionId, composed }: Props) {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setError("Error al exportar");
+      setError("Export konnte nicht erstellt werden");
     } finally {
       setBusy(null);
     }
   };
 
   return (
-    <div className="card">
-      <h2 className="section-title mb-4">Exportar</h2>
-      {error && (
-        <div className="mb-3 bg-red-50/80 border border-red-100 rounded-xl p-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
-      <div className="flex gap-2">
-        {FORMATS.map((f) => (
-          <button key={f.value} onClick={() => handleExport(f.value)}
+    <aside className="panel overflow-hidden xl:sticky xl:top-6 xl:self-start">
+      <div className="border-b border-slate-200 bg-white p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Export</p>
+        <h2 className="mt-2 text-xl font-extrabold text-slate-950">Formate herunterladen</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600">Wähle das passende Ausgabeformat für den Kanal.</p>
+      </div>
+
+      <div className="grid gap-3 p-5">
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        {FORMATS.map((format) => (
+          <button
+            key={format.value}
+            type="button"
+            onClick={() => handleExport(format.value)}
             disabled={busy !== null}
-            className={`flex-1 p-3 rounded-xl border text-center transition-all ${
-              busy === f.value
-                ? "border-edeka-blue/30 bg-edeka-lightblue/50"
-                : "border-gray-100 bg-gray-50/50 hover:border-gray-200 hover:bg-white"
-            } disabled:opacity-40`}>
-            <div className="flex items-center justify-center gap-2 mb-0.5">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span className="text-sm font-semibold text-gray-700">{f.label}</span>
-            </div>
-            <div className="text-[11px] text-gray-400">{f.dim}</div>
-            {busy === f.value && (
-              <svg className="animate-spin h-3 w-3 mx-auto mt-1 text-edeka-blue" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
+            className={`group flex items-center justify-between gap-3 rounded-lg border p-4 text-left transition-all ${
+              busy === format.value
+                ? "border-edeka-blue bg-edeka-lightblue"
+                : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-card"
+            } disabled:cursor-not-allowed disabled:opacity-55`}
+          >
+            <span>
+              <span className="block text-sm font-extrabold text-slate-950">{format.label}</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-500">{format.use} · {format.dim}</span>
+            </span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-edeka-blue group-hover:text-white">
+              {busy === format.value ? <span className="spinner" /> : <DownloadIcon />}
+            </span>
           </button>
         ))}
       </div>
-    </div>
+    </aside>
   );
 }

@@ -2,29 +2,89 @@
 
 Herramienta de creación de promociones con IA para EDEKA Mühlenbein.
 
-## Requisitos
+## Uso del cliente
+
+El cliente no necesita instalar Python ni Node.js si recibe el `.exe` generado.
+
+1. Ejecutar `edeka-promo-tool.exe`
+2. Abrir el apartado **Ajustes IA**
+3. Pegar su API key
+4. Elegir proveedor/modelo
+5. Guardar y crear promociones
+
+La key se guarda localmente en el equipo del cliente:
+
+- Windows: `%APPDATA%\EDEKA Promo Tool\settings.json`
+- Linux: `~/.config/edeka-promo-tool/settings.json`
+- macOS: `~/Library/Application Support/EDEKA Promo Tool/settings.json`
+
+## Generar el .exe
+
+Requisitos de build:
+
+- Docker
+- Node.js 18+
+
+```bash
+python3 build_desktop.py
+```
+
+El ejecutable queda en:
+
+```bash
+dist/edeka-promo-tool.exe
+```
+
+Ese archivo se puede enviar al cliente para descargar y ejecutar.
+
+## Generar instalador Linux
+
+Requisitos de build:
 
 - Python 3.12+
 - Node.js 18+
-- API key de OpenRouter (https://openrouter.ai)
+
+```bash
+python3 build_linux.py
+```
+
+El paquete queda en:
+
+```bash
+dist/edeka-promo-tool-linux.tar.gz
+```
+
+Para instalarlo en Linux:
+
+```bash
+tar -xzf dist/edeka-promo-tool-linux.tar.gz -C /tmp
+cd /tmp/edeka-promo-tool-linux
+./install.sh
+```
+
+## Desarrollo local
+
+Requisitos:
+
+- Python 3.12+
+- Node.js 18+
 
 ## Instalación rápida
 
 ```bash
-# 1. Configurar API key
-echo "OPENROUTER_API_KEY=tu_key_aqui" > backend/.env
-
-# 2. Instalar dependencias
+# 1. Instalar dependencias
 cd backend && pip install -r requirements.txt
 cd ../frontend && npm install
 
-# 3. Ejecutar
+# 2. Ejecutar
 cd .. && bash start.sh
 ```
 
+La API key se configura desde el botón **Ajustes IA** en la interfaz.
+
 ## URLs
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3001
 - Backend API: http://localhost:8000
 - Documentación API: http://localhost:8000/docs
 
@@ -50,6 +110,6 @@ edeka-promo-tool/
 
 - **Backend:** Python 3.12, FastAPI, Pillow
 - **Frontend:** Next.js 14, TypeScript, Tailwind CSS
-- **IA:** OpenRouter (GPT-4o-mini por defecto)
+- **IA:** OpenRouter por defecto, compatible con APIs estilo OpenAI
 - **Fondos:** Generados gradiente por sección
-- **Tipografía:** Open Sans
+- **Tipografía de piezas exportadas:** Open Sans

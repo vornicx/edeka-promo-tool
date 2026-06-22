@@ -5,10 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.routes.promo import router as promo_router
+from app.routes.settings import router as settings_router
 
 app = FastAPI(
     title="EDEKA Mühlenbein Promo Tool",
-    description="Herramienta de creación de promociones con IA",
+    description="Tool zur Erstellung professioneller EDEKA-Aktionsmotive",
     version="1.0.0",
 )
 
@@ -21,11 +22,20 @@ app.add_middleware(
 )
 
 app.include_router(promo_router)
+app.include_router(settings_router)
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "model": settings.openrouter_model}
+    from app.user_settings import get_effective_ai_settings
+
+    ai_settings = get_effective_ai_settings()
+    return {
+        "status": "ok",
+        "model": ai_settings.model,
+        "provider": ai_settings.provider,
+        "has_api_key": bool(ai_settings.api_key),
+    }
 
 
 if getattr(sys, "frozen", False):
