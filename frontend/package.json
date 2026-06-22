@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/start-backend.js",
     "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
