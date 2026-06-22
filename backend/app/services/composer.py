@@ -286,24 +286,13 @@ def _normalize(value: str | None) -> str:
     return clean.lower()
 
 
-def _resolve_product_asset(spec: PromotionSpec) -> Path | None:
-    # User-uploaded products take precedence over the bundled ones.
-    try:
-        from app.product_library import resolve_custom_asset
-
-        custom = resolve_custom_asset(spec.product, spec.category)
-        if custom:
-            return custom
-    except Exception:  # noqa: BLE001 - never let the library break composing
-        pass
-
+def _resolve_builtin_asset(spec: PromotionSpec) -> Path | None:
     haystack = _normalize(f"{spec.product} {spec.category or ''}")
     for asset_name, keywords in PRODUCT_ASSETS.items():
         if any(keyword in haystack for keyword in keywords):
             path = PRODUCT_ASSET_DIR / f"{asset_name}.png"
             if path.exists():
                 return path
-
     if any(word in haystack for word in FRUIT_WORDS):
         path = PRODUCT_ASSET_DIR / "mixed_fruit.png"
         return path if path.exists() else None
@@ -311,6 +300,38 @@ def _resolve_product_asset(spec: PromotionSpec) -> Path | None:
         path = PRODUCT_ASSET_DIR / "mixed_vegetables.png"
         return path if path.exists() else None
     return None
+
+
+def _resolve_product_asset(spec: PromotionSpec) -> Path | None:
+    choice = (spec.product_image or "").strip()
+
+    # Explicit choice from the form's motif picker.
+    if choice.startswith("builtin:"):
+        path = PRODUCT_ASSET_DIR / f"{choice.split(':', 1)[1]}.png"
+        if path.exists():
+            return path
+    elif choice.startswith("custom:"):
+        try:
+            from app.product_library import get_product_file
+
+            p = get_product_file(choice.split(":", 1)[1])
+            if p:
+                return p
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Auto (default): user-uploaded products take precedence over bundled ones.
+    if not choice or choice == "auto":
+        try:
+            from app.product_library import resolve_custom_asset
+
+            custom = resolve_custom_asset(spec.product, spec.category)
+            if custom:
+                return custom
+        except Exception:  # noqa: BLE001 - never let the library break composing
+            pass
+
+    return _resolve_builtin_asset(spec)
 
 
 def _trim_alpha(image: Image.Image) -> Image.Image:

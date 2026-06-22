@@ -31,6 +31,10 @@ class PromotionSpec(BaseModel):
     validity: str = Field(..., min_length=1, description="Gültigkeit des Angebots")
     origin: Optional[str] = Field(None, description="Herkunft des Produkts")
     claim: Optional[str] = Field(None, description="Kurzer Werbeclaim")
+    product_image: Optional[str] = Field(
+        None,
+        description="Bildquelle: leer/auto = nach Name, 'builtin:<key>' = integriertes Motiv, 'custom:<id>' = eigenes Foto",
+    )
     format: FormatType = Field(default=FormatType.POST, description="Ausgabeformat")
     tone: ToneType = Field(default=ToneType.FRESCO, description="Visuelle Tonalität")
     differentiation_level: DifferentiationLevel = Field(

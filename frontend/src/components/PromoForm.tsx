@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/components/Toast";
-import { CreativeDirection, PromotionData, createPromo } from "@/lib/api";
+import {
+  CreativeDirection,
+  Motif,
+  PromotionData,
+  createPromo,
+  getMotifImageUrl,
+  listMotifs,
+} from "@/lib/api";
 
 interface Props {
   onCreated: (sessionId: string, directions: CreativeDirection[], mode: string, note: string) => void;
@@ -39,6 +46,8 @@ const LEVELS = [
   { value: "alto", label: "Auffällig" },
 ];
 
+const CATEGORY_BY_LABEL = new Map(CATEGORIES.map((c) => [c.label, c.value]));
+
 function validate(f: PromotionData) {
   const e: Record<string, string> = {};
   if (!f.product.trim()) e.product = "Produkt eintragen";
@@ -51,6 +60,7 @@ function validate(f: PromotionData) {
 export default function PromoForm({ onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [motifs, setMotifs] = useState<Motif[]>([]);
   const [form, setForm] = useState<PromotionData>({
     product: "",
     category: "",
@@ -59,6 +69,7 @@ export default function PromoForm({ onCreated }: Props) {
     validity: "",
     origin: "",
     claim: "",
+    product_image: "",
     format: "post",
     tone: "fresco",
     differentiation_level: "medio",
@@ -70,6 +81,36 @@ export default function PromoForm({ onCreated }: Props) {
   const update = useCallback((field: keyof PromotionData, value: string) => {
     setForm((previous) => ({ ...previous, [field]: value }));
   }, []);
+
+  const loadMotifs = useCallback(() => {
+    listMotifs()
+      .then(setMotifs)
+      .catch(() => {
+        /* el selector simplemente queda en "Automatisch" */
+      });
+  }, []);
+
+  useEffect(() => {
+    loadMotifs();
+  }, [loadMotifs]);
+
+  const builtinMotifs = motifs.filter((m) => m.source === "builtin");
+  const customMotifs = motifs.filter((m) => m.source === "custom");
+  const selectedMotif = motifs.find((m) => m.value === form.product_image);
+
+  const handleMotifChange = (value: string) => {
+    setForm((previous) => {
+      const motif = motifs.find((m) => m.value === value);
+      const next: PromotionData = { ...previous, product_image: value };
+      if (motif) {
+        if (!previous.product.trim()) next.product = motif.name;
+        if (!previous.category && motif.category) {
+          next.category = CATEGORY_BY_LABEL.get(motif.category) ?? previous.category;
+        }
+      }
+      return next;
+    });
+  };
 
   const markTouched = (field: keyof PromotionData) => {
     setTouched((previous) => new Set(previous).add(field));
@@ -126,6 +167,46 @@ export default function PromoForm({ onCreated }: Props) {
               onBlur={() => markTouched("product")}
             />
             {touched.has("product") && errors.product && <p className="field-error">{errors.product}</p>}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="label" htmlFor="motif">Produktbild / Motiv</label>
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                {selectedMotif ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={getMotifImageUrl(selectedMotif)} alt={selectedMotif.name} className="h-full w-full object-contain" />
+                ) : (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Auto</span>
+                )}
+              </div>
+              <select
+                id="motif"
+                className="input"
+                value={form.product_image}
+                onChange={(e) => handleMotifChange(e.target.value)}
+                onFocus={loadMotifs}
+              >
+                <option value="">Automatisch (nach Produktname)</option>
+                {builtinMotifs.length > 0 && (
+                  <optgroup label="Integrierte Motive">
+                    {builtinMotifs.map((m) => (
+                      <option key={m.value} value={m.value}>{m.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {customMotifs.length > 0 && (
+                  <optgroup label="Eigene Fotos">
+                    {customMotifs.map((m) => (
+                      <option key={m.value} value={m.value}>{m.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Integriertes Motiv oder eigenes Foto wählen – oder automatisch nach Produktname. Eigene Fotos über „Produkte“ hochladen.
+            </p>
           </div>
 
           <div>

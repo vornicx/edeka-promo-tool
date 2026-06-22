@@ -4,9 +4,17 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app import product_library
+from app import builtin_products, product_library
 
 router = APIRouter(prefix="/api/products", tags=["products"])
+
+
+class MotifOut(BaseModel):
+    value: str  # "builtin:<key>" or "custom:<id>"
+    name: str
+    category: str = ""
+    image_url: str
+    source: str  # "builtin" | "custom"
 
 
 class ProductOut(BaseModel):
@@ -36,6 +44,40 @@ def _to_out(entry: dict) -> ProductOut:
 @router.get("")
 async def list_products() -> list[ProductOut]:
     return [_to_out(e) for e in product_library.load_catalog()]
+
+
+@router.get("/catalog")
+async def motif_catalog() -> list[MotifOut]:
+    """All selectable motifs: bundled ones first, then the user's own photos."""
+    motifs: list[MotifOut] = [
+        MotifOut(
+            value=f"builtin:{p['key']}",
+            name=p["name"],
+            category=p["category"],
+            image_url=f"/api/products/builtin/{p['key']}/image",
+            source="builtin",
+        )
+        for p in builtin_products.list_builtin()
+    ]
+    motifs += [
+        MotifOut(
+            value=f"custom:{e['id']}",
+            name=e.get("name", ""),
+            category=e.get("category", ""),
+            image_url=f"/api/products/{e['id']}/image",
+            source="custom",
+        )
+        for e in product_library.load_catalog()
+    ]
+    return motifs
+
+
+@router.get("/builtin/{key}/image")
+async def builtin_image(key: str):
+    path = builtin_products.builtin_file(key)
+    if not path:
+        raise HTTPException(status_code=404, detail="Motiv nicht gefunden")
+    return FileResponse(str(path), media_type="image/png")
 
 
 @router.post("")

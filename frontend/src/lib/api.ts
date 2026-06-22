@@ -11,9 +11,18 @@ export interface PromotionData {
   validity: string;
   origin?: string;
   claim?: string;
+  product_image?: string;
   format: string;
   tone: string;
   differentiation_level: string;
+}
+
+export interface Motif {
+  value: string;
+  name: string;
+  category: string;
+  image_url: string;
+  source: "builtin" | "custom";
 }
 
 export interface CreativeDirection {
@@ -179,6 +188,15 @@ export function getProductImageUrl(product: CustomProduct): string {
 export async function listProducts(): Promise<CustomProduct[]> {
   const res = await fetch(PRODUCTS_API_BASE);
   return handleResponse<CustomProduct[]>(res, "Produkte konnten nicht geladen werden");
+}
+
+export async function listMotifs(): Promise<Motif[]> {
+  const res = await fetch(`${PRODUCTS_API_BASE}/catalog`);
+  return handleResponse<Motif[]>(res, "Motive konnten nicht geladen werden");
+}
+
+export function getMotifImageUrl(motif: Motif): string {
+  return `${API_ROOT}${motif.image_url}`;
 }
 
 export async function createProduct(data: CreateProductPayload): Promise<CustomProduct> {
