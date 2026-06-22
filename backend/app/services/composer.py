@@ -699,17 +699,18 @@ INSTAGRAM = "@waschbaer_edeka"
 GREEN = (60, 140, 46)  # BIO tag
 
 
-def _paint_background(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+def _paint_background(canvas: Image.Image, cfg: "StyleConfig"):
     w, h = canvas.size
     # Saturated EDEKA-blue diagonal gradient base.
-    top = _lighten(primary, 0.10)
-    bottom = _darken(primary, 0.35)
+    top = _lighten(cfg.primary, cfg.bg_light)
+    bottom = _darken(cfg.primary, cfg.bg_dark)
     canvas.paste(_diagonal_gradient((w, h), top, bottom), (0, 0))
 
     # Soft vignette at the corners for depth (no hard shapes).
-    vig = Image.new("RGBA", (w, h), (*_darken(primary, 0.5), 0))
-    vig.putalpha(_radial_alpha(240, 0, 120, falloff=2.4).resize((w, h)))
-    canvas.alpha_composite(vig)
+    if cfg.vignette > 0:
+        vig = Image.new("RGBA", (w, h), (*_darken(cfg.primary, 0.5), 0))
+        vig.putalpha(_radial_alpha(240, 0, cfg.vignette, falloff=2.4).resize((w, h)))
+        canvas.alpha_composite(vig)
 
 
 def _load_mascot(target_h: int) -> Image.Image | None:
@@ -807,10 +808,14 @@ def _tag_width(text: str, height: int) -> int:
     return (b[2] - b[0]) + int(height * 0.5) * 2
 
 
-def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_top: int, height: int, angle: float = -4.0):
+def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_top: int, height: int, angle: float = -4.0, force_region: bool = False):
     """Stack up to two contextual badges, top-left anchored."""
+    tags = _context_tags(spec)
+    if force_region and not any(t[0] == "AUS DER REGION" for t in tags):
+        tags.insert(0, ("AUS DER REGION", RED, (255, 255, 255)))
+        tags = tags[:2]
     y = y_top
-    for text, bg, fg in _context_tags(spec):
+    for text, bg, fg in tags:
         tw = _tag_width(text, height)
         _draw_tag(canvas, text, x_left + tw // 2, y + height // 2, height, bg, fg, angle=angle)
         y += int(height * 1.28)
@@ -823,96 +828,148 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 CLAIM_LIGHT = (205, 222, 245)
 
 
-def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+@dataclass
+class StyleConfig:
+    primary: tuple[int, int, int]
+    accent: tuple[int, int, int]
+    bg_light: float
+    bg_dark: float
+    vignette: int
+    star_scale: float
+    halo_alpha: int
+    spotlight_alpha: int
+    force_region: bool
+
+
+def _enum_val(value) -> str:
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _build_style_config(spec: PromotionSpec, primary, accent) -> StyleConfig:
+    """Translate Tonalität (mood/colour) and Kreativniveau (intensity) into
+    concrete drawing parameters, while keeping the EDEKA identity."""
+    tone = _enum_val(spec.tone)
+    level = _enum_val(spec.differentiation_level)
+
+    bg_light, bg_dark, vignette = 0.10, 0.35, 120
+    star_scale, halo, spot = 1.0, 120, 165
+    force_region = False
+
+    # --- Tonalität: mood + colour accent ---
+    if tone == "premium":          # elegant, deep, gold accent
+        primary = _darken(primary, 0.18)
+        accent = _mix(accent, (255, 176, 32), 0.28)
+        bg_light, bg_dark, vignette = 0.04, 0.50, 180
+        star_scale *= 0.95
+    elif tone == "atrevido":       # Mutig: louder, bigger, brighter
+        primary = _lighten(primary, 0.05)
+        star_scale *= 1.12
+        halo += 45
+        spot += 25
+    elif tone == "local":          # warm + always show the region badge
+        accent = _mix(accent, (255, 168, 64), 0.22)
+        force_region = True
+        bg_dark = 0.42
+    # "fresco" keeps the defaults
+
+    # --- Kreativniveau: how much visual punch ---
+    if level == "bajo":            # Dezent: clean, restrained
+        star_scale *= 0.90
+        halo = int(halo * 0.5)
+        spot = int(spot * 0.7)
+        vignette = int(vignette * 0.55)
+        bg_light += 0.04
+    elif level == "alto":          # Auffällig: maximum impact
+        star_scale *= 1.13
+        halo = int(halo * 1.45)
+        spot = int(spot * 1.2)
+
+    return StyleConfig(primary, accent, bg_light, bg_dark, vignette,
+                       round(star_scale, 3), halo, spot, force_region)
+
+
+def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     w, h = canvas.size
     margin = int(w * 0.05)
     white = (255, 255, 255)
-    _paint_background(canvas, primary, accent)
+    primary, accent = cfg.primary, cfg.accent
+    _paint_background(canvas, cfg)
     draw = ImageDraw.Draw(canvas)
 
-    # Soft warm halo behind the star (no hard bars).
-    star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.46), int(w * 0.24)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), 120)
+    # Soft warm halo behind the star (intensity from Kreativniveau).
+    star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.46), int(w * 0.24 * cfg.star_scale)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
     _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary)
 
     # Product hero on the left, lifted by a warm spotlight.
-    _draw_spotlight(canvas, int(w * 0.31), int(h * 0.43), int(w * 0.36), _lighten(accent, 0.5), 165)
+    _draw_spotlight(canvas, int(w * 0.31), int(h * 0.43), int(w * 0.36), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.02), int(h * 0.20), int(w * 0.56), int(h * 0.44)), white)
 
-    # Contextual badges over the product corner.
-    _draw_context_tags(canvas, spec, margin, int(h * 0.205), int(w * 0.052))
+    _draw_context_tags(canvas, spec, margin, int(h * 0.205), int(w * 0.052), force_region=cfg.force_region)
 
-    # Price star on the right (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.88), int(star_r * 0.46))
     _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.0), int(w * 0.052), accent, primary)
 
-    # Headline + claim, bottom-left, white on blue.
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.62), int(h * 0.14)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_footer_text(canvas, accent, margin)
 
 
-def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     w, h = canvas.size
     margin = int(w * 0.06)
     white = (255, 255, 255)
-    _paint_background(canvas, primary, accent)
+    primary, accent = cfg.primary, cfg.accent
+    _paint_background(canvas, cfg)
     draw = ImageDraw.Draw(canvas)
 
-    # Soft warm halo behind the star (no hard bars).
-    star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), 120)
+    star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27 * cfg.star_scale)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.072), accent)
     _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary)
 
-    # Product hero, upper area.
-    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.31), int(w * 0.52), _lighten(accent, 0.5), 165)
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.31), int(w * 0.52), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.32)), white)
-    _draw_context_tags(canvas, spec, margin, int(h * 0.12), int(w * 0.06))
+    _draw_context_tags(canvas, spec, margin, int(h * 0.12), int(w * 0.06), force_region=cfg.force_region)
 
-    # Price star, mid-right (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.80), int(star_cy - star_r * 0.86), int(star_r * 0.42))
 
-    # Headline + claim, lower-left.
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.60), int(h * 0.13)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.85), int(w * 0.058), accent, primary)
     _draw_footer_text(canvas, accent, margin)
 
 
-def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     w, h = canvas.size
     margin = int(w * 0.06)
     white = (255, 255, 255)
-    _paint_background(canvas, primary, accent)
+    primary, accent = cfg.primary, cfg.accent
+    _paint_background(canvas, cfg)
     draw = ImageDraw.Draw(canvas)
 
-    # Soft warm halo behind the star (no hard bars).
-    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), 120)
+    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27 * cfg.star_scale)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.060), accent)
     _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary)
 
-    # Product hero, upper-center.
-    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.32), int(w * 0.46), _lighten(accent, 0.5), 165)
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.32), int(w * 0.46), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.11), w - margin * 2, int(h * 0.40)), white)
-    _draw_context_tags(canvas, spec, margin, int(h * 0.10), int(w * 0.05))
+    _draw_context_tags(canvas, spec, margin, int(h * 0.10), int(w * 0.05), force_region=cfg.force_region)
 
-    # Price star, lower-right overlapping (drawn on top of the product).
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.80), int(star_cy - star_r * 0.86), int(star_r * 0.44))
 
-    # Headline + claim, lower-left.
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.15)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
     _draw_footer_text(canvas, accent, margin)
@@ -944,12 +1001,14 @@ def compose_promotion(
         primary = _mix(_hex_to_rgb(base_hex, _hex_to_rgb(BRAND_BLUE)), _hex_to_rgb(BRAND_BLUE), 0.30)
         accent = _mix(_hex_to_rgb(accent_hex, _hex_to_rgb(BRAND_YELLOW)), _hex_to_rgb(BRAND_YELLOW), 0.40)
 
+    cfg = _build_style_config(spec, primary, accent)
+
     if format_type == FormatType.POST:
-        _layout_post(canvas, spec, direction, primary, accent)
+        _layout_post(canvas, spec, cfg)
     elif format_type == FormatType.STORY:
-        _layout_story(canvas, spec, direction, primary, accent)
+        _layout_story(canvas, spec, cfg)
     else:
-        _layout_poster(canvas, spec, direction, format_type, primary, accent)
+        _layout_poster(canvas, spec, cfg)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(str(output_path), quality=96, optimize=True)
