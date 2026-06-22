@@ -7,6 +7,7 @@ import {
   Motif,
   PromotionData,
   createPromo,
+  exampleImageUrl,
   getMotifImageUrl,
   listMotifs,
 } from "@/lib/api";
@@ -117,6 +118,42 @@ export default function PromoForm({ onCreated }: Props) {
       return next;
     });
   };
+
+  const renderExampleCards = (
+    options: { value: string; label: string; meta?: string }[],
+    current: string,
+    onPick: (value: string) => void,
+    urlFor: (value: string) => string,
+    cols: string,
+  ) => (
+    <div className={`grid gap-2.5 ${cols}`}>
+      {options.map((o) => {
+        const active = current === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onPick(o.value)}
+            className={`overflow-hidden rounded-lg border bg-white text-left transition-all ${
+              active
+                ? "border-edeka-blue ring-2 ring-edeka-blue/30 shadow-card"
+                : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card"
+            }`}
+          >
+            <div className="aspect-square w-full bg-slate-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={urlFor(o.value)} alt={o.label} loading="lazy" className="h-full w-full object-cover" />
+            </div>
+            <div className="px-2.5 py-2">
+              <p className="text-xs font-bold text-slate-900">{o.label}</p>
+              {o.meta && <p className="text-[10px] font-medium text-slate-500">{o.meta}</p>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const markTouched = (field: keyof PromotionData) => {
     setTouched((previous) => new Set(previous).add(field));
@@ -231,24 +268,6 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label">Designstil</label>
-            <div className="segmented">
-              {STYLES.map((style) => (
-                <button
-                  key={style.value}
-                  type="button"
-                  aria-pressed={form.style === style.value}
-                  onClick={() => update("style", style.value)}
-                  className={`segment ${form.style === style.value ? "segment-active" : ""}`}
-                >
-                  <span className="font-bold">{style.label}</span>
-                  <span className="text-[11px] text-slate-500">{style.meta}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <label className="label">Hauptformat</label>
             <div className="segmented">
               {FORMATS.map((format) => (
@@ -332,39 +351,42 @@ export default function PromoForm({ onCreated }: Props) {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <p className="text-xs leading-5 text-slate-500">
+              Wähle visuell – jede Option zeigt ein Beispiel, damit du sicher entscheidest.
+            </p>
+
+            <div>
+              <label className="label">Designstil</label>
+              {renderExampleCards(
+                STYLES,
+                form.style,
+                (v) => update("style", v),
+                (v) => exampleImageUrl({ style: v, tone: form.tone, level: form.differentiation_level }),
+                "grid-cols-2",
+              )}
+            </div>
+
             <div>
               <label className="label">Tonalität</label>
-              <div className="segmented">
-                {TONES.map((tone) => (
-                  <button
-                    key={tone.value}
-                    type="button"
-                    aria-pressed={form.tone === tone.value}
-                    onClick={() => update("tone", tone.value)}
-                    className={`segment ${form.tone === tone.value ? "segment-active" : ""}`}
-                  >
-                    {tone.label}
-                  </button>
-                ))}
-              </div>
+              {renderExampleCards(
+                TONES,
+                form.tone,
+                (v) => update("tone", v),
+                (v) => exampleImageUrl({ style: form.style, tone: v, level: form.differentiation_level }),
+                "grid-cols-2 sm:grid-cols-4",
+              )}
             </div>
 
             <div>
               <label className="label">Kreativniveau</label>
-              <div className="segmented">
-                {LEVELS.map((level) => (
-                  <button
-                    key={level.value}
-                    type="button"
-                    aria-pressed={form.differentiation_level === level.value}
-                    onClick={() => update("differentiation_level", level.value)}
-                    className={`segment ${form.differentiation_level === level.value ? "segment-active" : ""}`}
-                  >
-                    {level.label}
-                  </button>
-                ))}
-              </div>
+              {renderExampleCards(
+                LEVELS,
+                form.differentiation_level,
+                (v) => update("differentiation_level", v),
+                (v) => exampleImageUrl({ style: form.style, tone: form.tone, level: v }),
+                "grid-cols-3",
+              )}
             </div>
           </div>
         </section>

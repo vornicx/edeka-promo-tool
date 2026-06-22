@@ -7,6 +7,7 @@ from app.config import settings
 from app.routes.promo import router as promo_router
 from app.routes.settings import router as settings_router
 from app.routes.products import router as products_router
+from app.routes.examples import router as examples_router
 
 app = FastAPI(
     title="EDEKA Mühlenbein Promo Tool",
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(promo_router)
 app.include_router(settings_router)
 app.include_router(products_router)
+app.include_router(examples_router)
 
 
 @app.get("/health")

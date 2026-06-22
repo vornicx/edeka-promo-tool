@@ -200,6 +200,11 @@ export function getMotifImageUrl(motif: Motif): string {
   return `${API_ROOT}${motif.image_url}`;
 }
 
+export function exampleImageUrl(p: { style: string; tone: string; level: string }): string {
+  const q = new URLSearchParams({ style: p.style, tone: p.tone, level: p.level }).toString();
+  return `${API_ROOT}/api/examples?${q}`;
+}
+
 export async function createProduct(data: CreateProductPayload): Promise<CustomProduct> {
   const res = await fetch(PRODUCTS_API_BASE, {
     method: "POST",
