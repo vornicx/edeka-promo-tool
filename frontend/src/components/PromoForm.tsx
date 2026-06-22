@@ -138,10 +138,9 @@ export default function PromoForm({ onCreated }: Props) {
       const motif = motifs.find((m) => m.value === value);
       const next: PromotionData = { ...previous, product_image: value };
       if (motif) {
-        if (!previous.product.trim()) next.product = motif.name;
-        if (!previous.category && motif.category) {
-          next.category = CATEGORY_BY_LABEL.get(motif.category) ?? previous.category;
-        }
+        // Al elegir de la lista, sincroniza nombre y categoría automáticamente.
+        next.product = motif.name;
+        next.category = motif.category ? (CATEGORY_BY_LABEL.get(motif.category) ?? "") : previous.category;
       }
       return next;
     });
