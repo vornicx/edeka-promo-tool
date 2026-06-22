@@ -47,6 +47,7 @@ export default function Home() {
   const [directions, setDirections] = useState<CreativeDirection[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [composed, setComposed] = useState(false);
+  const [composeVersion, setComposeVersion] = useState(0);
   const [composing, setComposing] = useState(false);
   const [error, setError] = useState("");
   const [generationMode, setGenerationMode] = useState("");
@@ -71,6 +72,30 @@ export default function Home() {
     setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   };
 
+  const handleSelectDirection = (index: number) => {
+    if (index !== selectedIndex) setComposed(false);
+    setSelectedIndex(index);
+    setError("");
+  };
+
+  const handleTryAnother = () => {
+    setComposed(false);
+    setError("");
+    setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
+
+  const handleReset = () => {
+    setSessionId(null);
+    setDirections([]);
+    setSelectedIndex(null);
+    setComposed(false);
+    setComposing(false);
+    setError("");
+    setGenerationMode("");
+    setGenerationNote("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleCompose = async () => {
     if (!sessionId || selectedIndex === null) return;
     setComposing(true);
@@ -78,6 +103,7 @@ export default function Home() {
     try {
       await composePromo(sessionId, selectedIndex);
       setComposed(true);
+      setComposeVersion((v) => v + 1);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2500);
       showToast("success", "Promotion ist bereit");
@@ -110,6 +136,11 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            {sessionId && (
+              <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={handleReset}>
+                Neue Aktion
+              </button>
+            )}
             <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={() => setProductsOpen(true)}>
               Produkte
             </button>
@@ -207,7 +238,7 @@ export default function Home() {
 
           {directions.length > 0 && step >= 2 && (
             <section className="animate-slide-up space-y-5">
-              <DirectionPicker directions={directions} selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
+              <DirectionPicker directions={directions} selectedIndex={selectedIndex} onSelect={handleSelectDirection} />
 
               {generationMode && (
                 <div className="panel flex flex-col gap-2 p-4 md:flex-row md:items-center md:justify-between">
@@ -252,9 +283,28 @@ export default function Home() {
           )}
 
           {composed && (
-            <section className="grid animate-slide-up gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <PreviewPanel sessionId={sessionId} composed={composed} />
-              <ExportPanel sessionId={sessionId} composed={composed} />
+            <section className="animate-slide-up space-y-5">
+              <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Fertig</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    Promotion erstellt. Du kannst eine andere Richtung testen oder neu starten.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleTryAnother}>
+                    Andere Richtung testen
+                  </button>
+                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
+                    Neue Aktion
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion} />
+                <ExportPanel sessionId={sessionId} composed={composed} />
+              </div>
             </section>
           )}
         </div>

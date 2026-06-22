@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getImageUrl } from "@/lib/api";
 
 interface Props {
   sessionId: string | null;
   composed: boolean;
+  version?: number;
 }
 
-export default function PreviewPanel({ sessionId, composed }: Props) {
+export default function PreviewPanel({ sessionId, composed, version = 0 }: Props) {
   const [imgError, setImgError] = useState(false);
   const [lightbox, setLightbox] = useState(false);
 
+  // Reset the error state whenever a new composition is rendered.
+  useEffect(() => {
+    setImgError(false);
+  }, [version, sessionId]);
+
   if (!sessionId) return null;
+
+  const imageSrc = `${getImageUrl(sessionId)}?v=${version}`;
 
   return (
     <>
@@ -44,7 +52,7 @@ export default function PreviewPanel({ sessionId, composed }: Props) {
                   className="group relative max-w-full rounded-lg bg-white p-3 shadow-elevated outline-none transition-transform hover:-translate-y-0.5 focus:ring-4 focus:ring-edeka-blue/15"
                 >
                   <img
-                    src={getImageUrl(sessionId)}
+                    src={imageSrc}
                     alt="Vorschau der Promotion"
                     className="max-h-[620px] max-w-full rounded-md border border-slate-200 object-contain"
                     onError={() => setImgError(true)}
@@ -81,7 +89,7 @@ export default function PreviewPanel({ sessionId, composed }: Props) {
             Schließen
           </button>
           <img
-            src={getImageUrl(sessionId)}
+            src={imageSrc}
             alt="Vergrößerte Vorschau"
             className="max-h-[90vh] max-w-[92vw] rounded-lg bg-white shadow-modal animate-scale-in"
             onClick={(e) => e.stopPropagation()}
