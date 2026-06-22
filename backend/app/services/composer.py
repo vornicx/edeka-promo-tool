@@ -348,18 +348,6 @@ def _discount_percent(old: str, new: str) -> int | None:
     return int(round((1 - new_val / old_val) * 100))
 
 
-def _draw_discount_badge(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int, blue: tuple[int, int, int]):
-    draw = ImageDraw.Draw(canvas)
-    # White ring + red circle
-    draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=(255, 255, 255), outline=blue, width=max(2, radius // 12))
-    inner_r = int(radius * 0.85)
-    draw.ellipse((cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r), fill=(211, 47, 47))
-    text = f"-{percent}%"
-    font = _fit_font_width(draw, text, FONT_PATH_EXTRABOLD, int(inner_r * 1.5), int(inner_r * 0.75), int(inner_r * 0.45))
-    tw, th = _text_size(draw, text, font)
-    draw.text((cx - tw / 2, cy - th / 2 - 1), text, fill=(255, 255, 255), font=font)
-
-
 # ---------------------------------------------------------------------------
 # Headline block
 # ---------------------------------------------------------------------------
@@ -408,273 +396,372 @@ def _draw_headline_block(
 
 
 # ---------------------------------------------------------------------------
-# Price card
+# Knaller elements: starburst price seal, formatted price, tags, bands
 # ---------------------------------------------------------------------------
 
-def _draw_price_card(
+RED = (226, 0, 26)  # EDEKA-style action red
+
+
+def _aa_polygon(canvas: Image.Image, points, fill, outline=None, width: int = 0, scale: int = 4):
+    """Composite an anti-aliased polygon by rendering supersampled in its bbox."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    minx, miny = int(min(xs)) - 2, int(min(ys)) - 2
+    maxx, maxy = int(max(xs)) + 2, int(max(ys)) + 2
+    w, h = max(1, maxx - minx), max(1, maxy - miny)
+    layer = Image.new("RGBA", (w * scale, h * scale), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    sp = [((px - minx) * scale, (py - miny) * scale) for px, py in points]
+    d.polygon(sp, fill=fill, outline=outline, width=(width * scale if width else 0))
+    layer = layer.resize((w, h), Image.LANCZOS)
+    canvas.alpha_composite(layer, (minx, miny))
+
+
+def _star_points(cx: float, cy: float, outer: float, inner: float, points: int, rot: float = 0.0):
+    pts = []
+    for i in range(points * 2):
+        r = outer if i % 2 == 0 else inner
+        a = rot + math.pi * i / points
+        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return pts
+
+
+def _split_price(value: str) -> tuple[str, str, str]:
+    """'2,99 €' -> ('2', '99', '€')."""
+    cur = "€" if "€" in value else ("$" if "$" in value else "")
+    clean = value.replace("€", "").replace("$", "").strip()
+    for sep in (",", "."):
+        if sep in clean:
+            euros, cents = clean.split(sep, 1)
+            return euros.strip() or "0", (cents.strip() + "00")[:2], cur
+    return clean or "0", "", cur
+
+
+def _draw_price_value(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    max_w: int,
+    max_h: int,
+    price: str,
+    color: tuple[int, int, int],
+):
+    """Big euros + superscript cents + small currency, centred on (cx, cy)."""
+    euros, cents, cur = _split_price(price)
+    size = max_h
+    while size > 12:
+        euros_font = _load_font(FONT_PATH_EXTRABOLD, size)
+        small = max(10, int(size * 0.44))
+        cents_font = _load_font(FONT_PATH_EXTRABOLD, small)
+        cur_font = _load_font(FONT_PATH_BOLD, max(10, int(size * 0.40)))
+        eb = draw.textbbox((0, 0), euros, font=euros_font)
+        ew, eh = eb[2] - eb[0], eb[3] - eb[1]
+        gap = max(4, int(size * 0.05))
+        cb = draw.textbbox((0, 0), cents or "00", font=cents_font)
+        cw = (cb[2] - cb[0]) if cents else 0
+        ub = draw.textbbox((0, 0), cur, font=cur_font)
+        uw = (ub[2] - ub[0]) if cur else 0
+        tail = max(cw, uw)
+        group_w = ew + (gap + tail if (cents or cur) else 0)
+        if group_w <= max_w and eh <= max_h:
+            break
+        size -= max(2, size // 24)
+
+    left = cx - group_w // 2
+    top = cy - eh // 2
+    # Euros (big)
+    draw.text((left - eb[0], top - eb[1]), euros, fill=color, font=euros_font)
+    tail_x = left + ew + gap
+    if cents:
+        # cents raised to the top of the euros block (superscript)
+        draw.text((tail_x - cb[0], top - cb[1]), cents, fill=color, font=cents_font)
+    if cur:
+        # currency sits at the lower portion, under the cents
+        cur_y = top + eh - (ub[3] - ub[1])
+        draw.text((tail_x - ub[0], cur_y - ub[1]), cur, fill=color, font=cur_font)
+
+
+def _draw_price_star(
     canvas: Image.Image,
     spec: PromotionSpec,
-    zone: Zone,
+    cx: int,
+    cy: int,
+    radius: int,
     primary: tuple[int, int, int],
     accent: tuple[int, int, int],
+    rot_deg: float = -8.0,
 ):
+    """The classic 'Knallerpreis' star seal with the big price inside."""
     draw = ImageDraw.Draw(canvas)
-    x, y, w, h = zone.x, zone.y, zone.w, zone.h
     white = (255, 255, 255)
-    radius = min(w, h) // 7
+    rot = math.radians(rot_deg)
+    n = 15
 
-    # Soft drop shadow behind the card.
-    pad = max(18, w // 30)
-    layer = Image.new("RGBA", (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
-    ldraw = ImageDraw.Draw(layer)
-    ldraw.rounded_rectangle(
-        (pad, pad, w + pad, h + pad), radius=radius, fill=(0, 25, 60, 60)
-    )
-    layer = layer.filter(ImageFilter.GaussianBlur(radius=pad // 2))
-    canvas.alpha_composite(layer, (x - pad, y - pad + pad // 3))
+    # Soft shadow under the star.
+    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sh)
+    sd.ellipse((cx - radius, cy - radius + int(radius * 0.18), cx + radius, cy + radius + int(radius * 0.18)),
+               fill=(0, 20, 50, 70))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
 
-    # Card body (EDEKA-yellow) with a thin tint for crispness.
-    draw.rounded_rectangle((x, y, x + w, y + h), radius=radius, fill=accent)
+    # Layered star: blue rim -> white -> yellow core.
+    _aa_polygon(canvas, _star_points(cx, cy, radius, radius * 0.80, n, rot), fill=primary)
+    _aa_polygon(canvas, _star_points(cx, cy, radius * 0.93, radius * 0.74, n, rot), fill=white)
+    _aa_polygon(canvas, _star_points(cx, cy, radius * 0.86, radius * 0.68, n, rot), fill=accent)
     draw = ImageDraw.Draw(canvas)
 
-    pad_x = int(w * 0.09)
-    pad_y = int(h * 0.10)
-    ix = x + pad_x
-    iy = y + pad_y
-    iw = w - pad_x * 2
-    bottom_limit = y + h - pad_y
-
-    # --- Bottom band: validity pill (reserve its space first) ---
-    vt = spec.validity.upper()
-    pill_h = int(h * 0.16)
-    validity_font = _fit_font_height(draw, vt, FONT_PATH_BOLD, int(pill_h * 0.52), int(pill_h * 0.6), int(pill_h * 0.34))
-    vw, vh = _text_size(draw, vt, validity_font)
-    pill_pad_x = int(pill_h * 0.45)
-    pill_w = min(iw, vw + pill_pad_x * 2)
-    pill_y = bottom_limit - pill_h
-    pill_x = ix
-    draw.rounded_rectangle(
-        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=pill_h // 2, fill=primary,
-    )
-    draw.text(
-        (pill_x + (pill_w - vw) / 2, pill_y + (pill_h - vh) / 2 - 1),
-        vt, fill=white, font=validity_font,
-    )
-
-    # --- Top band: "ANGEBOT" label (left) + struck-through old price (right) ---
-    label_h = int(h * 0.14)
-    label_font = _fit_font_height(draw, "ANGEBOT", FONT_PATH_EXTRABOLD, label_h, int(label_h * 1.1), int(label_h * 0.6))
-    lbbox = draw.textbbox((0, 0), "ANGEBOT", font=label_font)
-    draw.text((ix, iy - lbbox[1]), "ANGEBOT", fill=primary, font=label_font)
-    label_bottom = iy + (lbbox[3] - lbbox[1])
-
+    inner = int(radius * 0.66)
+    # "statt" struck-through old price at the upper area.
+    top_cursor = cy - int(inner * 0.78)
     if spec.old_price:
         old_text = f"statt {spec.old_price}"
-        old_font = _fit_font_height(draw, old_text, FONT_PATH_BOLD, int(label_h * 0.72), int(label_h), int(label_h * 0.45))
-        obbox = draw.textbbox((0, 0), old_text, font=old_font)
-        ow, oh = obbox[2] - obbox[0], obbox[3] - obbox[1]
-        ox = x + w - pad_x - ow
-        # baseline-align with the ANGEBOT label
-        oy = label_bottom - oh
-        draw.text((ox - obbox[0], oy - obbox[1]), old_text, fill=_darken(accent, 0.5), font=old_font)
-        strike_y = oy + oh * 0.55
-        draw.line((ox, strike_y, ox + ow, strike_y), fill=(211, 47, 47), width=max(2, h // 80))
+        of = _fit_font_width(draw, old_text, FONT_PATH_BOLD, int(inner * 1.5), int(radius * 0.16), int(radius * 0.09))
+        ob = draw.textbbox((0, 0), old_text, font=of)
+        ow, oh = ob[2] - ob[0], ob[3] - ob[1]
+        ox = cx - ow // 2
+        draw.text((ox - ob[0], top_cursor - ob[1]), old_text, fill=_darken(primary, 0.15), font=of)
+        draw.line((ox, top_cursor + oh * 0.5, ox + ow, top_cursor + oh * 0.5), fill=RED, width=max(3, radius // 40))
+        price_cy = cy + int(radius * 0.06)
+        price_h = int(radius * 0.62)
+    else:
+        price_cy = cy
+        price_h = int(radius * 0.78)
 
-    old_bottom = label_bottom
+    _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
-    # --- Middle band: the headline price, centered in remaining space ---
-    price_top = old_bottom + int(h * 0.06)
-    price_bottom = pill_y - int(h * 0.06)
-    price_band_h = max(int(h * 0.18), price_bottom - price_top)
-    price_font = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, iw, int(price_band_h * 1.05), int(price_band_h * 0.45))
-    price_font = _fit_font_height(draw, spec.price, FONT_PATH_EXTRABOLD, price_band_h, price_font.size, int(price_band_h * 0.40))
-    bbox = draw.textbbox((0, 0), spec.price, font=price_font)
-    pw = bbox[2] - bbox[0]
-    px = ix + (iw - pw) // 2 - bbox[0]
-    py = price_top + (price_band_h - (bbox[3] - bbox[1])) // 2 - bbox[1]
-    draw.text((px, py), spec.price, fill=primary, font=price_font)
+
+def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
+    """Small red explosion badge for the discount percentage."""
+    white = (255, 255, 255)
+    _aa_polygon(canvas, _star_points(cx, cy, radius, radius * 0.72, 12, rot=0.2), fill=white)
+    _aa_polygon(canvas, _star_points(cx, cy, radius * 0.88, radius * 0.62, 12, rot=0.2), fill=RED)
+    draw = ImageDraw.Draw(canvas)
+    text = f"-{percent}%"
+    font = _fit_font_width(draw, text, FONT_PATH_EXTRABOLD, int(radius * 1.25), int(radius * 0.8), int(radius * 0.4))
+    b = draw.textbbox((0, 0), text, font=font)
+    draw.text((cx - (b[2] - b[0]) / 2 - b[0], cy - (b[3] - b[1]) / 2 - b[1]), text, fill=white, font=font)
+
+
+def _draw_tag(
+    canvas: Image.Image,
+    text: str,
+    cx: int,
+    cy: int,
+    height: int,
+    bg: tuple[int, int, int],
+    fg: tuple[int, int, int],
+    angle: float = 0.0,
+):
+    """A small rounded banner/label, optionally rotated, centred on (cx, cy)."""
+    text = text.upper()
+    pad_x = int(height * 0.5)
+    tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    font = _fit_font_height(tmp, text, FONT_PATH_BOLD, int(height * 0.5), int(height * 0.6), int(height * 0.3))
+    b = tmp.textbbox((0, 0), text, font=font)
+    tw, th = b[2] - b[0], b[3] - b[1]
+    w = tw + pad_x * 2
+    layer = Image.new("RGBA", (w, height), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle((0, 0, w, height), radius=height // 2, fill=bg)
+    ld.text(((w - tw) / 2 - b[0], (height - th) / 2 - b[1]), text, fill=fg, font=font)
+    if angle:
+        layer = layer.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+    canvas.alpha_composite(layer, (int(cx - layer.width / 2), int(cy - layer.height / 2)))
+
+
+def _draw_diagonal_band(
+    canvas: Image.Image,
+    top_left: int,
+    top_right: int,
+    height: int,
+    color: tuple[int, int, int],
+    at_bottom: bool = False,
+):
+    """Full-width band with a slanted edge (top_left/top_right give the slant)."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    if at_bottom:
+        y0 = h - height
+        pts = [(0, h), (w, h), (w, y0 + top_right), (0, y0 + top_left)]
+    else:
+        pts = [(0, 0), (w, 0), (w, top_right), (0, top_left)]
+    draw.polygon(pts, fill=color)
+
+
+def _draw_sunburst_rays(
+    canvas: Image.Image,
+    cx: int,
+    cy: int,
+    radius: int,
+    rays: int,
+    color: tuple[int, int, int],
+    alpha: int,
+    rot_deg: float = 0.0,
+):
+    """Pinwheel of wedges radiating from (cx, cy) for that 'explosion' energy."""
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    rot = math.radians(rot_deg)
+    step = math.pi / rays
+    for i in range(rays):
+        a0 = rot + 2 * step * i
+        a1 = a0 + step
+        d.polygon(
+            [(cx, cy),
+             (cx + radius * math.cos(a0), cy + radius * math.sin(a0)),
+             (cx + radius * math.cos(a1), cy + radius * math.sin(a1))],
+            fill=(*color, alpha),
+        )
+    canvas.alpha_composite(layer)
 
 
 # ---------------------------------------------------------------------------
-# Footer
+# Shared Knaller scaffolding
 # ---------------------------------------------------------------------------
 
 STORE_NAME = "EDEKA MÜHLENBEIN"
 
 
-def _draw_footer(
-    canvas: Image.Image,
-    band_h: int,
-    text_color: tuple[int, int, int],
-    bar_color: tuple[int, int, int] | None = None,
-):
-    """Draw the store name vertically centred inside a reserved bottom band."""
-    draw = ImageDraw.Draw(canvas)
+def _paint_background(canvas: Image.Image, primary: tuple[int, int, int]):
     w, h = canvas.size
-    band_top = h - band_h
-    if bar_color is not None:
-        draw.rectangle((0, band_top, w, h), fill=bar_color)
-    font = _fit_font_width(draw, STORE_NAME, FONT_PATH_BOLD, int(w * 0.8), int(band_h * 0.42), int(band_h * 0.22))
-    tw, th = _text_size(draw, STORE_NAME, font)
-    # textbbox top offset, so anchor by bbox for true vertical centring.
-    bbox = draw.textbbox((0, 0), STORE_NAME, font=font)
-    ty = band_top + (band_h - (bbox[3] - bbox[1])) // 2 - bbox[1]
-    draw.text(((w - tw) // 2, ty), STORE_NAME, fill=text_color, font=font)
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle((0, 0, w, h), fill=_lighten(primary, 0.93))
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gr = int(max(w, h) * 0.5)
+    gcx, gcy = w // 2, int(h * 0.40)
+    gd.ellipse((gcx - gr, gcy - gr, gcx + gr, gcy + gr), fill=(255, 255, 255, 215))
+    canvas.alpha_composite(glow.filter(ImageFilter.GaussianBlur(radius=max(w, h) // 7)))
+
+
+def _draw_wordmark(draw: ImageDraw.ImageDraw, x: int, y: int, height: int, color: tuple[int, int, int]) -> int:
+    font = _load_font(FONT_PATH_EXTRABOLD, height)
+    b = draw.textbbox((0, 0), "EDEKA", font=font)
+    draw.text((x - b[0], y - b[1]), "EDEKA", fill=color, font=font)
+    return b[2] - b[0]
+
+
+def _draw_header_band(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int], band_l: int, band_r: int):
+    """Diagonal brand band with the EDEKA wordmark and an 'ANGEBOT' kicker."""
+    w, h = canvas.size
+    margin = int(w * 0.05)
+    _draw_diagonal_band(canvas, band_l, band_r, 0, primary)
+    draw = ImageDraw.Draw(canvas)
+    edge = min(band_l, band_r)
+    wm_h = int(edge * 0.42)
+    wm_y = (edge - wm_h) // 2
+    _draw_wordmark(draw, margin, wm_y, wm_h, accent)
+    af = _fit_font_height(draw, "ANGEBOT", FONT_PATH_EXTRABOLD, int(edge * 0.34), int(edge * 0.4), int(edge * 0.2))
+    ab = draw.textbbox((0, 0), "ANGEBOT", font=af)
+    aw = ab[2] - ab[0]
+    draw.text((w - margin - aw - ab[0], (band_r - (ab[3] - ab[1])) // 2 - ab[1] + int(edge * 0.04)),
+              "ANGEBOT", fill=accent, font=af)
+
+
+def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], band_h: int, slant: int):
+    w, h = canvas.size
+    _draw_diagonal_band(canvas, 0, slant, band_h, primary, at_bottom=True)
+    draw = ImageDraw.Draw(canvas)
+    top = h - band_h + slant
+    font = _fit_font_width(draw, STORE_NAME, FONT_PATH_BOLD, int(w * 0.8), int(band_h * 0.34), int(band_h * 0.18))
+    b = draw.textbbox((0, 0), STORE_NAME, font=font)
+    ty = top + ((h - top) - (b[3] - b[1])) // 2 - b[1]
+    draw.text(((w - (b[2] - b[0])) // 2, ty), STORE_NAME, fill=(255, 255, 255), font=font)
+
+
+def _draw_product_or_name(canvas, draw, spec, product_zone, primary):
+    product = _load_product_image(spec, (int(product_zone.w * 0.96), int(product_zone.h * 0.96)))
+    if product:
+        _draw_product(canvas, product, product_zone.cx, product_zone.cy, angle=0.0)
+    else:
+        ph = int(product_zone.w * 0.16)
+        f = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(product_zone.w * 0.85), ph, int(ph * 0.55))
+        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, f, primary)
+
+
+def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
+    txt = spec.validity if spec.validity.lower().startswith(("nur", "bis", "kw", "gültig")) else f"nur {spec.validity}"
+    _draw_tag(canvas, txt, cx, cy, height, accent, primary, angle=-3.0)
 
 
 # ---------------------------------------------------------------------------
-# Format-specific layouts (modern Figma/Higgsfield style)
+# Format-specific layouts (German 'Knaller' style)
 # ---------------------------------------------------------------------------
 
 def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
-    margin = int(w * 0.06)
+    margin = int(w * 0.05)
+    _paint_background(canvas, primary)
+    _draw_header_band(canvas, primary, accent, int(h * 0.150), int(h * 0.112))
     draw = ImageDraw.Draw(canvas)
-    footer_h = int(h * 0.075)
 
-    # Background: soft vertical gradient for a clean, modern base.
-    top = _lighten(primary, 0.95)
-    bottom = _lighten(primary, 0.86)
-    for yy in range(h):
-        draw.line((0, yy, w, yy), fill=_mix(top, bottom, yy / max(1, h - 1)))
-    # Subtle accent halo behind the product (centred, fully on-canvas).
-    halo_r = int(w * 0.38)
-    halo_cx, halo_cy = w // 2, int(h * 0.34)
-    draw.ellipse(
-        (halo_cx - halo_r, halo_cy - halo_r, halo_cx + halo_r, halo_cy + halo_r),
-        fill=_with_alpha(_lighten(accent, 0.25), 90),
-    )
+    # Product hero on the left.
+    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.00), int(h * 0.21), int(w * 0.58), int(h * 0.45)), primary)
 
-    # Logo top-left
-    logo_h = int(w * 0.08)
-    _draw_logo(draw, margin, margin, logo_h, primary, accent)
-
-    # Product hero (centred, upper area)
-    product_zone = Zone(margin, int(h * 0.12), w - margin * 2, int(h * 0.40))
-    product = _load_product_image(spec, (int(product_zone.w * 0.78), int(product_zone.h * 0.94)))
-    if product:
-        _draw_product(canvas, product, product_zone.cx, product_zone.cy, angle=0.0)
-    else:
-        ph = int(w * 0.10)
-        placeholder_font = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(w * 0.8), ph, int(ph * 0.55))
-        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, placeholder_font, primary)
-
-    # Discount badge: top-right corner, clear of logo, product and text.
+    # Price star on the right, overlapping, with subtle burst rays behind it.
+    star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.45), int(w * 0.235)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.55), 24, accent, 55, rot_deg=4)
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        br = int(w * 0.10)
-        _draw_discount_badge(canvas, discount, w - margin - br, margin + br, br, primary)
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.74), int(star_cy - star_r * 0.86), int(star_r * 0.46))
 
-    # Headline + claim, centred below the product.
-    text_zone = Zone(margin, int(h * 0.51), w - margin * 2, int(h * 0.11))
-    _draw_headline_block(draw, spec, text_zone, primary, align="center")
+    # Headline + claim, bottom-left.
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.64), int(h * 0.16)), primary, align="left")
 
-    # Price card, centred near the bottom.
-    card_w = int(w * 0.64)
-    card_h = int(h * 0.24)
-    card_x = (w - card_w) // 2
-    card_y = h - footer_h - int(h * 0.035) - card_h
-    _draw_price_card(canvas, spec, Zone(card_x, card_y, card_w, card_h), primary, accent)
-
-    _draw_footer(canvas, footer_h, primary)
+    # Validity tag near the star, footer band at the bottom.
+    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.04), int(w * 0.052), accent, primary)
+    _draw_knaller_footer(canvas, primary, int(h * 0.085), int(h * 0.028))
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
     margin = int(w * 0.07)
+    _paint_background(canvas, primary)
+    _draw_header_band(canvas, primary, accent, int(h * 0.105), int(h * 0.078))
     draw = ImageDraw.Draw(canvas)
-    footer_h = int(h * 0.05)
 
-    # Vertical gradient: light top -> tinted bottom
-    top = _lighten(primary, 0.95)
-    bottom = _lighten(primary, 0.80)
-    for y in range(h):
-        draw.line((0, y, w, y), fill=_mix(top, bottom, y / max(1, h - 1)))
+    # Product hero, upper area.
+    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.34)), primary)
 
-    # Smooth brand-blue wave separating the product area from the text area.
-    wave_y = int(h * 0.60)
-    draw.polygon([(0, wave_y), (w, int(h * 0.55)), (w, h), (0, h)], fill=primary)
-
-    # Logo top-left
-    logo_h = int(w * 0.10)
-    _draw_logo(draw, margin, margin, logo_h, primary, accent)
-
-    # Product centered in upper area
-    product_zone = Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.38))
-    product = _load_product_image(spec, (int(product_zone.w * 0.86), int(product_zone.h * 0.92)))
-    if product:
-        _draw_product(canvas, product, product_zone.cx, product_zone.cy, angle=0.0)
-    else:
-        ph = int(w * 0.10)
-        placeholder_font = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(w * 0.85), ph, int(ph * 0.55))
-        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, placeholder_font, primary)
-
-    # Discount badge: top-right corner.
+    # Price star, mid-right overlapping the product base.
+    star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.7), 28, accent, 55, rot_deg=4)
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        br = int(w * 0.11)
-        _draw_discount_badge(canvas, discount, w - margin - br, margin + br, br, primary)
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.84), int(star_r * 0.42))
 
-    # Headline centered in the blue band (white text), above the price card.
-    headline_zone = Zone(margin, int(h * 0.62), w - margin * 2, int(h * 0.12))
-    _draw_headline_block(draw, spec, headline_zone, (255, 255, 255), align="center", claim_color=_lighten(accent, 0.2))
+    # Headline + claim, lower-left.
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.58), int(h * 0.14)), primary, align="left")
+    _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.86), int(w * 0.058), accent, primary)
 
-    # Price card centered below the headline.
-    card_w = int(w * 0.72)
-    card_h = int(h * 0.20)
-    card_x = (w - card_w) // 2
-    card_y = int(h * 0.76)
-    _draw_price_card(canvas, spec, Zone(card_x, card_y, card_w, card_h), primary, accent)
-
-    _draw_footer(canvas, footer_h, (255, 255, 255))
+    _draw_knaller_footer(canvas, primary, int(h * 0.06), int(h * 0.02))
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, primary: tuple[int, int, int], accent: tuple[int, int, int]):
     w, h = canvas.size
     margin = int(w * 0.06)
+    _paint_background(canvas, primary)
+    _draw_header_band(canvas, primary, accent, int(h * 0.090), int(h * 0.066))
     draw = ImageDraw.Draw(canvas)
-    white = (255, 255, 255)
 
-    # Clean white background with a brand header bar and a tinted bottom panel.
-    draw.rectangle((0, 0, w, h), fill=white)
-    header_h = int(h * 0.06)
-    draw.rectangle((0, 0, w, header_h), fill=primary)
-    panel_y = int(h * 0.56)
-    footer_h = int(h * 0.06)
-    draw.rectangle((0, panel_y, w, h - footer_h), fill=_lighten(primary, 0.92))
+    # Product hero, upper-center.
+    _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.42)), primary)
 
-    # Logo in header
-    logo_h = int(header_h * 0.66)
-    _draw_logo(draw, margin, (header_h - logo_h) // 2, logo_h, primary, accent)
-
-    # Product in upper area
-    product_zone = Zone(margin, int(h * 0.10), w - margin * 2, int(h * 0.42))
-    product = _load_product_image(spec, (int(product_zone.w * 0.80), int(product_zone.h * 0.92)))
-    if product:
-        _draw_product(canvas, product, product_zone.cx, product_zone.cy, angle=0.0)
-    else:
-        ph = int(w * 0.10)
-        placeholder_font = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(w * 0.85), ph, int(ph * 0.55))
-        _draw_text_centered(draw, spec.product.upper(), product_zone.cx, product_zone.cy, placeholder_font, primary)
-
-    # Discount badge: top-right, below the header bar.
+    # Price star, lower-right overlapping, with large burst rays to fill the page.
+    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27)
+    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.95), 32, accent, 60, rot_deg=4)
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, primary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        br = int(w * 0.085)
-        _draw_discount_badge(canvas, discount, w - margin - br, header_h + br + int(h * 0.01), br, primary)
+        _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.84), int(star_r * 0.44))
 
-    # Bottom panel: headline + claim centred, price card centred beneath.
-    text_zone = Zone(margin, panel_y + int(h * 0.02), w - margin * 2, int(h * 0.10))
-    _draw_headline_block(draw, spec, text_zone, primary, align="center")
+    # Headline + claim, lower-left.
+    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.16)), primary, align="left")
+    _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
 
-    card_w = int(w * 0.54)
-    card_h = int(h * 0.21)
-    card_x = (w - card_w) // 2
-    card_y = (h - footer_h) - int(h * 0.03) - card_h
-    _draw_price_card(canvas, spec, Zone(card_x, card_y, card_w, card_h), primary, accent)
-
-    _draw_footer(canvas, footer_h, white, bar_color=primary)
+    _draw_knaller_footer(canvas, primary, int(h * 0.065), int(h * 0.022))
 
 
 # ---------------------------------------------------------------------------
