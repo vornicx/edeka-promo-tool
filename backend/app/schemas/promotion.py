@@ -24,18 +24,18 @@ class DifferentiationLevel(str, Enum):
 
 
 class PromotionSpec(BaseModel):
-    product: str = Field(..., min_length=1, description="Nombre del producto")
-    category: Optional[str] = Field(None, description="Categoría del producto")
-    price: str = Field(..., min_length=1, description="Precio actual")
-    old_price: Optional[str] = Field(None, description="Precio anterior (tachado)")
-    validity: str = Field(..., min_length=1, description="Vigencia de la oferta")
-    origin: Optional[str] = Field(None, description="Origen del producto")
-    claim: Optional[str] = Field(None, description="Claim corto promocional")
-    format: FormatType = Field(default=FormatType.POST, description="Formato de salida")
-    tone: ToneType = Field(default=ToneType.FRESCO, description="Tono visual")
+    product: str = Field(..., min_length=1, description="Produktname")
+    category: Optional[str] = Field(None, description="Produktkategorie")
+    price: str = Field(..., min_length=1, description="Aktueller Preis")
+    old_price: Optional[str] = Field(None, description="Vorheriger Preis (durchgestrichen)")
+    validity: str = Field(..., min_length=1, description="Gültigkeit des Angebots")
+    origin: Optional[str] = Field(None, description="Herkunft des Produkts")
+    claim: Optional[str] = Field(None, description="Kurzer Werbeclaim")
+    format: FormatType = Field(default=FormatType.POST, description="Ausgabeformat")
+    tone: ToneType = Field(default=ToneType.FRESCO, description="Visuelle Tonalität")
     differentiation_level: DifferentiationLevel = Field(
         default=DifferentiationLevel.MEDIO,
-        description="Nivel de diferenciación visual",
+        description="Grad der visuellen Differenzierung",
     )
 
 
