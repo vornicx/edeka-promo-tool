@@ -315,8 +315,12 @@ def _load_product_image(spec: PromotionSpec, max_size: tuple[int, int]) -> Image
     if not asset_path:
         return None
     product = _trim_alpha(Image.open(asset_path).convert("RGBA"))
-    product.thumbnail(max_size, Image.Resampling.LANCZOS)
-    return product
+    # Scale to FILL the target box (up or down), preserving aspect, so the
+    # product is never left tiny inside a large zone.
+    mw, mh = max_size
+    scale = min(mw / product.width, mh / product.height)
+    new_size = (max(1, round(product.width * scale)), max(1, round(product.height * scale)))
+    return product.resize(new_size, Image.Resampling.LANCZOS)
 
 
 # ---------------------------------------------------------------------------
