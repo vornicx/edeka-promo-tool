@@ -620,6 +620,8 @@ def _draw_sunburst_rays(
 # ---------------------------------------------------------------------------
 
 STORE_NAME = "EDEKA MÜHLENBEIN"
+SLOGAN = "Wir lieben Lebensmittel."
+GREEN = (60, 140, 46)  # BIO tag
 
 
 def _paint_background(canvas: Image.Image, primary: tuple[int, int, int]):
@@ -658,15 +660,26 @@ def _draw_header_band(canvas: Image.Image, primary: tuple[int, int, int], accent
               "ANGEBOT", fill=accent, font=af)
 
 
-def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], band_h: int, slant: int):
+def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], accent: tuple[int, int, int], band_h: int, slant: int):
     w, h = canvas.size
     _draw_diagonal_band(canvas, 0, slant, band_h, primary, at_bottom=True)
     draw = ImageDraw.Draw(canvas)
     top = h - band_h + slant
-    font = _fit_font_width(draw, STORE_NAME, FONT_PATH_BOLD, int(w * 0.8), int(band_h * 0.34), int(band_h * 0.18))
-    b = draw.textbbox((0, 0), STORE_NAME, font=font)
-    ty = top + ((h - top) - (b[3] - b[1])) // 2 - b[1]
-    draw.text(((w - (b[2] - b[0])) // 2, ty), STORE_NAME, fill=(255, 255, 255), font=font)
+    avail = h - top
+
+    name_font = _fit_font_width(draw, STORE_NAME, FONT_PATH_EXTRABOLD, int(w * 0.82), int(avail * 0.40), int(avail * 0.22))
+    nb = draw.textbbox((0, 0), STORE_NAME, font=name_font)
+    nh = nb[3] - nb[1]
+    slogan_font = _fit_font_width(draw, SLOGAN, FONT_PATH_BOLD, int(w * 0.7), int(avail * 0.26), int(avail * 0.13))
+    sb = draw.textbbox((0, 0), SLOGAN, font=slogan_font)
+    sh = sb[3] - sb[1]
+
+    gap = int(avail * 0.10)
+    block_h = nh + gap + sh
+    ny = top + (avail - block_h) // 2
+    draw.text(((w - (nb[2] - nb[0])) // 2 - nb[0], ny - nb[1]), STORE_NAME, fill=(255, 255, 255), font=name_font)
+    sy = ny + nh + gap
+    draw.text(((w - (sb[2] - sb[0])) // 2 - sb[0], sy - sb[1]), SLOGAN, fill=accent, font=slogan_font)
 
 
 def _draw_product_or_name(canvas, draw, spec, product_zone, primary):
@@ -684,6 +697,36 @@ def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
     _draw_tag(canvas, txt, cx, cy, height, accent, primary, angle=-3.0)
 
 
+def _context_tags(spec: PromotionSpec) -> list[tuple[str, tuple[int, int, int], tuple[int, int, int]]]:
+    """Derive realistic flyer badges (BIO / AUS DER REGION / NEU) from the spec."""
+    hay = _normalize(f"{spec.product} {spec.category or ''} {spec.claim or ''} {spec.origin or ''}")
+    white = (255, 255, 255)
+    tags: list[tuple[str, tuple[int, int, int], tuple[int, int, int]]] = []
+    if "bio" in hay or "oekolog" in hay or "organic" in hay:
+        tags.append(("BIO", GREEN, white))
+    if spec.origin or "region" in hay or "heimat" in hay or "lokal" in hay:
+        tags.append(("AUS DER REGION", RED, white))
+    if "neu" in hay or "new" in hay:
+        tags.append(("NEU", RED, white))
+    return tags[:2]
+
+
+def _tag_width(text: str, height: int) -> int:
+    tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    font = _fit_font_height(tmp, text.upper(), FONT_PATH_BOLD, int(height * 0.5), int(height * 0.6), int(height * 0.3))
+    b = tmp.textbbox((0, 0), text.upper(), font=font)
+    return (b[2] - b[0]) + int(height * 0.5) * 2
+
+
+def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_top: int, height: int, angle: float = -4.0):
+    """Stack up to two contextual badges, top-left anchored."""
+    y = y_top
+    for text, bg, fg in _context_tags(spec):
+        tw = _tag_width(text, height)
+        _draw_tag(canvas, text, x_left + tw // 2, y + height // 2, height, bg, fg, angle=angle)
+        y += int(height * 1.28)
+
+
 # ---------------------------------------------------------------------------
 # Format-specific layouts (German 'Knaller' style)
 # ---------------------------------------------------------------------------
@@ -694,6 +737,9 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDi
     _paint_background(canvas, primary)
     _draw_header_band(canvas, primary, accent, int(h * 0.150), int(h * 0.112))
     draw = ImageDraw.Draw(canvas)
+
+    # Contextual flyer badges (BIO / Aus der Region) top-left.
+    _draw_context_tags(canvas, spec, margin, int(h * 0.185), int(w * 0.05))
 
     # Product hero on the left.
     _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.00), int(h * 0.21), int(w * 0.58), int(h * 0.45)), primary)
@@ -711,7 +757,7 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDi
 
     # Validity tag near the star, footer band at the bottom.
     _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.04), int(w * 0.052), accent, primary)
-    _draw_knaller_footer(canvas, primary, int(h * 0.085), int(h * 0.028))
+    _draw_knaller_footer(canvas, primary, accent, int(h * 0.095), int(h * 0.028))
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
@@ -720,6 +766,9 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeD
     _paint_background(canvas, primary)
     _draw_header_band(canvas, primary, accent, int(h * 0.105), int(h * 0.078))
     draw = ImageDraw.Draw(canvas)
+
+    # Contextual flyer badges (BIO / Aus der Region) top-left.
+    _draw_context_tags(canvas, spec, margin, int(h * 0.135), int(w * 0.058))
 
     # Product hero, upper area.
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.34)), primary)
@@ -736,7 +785,7 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeD
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.58), int(h * 0.14)), primary, align="left")
     _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.86), int(w * 0.058), accent, primary)
 
-    _draw_knaller_footer(canvas, primary, int(h * 0.06), int(h * 0.02))
+    _draw_knaller_footer(canvas, primary, accent, int(h * 0.072), int(h * 0.02))
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, primary: tuple[int, int, int], accent: tuple[int, int, int]):
@@ -745,6 +794,9 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: Creative
     _paint_background(canvas, primary)
     _draw_header_band(canvas, primary, accent, int(h * 0.090), int(h * 0.066))
     draw = ImageDraw.Draw(canvas)
+
+    # Contextual flyer badges (BIO / Aus der Region) top-left.
+    _draw_context_tags(canvas, spec, margin, int(h * 0.115), int(w * 0.05))
 
     # Product hero, upper-center.
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.42)), primary)
@@ -761,7 +813,7 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: Creative
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.16)), primary, align="left")
     _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
 
-    _draw_knaller_footer(canvas, primary, int(h * 0.065), int(h * 0.022))
+    _draw_knaller_footer(canvas, primary, accent, int(h * 0.075), int(h * 0.022))
 
 
 # ---------------------------------------------------------------------------
