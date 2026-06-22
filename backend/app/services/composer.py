@@ -827,6 +827,15 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 
 CLAIM_LIGHT = (205, 222, 245)
 
+# Kreativ: colour themes by Tonalität — deliberately different from the
+# brand-blue EDEKA Style so the two styles are clearly distinguishable.
+KREATIV_THEMES: dict[str, tuple[str, str]] = {
+    "fresco": ("#0F8A5F", "#FFE000"),    # fresh green + yellow
+    "premium": ("#23272E", "#D9B45B"),   # charcoal + gold (elegant)
+    "atrevido": ("#C01828", "#FFD200"),  # bold red + yellow
+    "local": ("#7A4A24", "#F2C879"),     # warm brown + cream
+}
+
 
 @dataclass
 class StyleConfig:
@@ -845,29 +854,34 @@ def _enum_val(value) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
-def _build_style_config(spec: PromotionSpec, primary, accent) -> StyleConfig:
+def _build_style_config(spec: PromotionSpec, primary, accent, style: str = "edeka") -> StyleConfig:
     """Translate Tonalität (mood/colour) and Kreativniveau (intensity) into
-    concrete drawing parameters, while keeping the EDEKA identity."""
+    concrete drawing parameters."""
     tone = _enum_val(spec.tone)
     level = _enum_val(spec.differentiation_level)
+    edeka = style == "edeka"
 
     bg_light, bg_dark, vignette = 0.10, 0.35, 120
     star_scale, halo, spot = 1.0, 120, 165
     force_region = False
 
-    # --- Tonalität: mood + colour accent ---
-    if tone == "premium":          # elegant, deep, gold accent
-        primary = _darken(primary, 0.18)
-        accent = _mix(accent, (255, 176, 32), 0.28)
-        bg_light, bg_dark, vignette = 0.04, 0.50, 180
+    # --- Tonalität: mood (colour tweaks only for EDEKA Style; Kreativ already
+    #     uses a distinct colour theme per tone) ---
+    if tone == "premium":          # elegant, deep
+        if edeka:
+            primary = _darken(primary, 0.18)
+            accent = _mix(accent, (255, 176, 32), 0.28)
+        bg_light, bg_dark, vignette = 0.04, 0.52, 185
         star_scale *= 0.95
     elif tone == "atrevido":       # Mutig: louder, bigger, brighter
-        primary = _lighten(primary, 0.05)
+        if edeka:
+            primary = _lighten(primary, 0.05)
         star_scale *= 1.12
         halo += 45
         spot += 25
     elif tone == "local":          # warm + always show the region badge
-        accent = _mix(accent, (255, 168, 64), 0.22)
+        if edeka:
+            accent = _mix(accent, (255, 168, 64), 0.22)
         force_region = True
         bg_dark = 0.42
     # "fresco" keeps the defaults
@@ -994,14 +1008,13 @@ def compose_promotion(
         primary = _hex_to_rgb(BRAND_BLUE)
         accent = _hex_to_rgb(BRAND_YELLOW)
     else:
-        # Kreativ: take the AI-chosen palette, kept close to EDEKA identity.
-        palette = direction.palette or [BRAND_BLUE, BRAND_YELLOW]
-        base_hex = palette[0] if palette[0] and palette[0].startswith("#") else BRAND_BLUE
-        accent_hex = palette[1] if len(palette) > 1 and palette[1].startswith("#") else BRAND_YELLOW
-        primary = _mix(_hex_to_rgb(base_hex, _hex_to_rgb(BRAND_BLUE)), _hex_to_rgb(BRAND_BLUE), 0.30)
-        accent = _mix(_hex_to_rgb(accent_hex, _hex_to_rgb(BRAND_YELLOW)), _hex_to_rgb(BRAND_YELLOW), 0.40)
+        # Kreativ: a distinct colour theme chosen by the Tonalität, so it looks
+        # clearly different from the brand-blue EDEKA Style.
+        theme = KREATIV_THEMES.get(_enum_val(spec.tone), KREATIV_THEMES["fresco"])
+        primary = _hex_to_rgb(theme[0])
+        accent = _hex_to_rgb(theme[1])
 
-    cfg = _build_style_config(spec, primary, accent)
+    cfg = _build_style_config(spec, primary, accent, style)
 
     if format_type == FormatType.POST:
         _layout_post(canvas, spec, cfg)
