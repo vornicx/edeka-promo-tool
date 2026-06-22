@@ -36,6 +36,7 @@ class PromotionSpec(BaseModel):
         description="Bildquelle: leer/auto = nach Name, 'builtin:<key>' = integriertes Motiv, 'custom:<id>' = eigenes Foto",
     )
     format: FormatType = Field(default=FormatType.POST, description="Ausgabeformat")
+    style: str = Field(default="edeka", description="Designstil: 'edeka' (Markenlook) | 'kreativ' (KI-Farben)")
     tone: ToneType = Field(default=ToneType.FRESCO, description="Visuelle Tonalität")
     differentiation_level: DifferentiationLevel = Field(
         default=DifferentiationLevel.MEDIO,

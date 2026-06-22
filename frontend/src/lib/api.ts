@@ -13,6 +13,7 @@ export interface PromotionData {
   claim?: string;
   product_image?: string;
   format: string;
+  style: string;
   tone: string;
   differentiation_level: string;
 }

@@ -26,6 +26,11 @@ const CATEGORIES = [
   { value: "haushalt", label: "Haushalt" },
 ];
 
+const STYLES = [
+  { value: "edeka", label: "EDEKA Style", meta: "Markenlook" },
+  { value: "kreativ", label: "Kreativ", meta: "KI-Farben" },
+];
+
 const TONES = [
   { value: "fresco", label: "Frisch" },
   { value: "premium", label: "Premium" },
@@ -71,6 +76,7 @@ export default function PromoForm({ onCreated }: Props) {
     claim: "",
     product_image: "",
     format: "post",
+    style: "edeka",
     tone: "fresco",
     differentiation_level: "medio",
   });
@@ -222,6 +228,24 @@ export default function PromoForm({ onCreated }: Props) {
                 <option key={category.value} value={category.value}>{category.label}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="label">Designstil</label>
+            <div className="segmented">
+              {STYLES.map((style) => (
+                <button
+                  key={style.value}
+                  type="button"
+                  aria-pressed={form.style === style.value}
+                  onClick={() => update("style", style.value)}
+                  className={`segment ${form.style === style.value ? "segment-active" : ""}`}
+                >
+                  <span className="font-bold">{style.label}</span>
+                  <span className="text-[11px] text-slate-500">{style.meta}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

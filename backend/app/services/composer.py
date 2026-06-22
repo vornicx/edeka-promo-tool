@@ -931,15 +931,18 @@ def compose_promotion(
     fmt = EXPORT_FORMATS[format_type]
     canvas = Image.new("RGBA", (fmt.width, fmt.height), (255, 255, 255, 255))
 
-    palette = direction.palette or [BRAND_BLUE, BRAND_YELLOW]
-    base_hex = palette[0] if palette[0] and palette[0].startswith("#") else BRAND_BLUE
-    accent_hex = palette[1] if len(palette) > 1 and palette[1].startswith("#") else BRAND_YELLOW
-
-    primary = _hex_to_rgb(base_hex, _hex_to_rgb(BRAND_BLUE))
-    accent = _hex_to_rgb(accent_hex, _hex_to_rgb(BRAND_YELLOW))
-    # Keep close to EDEKA identity
-    primary = _mix(primary, _hex_to_rgb(BRAND_BLUE), 0.30)
-    accent = _mix(accent, _hex_to_rgb(BRAND_YELLOW), 0.40)
+    style = (getattr(spec, "style", None) or "edeka").lower()
+    if style == "edeka":
+        # EDEKA Style: fixed brand colours, identical look every time.
+        primary = _hex_to_rgb(BRAND_BLUE)
+        accent = _hex_to_rgb(BRAND_YELLOW)
+    else:
+        # Kreativ: take the AI-chosen palette, kept close to EDEKA identity.
+        palette = direction.palette or [BRAND_BLUE, BRAND_YELLOW]
+        base_hex = palette[0] if palette[0] and palette[0].startswith("#") else BRAND_BLUE
+        accent_hex = palette[1] if len(palette) > 1 and palette[1].startswith("#") else BRAND_YELLOW
+        primary = _mix(_hex_to_rgb(base_hex, _hex_to_rgb(BRAND_BLUE)), _hex_to_rgb(BRAND_BLUE), 0.30)
+        accent = _mix(_hex_to_rgb(accent_hex, _hex_to_rgb(BRAND_YELLOW)), _hex_to_rgb(BRAND_YELLOW), 0.40)
 
     if format_type == FormatType.POST:
         _layout_post(canvas, spec, direction, primary, accent)

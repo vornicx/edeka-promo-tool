@@ -46,6 +46,7 @@ class CreatePromoRequest(BaseModel):
     claim: Optional[str] = None
     product_image: Optional[str] = None
     format: str = "post"
+    style: str = "edeka"
     tone: str = "fresco"
     differentiation_level: str = "medio"
 
