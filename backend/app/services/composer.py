@@ -12,6 +12,7 @@ from app.assets.brand import (
     BRAND_YELLOW,
     FONT_PATH_BOLD,
     FONT_PATH_EXTRABOLD,
+    WASCHBAER_LOGO_PATH,
 )
 from app.schemas.promotion import (
     CreativeDirection,
@@ -684,6 +685,26 @@ def _draw_knaller_footer(canvas: Image.Image, primary: tuple[int, int, int], acc
     draw.text(((w - (sb[2] - sb[0])) // 2 - sb[0], sy - sb[1]), sub, fill=accent, font=slogan_font)
 
 
+def _draw_corner_mascot(canvas: Image.Image, target_h: int, margin: int, footer_h: int):
+    """Place the Waschbär mascot peeking from the bottom-right corner.
+
+    No-op until backend/app/assets/waschbaer_logo.png is provided.
+    """
+    if not WASCHBAER_LOGO_PATH.exists():
+        return
+    w, h = canvas.size
+    logo = _trim_alpha(Image.open(WASCHBAER_LOGO_PATH).convert("RGBA"))
+    ratio = target_h / max(1, logo.height)
+    logo = logo.resize((max(1, int(logo.width * ratio)), target_h), Image.Resampling.LANCZOS)
+    x = w - margin - logo.width
+    y = (h - footer_h) - logo.height + int(target_h * 0.16)
+    # Soft contact shadow.
+    sw, sh = int(logo.width * 0.8), int(logo.height * 0.12)
+    _draw_soft_shadow(canvas, x + (logo.width - sw) // 2, y + logo.height - sh, sw, sh,
+                      blur=max(10, logo.width // 18), intensity=60)
+    canvas.alpha_composite(logo, (x, y))
+
+
 def _draw_product_or_name(canvas, draw, spec, product_zone, primary):
     product = _load_product_image(spec, (int(product_zone.w * 0.96), int(product_zone.h * 0.96)))
     if product:
@@ -759,7 +780,9 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDi
 
     # Validity tag near the star, footer band at the bottom.
     _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.04), int(w * 0.052), accent, primary)
-    _draw_knaller_footer(canvas, primary, accent, int(h * 0.095), int(h * 0.028))
+    footer_h = int(h * 0.095)
+    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.028))
+    _draw_corner_mascot(canvas, int(h * 0.17), margin, footer_h)
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, primary: tuple[int, int, int], accent: tuple[int, int, int]):
@@ -787,7 +810,9 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeD
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.58), int(h * 0.14)), primary, align="left")
     _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.86), int(w * 0.058), accent, primary)
 
-    _draw_knaller_footer(canvas, primary, accent, int(h * 0.072), int(h * 0.02))
+    footer_h = int(h * 0.072)
+    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.02))
+    _draw_corner_mascot(canvas, int(h * 0.12), margin, footer_h)
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, primary: tuple[int, int, int], accent: tuple[int, int, int]):
@@ -815,7 +840,9 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: Creative
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.16)), primary, align="left")
     _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
 
-    _draw_knaller_footer(canvas, primary, accent, int(h * 0.075), int(h * 0.022))
+    footer_h = int(h * 0.075)
+    _draw_knaller_footer(canvas, primary, accent, footer_h, int(h * 0.022))
+    _draw_corner_mascot(canvas, int(h * 0.13), margin, footer_h)
 
 
 # ---------------------------------------------------------------------------
