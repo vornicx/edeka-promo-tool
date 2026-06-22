@@ -654,33 +654,6 @@ def _draw_diagonal_band(
     draw.polygon(pts, fill=color)
 
 
-def _draw_sunburst_rays(
-    canvas: Image.Image,
-    cx: int,
-    cy: int,
-    radius: int,
-    rays: int,
-    color: tuple[int, int, int],
-    alpha: int,
-    rot_deg: float = 0.0,
-):
-    """Pinwheel of wedges radiating from (cx, cy) for that 'explosion' energy."""
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    rot = math.radians(rot_deg)
-    step = math.pi / rays
-    for i in range(rays):
-        a0 = rot + 2 * step * i
-        a1 = a0 + step
-        d.polygon(
-            [(cx, cy),
-             (cx + radius * math.cos(a0), cy + radius * math.sin(a0)),
-             (cx + radius * math.cos(a1), cy + radius * math.sin(a1))],
-            fill=(*color, alpha),
-        )
-    canvas.alpha_composite(layer)
-
-
 # ---------------------------------------------------------------------------
 # Shared Knaller scaffolding
 # ---------------------------------------------------------------------------
@@ -698,9 +671,10 @@ def _paint_background(canvas: Image.Image, primary: tuple[int, int, int], accent
     bottom = _darken(primary, 0.35)
     canvas.paste(_diagonal_gradient((w, h), top, bottom), (0, 0))
 
-    # Faint darker burst rays from the upper area for texture/energy.
-    _draw_sunburst_rays(canvas, int(w * 0.5), int(h * 0.30), int(max(w, h) * 0.95),
-                        36, _darken(primary, 0.18), 60, rot_deg=5)
+    # Soft vignette at the corners for depth (no hard shapes).
+    vig = Image.new("RGBA", (w, h), (*_darken(primary, 0.5), 0))
+    vig.putalpha(_radial_alpha(240, 0, 120, falloff=2.4).resize((w, h)))
+    canvas.alpha_composite(vig)
 
 
 def _load_mascot(target_h: int) -> Image.Image | None:
@@ -821,9 +795,9 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDi
     _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Burst rays behind everything in the star area.
+    # Soft warm halo behind the star (no hard bars).
     star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.46), int(w * 0.24)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.65), 24, _lighten(accent, 0.18), 150, rot_deg=4)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), 120)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
     _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary)
@@ -854,9 +828,9 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, direction: CreativeD
     _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Burst rays behind everything in the star area.
+    # Soft warm halo behind the star (no hard bars).
     star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.55), int(w * 0.27)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 1.75), 28, _lighten(accent, 0.18), 150, rot_deg=4)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), 120)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.072), accent)
     _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary)
@@ -885,9 +859,9 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, direction: Creative
     _paint_background(canvas, primary, accent)
     draw = ImageDraw.Draw(canvas)
 
-    # Burst rays behind everything in the star area.
+    # Soft warm halo behind the star (no hard bars).
     star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.585), int(w * 0.27)
-    _draw_sunburst_rays(canvas, star_cx, star_cy, int(star_r * 2.0), 32, _lighten(accent, 0.18), 150, rot_deg=4)
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), 120)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.060), accent)
     _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary)
