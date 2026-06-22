@@ -5,3 +5,5 @@ out/
 .env
 dist/
 build/
+
+tsconfig.tsbuildinfo

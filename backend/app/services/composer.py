@@ -287,6 +287,16 @@ def _normalize(value: str | None) -> str:
 
 
 def _resolve_product_asset(spec: PromotionSpec) -> Path | None:
+    # User-uploaded products take precedence over the bundled ones.
+    try:
+        from app.product_library import resolve_custom_asset
+
+        custom = resolve_custom_asset(spec.product, spec.category)
+        if custom:
+            return custom
+    except Exception:  # noqa: BLE001 - never let the library break composing
+        pass
+
     haystack = _normalize(f"{spec.product} {spec.category or ''}")
     for asset_name, keywords in PRODUCT_ASSETS.items():
         if any(keyword in haystack for keyword in keywords):

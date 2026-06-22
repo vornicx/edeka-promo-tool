@@ -1,6 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/promo";
 const API_ROOT = API_BASE.replace(/\/api\/promo\/?$/, "");
 const SETTINGS_API_BASE = `${API_ROOT}/api/settings`;
+const PRODUCTS_API_BASE = `${API_ROOT}/api/products`;
 
 export interface PromotionData {
   product: string;
@@ -155,4 +156,41 @@ export async function saveAISettings(data: SaveAISettingsPayload): Promise<AISet
     body: JSON.stringify(data),
   });
   return handleResponse<AISettings>(res, "KI-Einstellungen konnten nicht gespeichert werden");
+}
+
+export interface CustomProduct {
+  id: string;
+  name: string;
+  category: string;
+  image_url: string;
+  created: string;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  category?: string;
+  image_base64: string;
+}
+
+export function getProductImageUrl(product: CustomProduct): string {
+  return `${API_ROOT}${product.image_url}`;
+}
+
+export async function listProducts(): Promise<CustomProduct[]> {
+  const res = await fetch(PRODUCTS_API_BASE);
+  return handleResponse<CustomProduct[]>(res, "Produkte konnten nicht geladen werden");
+}
+
+export async function createProduct(data: CreateProductPayload): Promise<CustomProduct> {
+  const res = await fetch(PRODUCTS_API_BASE, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<CustomProduct>(res, "Produkt konnte nicht gespeichert werden");
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  const res = await fetch(`${PRODUCTS_API_BASE}/${id}`, { method: "DELETE" });
+  await handleResponse<{ status: string }>(res, "Produkt konnte nicht gelöscht werden");
 }

@@ -9,3 +9,8 @@ dist/
 build/
 .venv/
 venv/
+
+# Datos locales de usuario (dev) y artefactos
+/product_photos/
+/products.json
+/backend.log

@@ -6,6 +6,7 @@ import DirectionPicker from "@/components/DirectionPicker";
 import ExportPanel from "@/components/ExportPanel";
 import PreviewPanel from "@/components/PreviewPanel";
 import PromoForm from "@/components/PromoForm";
+import ProductLibraryPanel from "@/components/ProductLibraryPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import ToastContainer, { showToast } from "@/components/Toast";
 import { CreativeDirection, composePromo } from "@/lib/api";
@@ -52,6 +53,7 @@ export default function Home() {
   const [generationNote, setGenerationNote] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const step = !sessionId ? 1 : selectedIndex === null ? 2 : !composed ? 3 : 4;
@@ -93,6 +95,7 @@ export default function Home() {
       <Confetti active={showConfetti} />
       <ToastContainer />
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ProductLibraryPanel open={productsOpen} onClose={() => setProductsOpen(false)} />
 
       <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
@@ -107,6 +110,14 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={() => setProductsOpen(true)}>
+              Produkte
+            </button>
+            <button type="button" className="icon-btn md:hidden" aria-label="Produkte verwalten" onClick={() => setProductsOpen(true)}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7l8-4 8 4-8 4-8-4zm0 0v10l8 4 8-4V7M12 11v10" />
+              </svg>
+            </button>
             <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={() => setSettingsOpen(true)}>
               KI-Einstellungen
             </button>
