@@ -27,7 +27,7 @@ _LEVELS = {d.value for d in DifferentiationLevel}
 _STYLES = {"edeka", "luxe", "editorial", "colorblock", "lifestyle", "magazine", "retro"}
 _FORMATS = {f.value for f in FormatType}
 
-_THUMB_LONG = 460  # render previews small (and fast); export keeps full quality
+_THUMB_LONG = 380  # render previews small (and fast); export keeps full quality
 _cache: dict[str, bytes] = {}
 
 
@@ -108,5 +108,7 @@ async def example(
     return Response(
         content=_cache[key],
         media_type="image/png",
-        headers={"Cache-Control": "no-store"},
+        # Cacheable within a session; the frontend appends a per-page-load
+        # token so a reload always fetches fresh previews.
+        headers={"Cache-Control": "public, max-age=3600"},
     )

@@ -986,6 +986,8 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     tall = h / w > 1.12
     margin = int(w * 0.08)
     accent, ink, bg, glow = _kreativ_palette(spec)
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(accent, am, 1.0)
     muted = _mix(ink, bg, 0.5)
 
     # Deep background with a faint product-tinted top and darker base + vignette.
@@ -997,11 +999,11 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     if tall:
         pz = Zone(margin, int(h * 0.14), w - margin * 2, int(h * 0.34))
-        price_cx, price_cy, price_r = int(w * 0.72), int(h * 0.585), int(w * 0.185)
+        price_cx, price_cy, price_r = int(w * 0.72), int(h * 0.585), int(w * 0.185 * pm)
         head_y = int(h * 0.70)
     else:
         pz = Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.40))
-        price_cx, price_cy, price_r = int(w * 0.78), int(h * 0.70), int(w * 0.16)
+        price_cx, price_cy, price_r = int(w * 0.78), int(h * 0.70), int(w * 0.16 * pm)
         head_y = int(h * 0.64)
 
     # Spotlight: product-coloured glow + warm white core so the product pops.
@@ -1023,7 +1025,7 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw.rectangle((margin, head_y, margin + int(w * 0.085), head_y + max(3, int(h * 0.006))), fill=accent)
     ny = head_y + int(h * 0.022)
     name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD,
-                                         int(w * 0.55), int(h * 0.16), int(h * 0.066), int(h * 0.034),
+                                         int(w * 0.55), int(h * 0.16), int(h * 0.066 * hm), int(h * 0.034),
                                          max_lines=2, line_spacing=1.04)
     ny = _draw_wrapped(draw, name_lines, margin, int(w * 0.55), ny, name_font, ink, align="left", line_spacing=1.04)
     if spec.claim:
@@ -1087,6 +1089,17 @@ def _product_accent(spec: PromotionSpec) -> tuple[int, int, int]:
     return _hsv_adjust(_product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb("#1565C0"), 1.2, 0.95)
 
 
+def _level_scale(spec: PromotionSpec) -> tuple[float, float, float]:
+    """Kreativniveau -> (price size mul, headline size mul, accent saturation mul).
+    Applies to every style so 'Dezent/Ausgewogen/Auffällig' is always visible."""
+    lv = _enum_val(spec.differentiation_level)
+    if lv == "bajo":       # Dezent: restrained
+        return 0.82, 0.9, 0.78
+    if lv == "alto":       # Auffällig: bigger, bolder, more saturated
+        return 1.2, 1.12, 1.3
+    return 1.0, 1.0, 1.0   # Ausgewogen
+
+
 def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     """Light editorial style: airy background, product on a big colour disc that
     bleeds off the corner, dark oversized headline, clean round price seal."""
@@ -1094,6 +1107,8 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
     accent = _product_accent(spec)
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(accent, am, 1.0)
     ink = (32, 32, 36)
     bg = _lighten(accent, 0.90)
     muted = _mix(ink, bg, 0.42)
@@ -1105,12 +1120,12 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     if tall:
         disc_cx, disc_cy, disc_r = int(w * 0.74), int(h * 0.18), int(w * 0.62)
         prod = Zone(int(w * 0.08), int(h * 0.11), int(w * 0.84), int(h * 0.44))
-        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.52), int(w * 0.185)
+        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.52), int(w * 0.185 * pm)
         head_y = int(h * 0.66)
     else:
         disc_cx, disc_cy, disc_r = int(w * 0.80), int(h * 0.18), int(w * 0.50)
         prod = Zone(int(w * 0.10), int(h * 0.12), int(w * 0.66), int(h * 0.54))
-        price_cx, price_cy, price_r = int(w * 0.82), int(h * 0.60), int(w * 0.155)
+        price_cx, price_cy, price_r = int(w * 0.82), int(h * 0.60), int(w * 0.155 * pm)
         head_y = int(h * 0.68)
 
     # Colour disc with shadow + gradient.
@@ -1159,6 +1174,8 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
     accent = _product_accent(spec)
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(accent, am, 1.0)
     ink = (24, 24, 26)
     white = (255, 255, 255)
     muted = (120, 120, 126)
@@ -1197,7 +1214,7 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     kh = int(h * 0.02)
     _draw_kicker(draw, col_x, head_y, (spec.category or "Angebot"), kh, accent)
     name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD,
-                                         col_w, int(h * 0.22), int(h * 0.085), int(h * 0.04),
+                                         col_w, int(h * 0.22), int(h * 0.085 * hm), int(h * 0.04),
                                          max_lines=2, line_spacing=1.0)
     ny = _draw_wrapped(draw, name_lines, col_x, col_w, head_y + int(kh * 1.9), name_font, ink, align="left", line_spacing=1.0)
     draw.rectangle((col_x, ny + int(h * 0.01), col_x + int(w * 0.10), ny + int(h * 0.01) + max(4, int(h * 0.01))), fill=accent)
@@ -1219,7 +1236,7 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         draw.text((col_x - ob[0], ny - ob[1]), ot, fill=muted, font=of)
         draw.line((col_x, ny + (ob[3] - ob[1]) * 0.55, col_x + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
         ny += int(h * 0.042)
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, col_w, int(h * 0.085), int(h * 0.05))
+    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, col_w, int(h * 0.085 * pm), int(h * 0.05))
     pb = draw.textbbox((0, 0), spec.price, font=pf)
     draw.text((col_x - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
     ny += int((pb[3] - pb[1]) + h * 0.02)
@@ -1277,7 +1294,8 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
     margin = int(w * 0.08)
-    accent = _hsv_adjust(_product_accent(spec), 0.95, 0.85)
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(_product_accent(spec), 0.95 * am, 0.85)
     ink = (58, 44, 30)
     muted = (120, 104, 84)
     white = (252, 248, 240)
@@ -1291,11 +1309,11 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
 
     if tall:
         pz = Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.40))
-        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.56), int(w * 0.16)
+        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.56), int(w * 0.16 * pm)
         head_y = int(h * 0.70)
     else:
         pz = Zone(margin, int(h * 0.14), w - margin * 2, int(h * 0.46))
-        price_cx, price_cy, price_r = int(w * 0.80), int(h * 0.66), int(w * 0.145)
+        price_cx, price_cy, price_r = int(w * 0.80), int(h * 0.66), int(w * 0.145 * pm)
         head_y = int(h * 0.70)
 
     _paste_product(canvas, spec, pz, shadow=120, name_color=ink)
@@ -1328,7 +1346,8 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
     margin = int(w * 0.08)
-    accent = _product_accent(spec)
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(_product_accent(spec), am, 1.0)
     deep = _hsv_adjust(accent, 0.95, 0.42)
     cream = (243, 239, 229)
     ink = deep
@@ -1358,7 +1377,7 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     hx = margin
     hw = int(w * (0.84 if tall else 0.40))
     nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, hw, int(h * 0.24),
-                          int(h * 0.10), int(h * 0.05), max_lines=2, line_spacing=0.98)
+                          int(h * 0.10 * hm), int(h * 0.05), max_lines=2, line_spacing=0.98)
     ny = _draw_wrapped(draw, nl, hx, hw, head_y, nf, ink, align="left", line_spacing=0.98)
     if spec.claim:
         cf = _load_font(FONT_PATH_REGULAR, int(h * 0.026))
@@ -1376,7 +1395,7 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
         draw.text((hx - ob[0], ny - ob[1]), ot, fill=muted, font=of)
         draw.line((hx, ny + (ob[3] - ob[1]) * 0.55, hx + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
         ny += int(h * 0.045)
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, hw, int(h * 0.10), int(h * 0.055))
+    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, hw, int(h * 0.10 * pm), int(h * 0.055))
     pb = draw.textbbox((0, 0), spec.price, font=pf)
     draw.text((hx - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
 
@@ -1406,7 +1425,8 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     margin = int(w * 0.07)
     cream = (243, 230, 202)
     ink = (58, 40, 22)
-    accent = RETRO_ACCENTS.get(_enum_val(spec.tone), RETRO_ACCENTS["fresco"])
+    pm, hm, am = _level_scale(spec)
+    accent = _hsv_adjust(RETRO_ACCENTS.get(_enum_val(spec.tone), RETRO_ACCENTS["fresco"]), am, 1.0)
     deep = _darken(accent, 0.2)
 
     canvas.paste(_vertical_gradient((w, h), _lighten(cream, 0.2), _darken(cream, 0.06)), (0, 0))
@@ -1420,11 +1440,11 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     if tall:
         pz = Zone(margin * 2, int(h * 0.13), w - margin * 4, int(h * 0.36))
-        star_cx, star_cy, star_r = int(w * 0.72), int(h * 0.56), int(w * 0.17)
+        star_cx, star_cy, star_r = int(w * 0.72), int(h * 0.56), int(w * 0.17 * pm)
         head_y = int(h * 0.66)
     else:
         pz = Zone(margin * 2, int(h * 0.14), w - margin * 4, int(h * 0.44))
-        star_cx, star_cy, star_r = int(w * 0.78), int(h * 0.66), int(w * 0.145)
+        star_cx, star_cy, star_r = int(w * 0.78), int(h * 0.66), int(w * 0.145 * pm)
         head_y = int(h * 0.68)
 
     _paste_product(canvas, spec, pz, shadow=70, name_color=ink)
@@ -1437,7 +1457,7 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     kh = int(h * 0.02)
     _draw_kicker(draw, margin * 2, head_y, (spec.category or "Frischemarkt"), kh, deep)
     nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(w * 0.5), int(h * 0.2),
-                          int(h * 0.085), int(h * 0.045), max_lines=2, line_spacing=1.0)
+                          int(h * 0.085 * hm), int(h * 0.045), max_lines=2, line_spacing=1.0)
     ny = _draw_wrapped(draw, nl, margin * 2, int(w * 0.5), head_y + int(kh * 1.9), nf, ink, align="left", line_spacing=1.0)
     if spec.claim:
         cf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.024))
