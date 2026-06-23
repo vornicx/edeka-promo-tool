@@ -32,6 +32,9 @@ const STYLES = [
   { value: "luxe", label: "Dark Luxe", meta: "Premium" },
   { value: "editorial", label: "Editorial", meta: "Hell & klar" },
   { value: "colorblock", label: "Color Block", meta: "Grafisch" },
+  { value: "lifestyle", label: "Foto Lifestyle", meta: "Natürlich" },
+  { value: "magazine", label: "Magazin", meta: "Duoton" },
+  { value: "retro", label: "Retro", meta: "Vintage" },
 ];
 
 const TONES = [

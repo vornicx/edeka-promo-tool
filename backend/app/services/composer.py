@@ -6,7 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from app.assets.brand import (
     BRAND_BLUE,
@@ -1135,9 +1135,9 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.9), int(price_cy - price_r * 0.95), int(price_r * 0.5))
-    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, ink, white, ring=accent,
-                     gradient=(_lighten(ink, 0.16), _darken(ink, 0.1)))
-    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), accent, white)
+    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, accent, white, ring=white,
+                     gradient=(_lighten(accent, 0.16), _darken(accent, 0.18)))
+    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), ink, white)
 
     # Kicker + accent rule + oversized headline + claim.
     kh = int(h * 0.02)
@@ -1236,6 +1236,235 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     ctx = _context_tags(spec)
     if ctx:
         _draw_kicker(draw, col_x, int(h * 0.9), ctx[0][0], int(h * 0.016), accent)
+
+
+def _duotone(img: Image.Image, dark: tuple[int, int, int], light: tuple[int, int, int]) -> Image.Image:
+    img = img.convert("RGBA")
+    alpha = img.getchannel("A")
+    duo = ImageOps.colorize(img.convert("L"), black=dark, white=light).convert("RGBA")
+    duo.putalpha(alpha)
+    return duo
+
+
+def _paste_product(canvas, spec, zone, shadow=70, duotone=None, name_color=(40, 40, 40)) -> bool:
+    img = _load_product_image(spec, (int(zone.w * 0.96), int(zone.h * 0.96)))
+    if img is None:
+        draw = ImageDraw.Draw(canvas)
+        f = _fit_font_width(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(zone.w * 0.85), int(zone.w * 0.14), int(zone.w * 0.07))
+        _draw_text_centered(draw, spec.product.upper(), zone.cx, zone.cy, f, name_color)
+        return False
+    if duotone:
+        img = _duotone(img, duotone[0], duotone[1])
+    x = zone.cx - img.width // 2
+    y = zone.cy - img.height // 2
+    if shadow:
+        sw, shh = int(img.width * 0.5), int(img.height * 0.06)
+        _draw_soft_shadow(canvas, x + (img.width - sw) // 2, y + img.height - shh, sw, shh,
+                          blur=max(12, img.width // 15), intensity=shadow)
+    canvas.alpha_composite(img, (x, y))
+    return True
+
+
+def _draw_brand_top(canvas, x, y, mascot_h, color, halo=False) -> None:
+    """Compact lockup: mascot + EDEKA Mühlenbein (used by the extra styles)."""
+    _draw_brand_lockup(canvas, x, y, mascot_h, color, sub_color=_mix(color, (128, 128, 128), 0.4), halo=halo)
+
+
+def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
+    """Warm natural 'market' look: linen/wood background, soft daylight, the
+    product grounded with a natural shadow, warm earthy type."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    tall = h / w > 1.12
+    margin = int(w * 0.08)
+    accent = _hsv_adjust(_product_accent(spec), 0.95, 0.85)
+    ink = (58, 44, 30)
+    muted = (120, 104, 84)
+    white = (252, 248, 240)
+
+    canvas.paste(_vertical_gradient((w, h), (240, 231, 216), (212, 194, 166)), (0, 0))
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.30), int(max(w, h) * 0.5), (255, 250, 236), 110, falloff=2.0)
+    vig = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    vig.putalpha(_radial_alpha(240, 0, 70, falloff=2.4).resize((w, h)))
+    canvas.alpha_composite(Image.composite(Image.new("RGBA", (w, h), (60, 44, 28, 255)), Image.new("RGBA", (w, h), (0, 0, 0, 0)), vig))
+    draw = ImageDraw.Draw(canvas)
+
+    if tall:
+        pz = Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.40))
+        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.56), int(w * 0.16)
+        head_y = int(h * 0.70)
+    else:
+        pz = Zone(margin, int(h * 0.14), w - margin * 2, int(h * 0.46))
+        price_cx, price_cy, price_r = int(w * 0.80), int(h * 0.66), int(w * 0.145)
+        head_y = int(h * 0.70)
+
+    _paste_product(canvas, spec, pz, shadow=120, name_color=ink)
+    _draw_brand_top(canvas, margin, int(h * 0.05), int(h * (0.058 if tall else 0.075)), ink)
+    _draw_context_tags(canvas, spec, margin, int(h * (0.13 if tall else 0.16)), int(w * 0.05))
+
+    kh = int(h * 0.02)
+    _draw_kicker(draw, margin, head_y, (spec.category or "Frisch"), kh, accent)
+    bar_y = head_y + int(kh * 1.9)
+    draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.10), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
+    _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.028), int(w * 0.58), int(h * 0.14)), ink, align="left", claim_color=muted)
+
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.9), int(price_cy - price_r * 0.95), int(price_r * 0.5))
+    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, accent, white, ring=white,
+                     gradient=(_lighten(accent, 0.12), _darken(accent, 0.14)))
+    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), ink, white)
+
+    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
+    ff = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
+    fb = draw.textbbox((0, 0), foot, font=ff)
+    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=ff)
+
+
+def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
+    """Editorial magazine / duotone: product recoloured into two tones, big
+    masthead typography, thin rules. Arty and high-end."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    tall = h / w > 1.12
+    margin = int(w * 0.08)
+    accent = _product_accent(spec)
+    deep = _hsv_adjust(accent, 0.95, 0.42)
+    cream = (243, 239, 229)
+    ink = deep
+    muted = _mix(deep, cream, 0.4)
+
+    canvas.paste(_vertical_gradient((w, h), cream, _darken(cream, 0.04)), (0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    # Masthead rule + EDEKA wordmark, top.
+    top = int(h * 0.06)
+    draw.line((margin, top, w - margin, top), fill=deep, width=max(2, h // 360))
+    mh = int(h * (0.05 if tall else 0.062))
+    _draw_brand_top(canvas, margin, top + int(h * 0.012), mh, deep)
+    kk = "ANGEBOT"
+    _draw_kicker(draw, w - margin - _kicker_width(draw, kk, int(h * 0.018)), top + int(h * 0.022), kk, int(h * 0.018), accent)
+
+    if tall:
+        pz = Zone(margin, int(h * 0.16), w - margin * 2, int(h * 0.40))
+        head_y = int(h * 0.62)
+    else:
+        pz = Zone(int(w * 0.30), int(h * 0.16), int(w * 0.66), int(h * 0.50))
+        head_y = int(h * 0.40)
+
+    _paste_product(canvas, spec, pz, shadow=0, duotone=(deep, cream), name_color=deep)
+
+    # Oversized masthead headline.
+    hx = margin
+    hw = int(w * (0.84 if tall else 0.40))
+    nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, hw, int(h * 0.24),
+                          int(h * 0.10), int(h * 0.05), max_lines=2, line_spacing=0.98)
+    ny = _draw_wrapped(draw, nl, hx, hw, head_y, nf, ink, align="left", line_spacing=0.98)
+    if spec.claim:
+        cf = _load_font(FONT_PATH_REGULAR, int(h * 0.026))
+        for line in _wrap_text(draw, spec.claim, cf, hw, 2):
+            b = draw.textbbox((0, 0), line, font=cf)
+            draw.text((hx - b[0], ny + int(h * 0.012) - b[1]), line, fill=muted, font=cf)
+            ny += int((b[3] - b[1]) * 1.3)
+    ny += int(h * 0.02)
+
+    # Price: big number + struck old price, magazine style.
+    if spec.old_price:
+        of = _load_font(FONT_PATH_REGULAR, int(h * 0.028))
+        ot = f"statt {spec.old_price}"
+        ob = draw.textbbox((0, 0), ot, font=of)
+        draw.text((hx - ob[0], ny - ob[1]), ot, fill=muted, font=of)
+        draw.line((hx, ny + (ob[3] - ob[1]) * 0.55, hx + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
+        ny += int(h * 0.045)
+    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, hw, int(h * 0.10), int(h * 0.055))
+    pb = draw.textbbox((0, 0), spec.price, font=pf)
+    draw.text((hx - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
+
+    # bottom rule + footer
+    by = h - int(h * 0.07)
+    draw.line((margin, by, w - margin, by), fill=deep, width=max(2, h // 500))
+    foot = f"{STORE_NAME}  ·  {spec.validity}  ·  {INSTAGRAM}"
+    ff = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.016))
+    fb = draw.textbbox((0, 0), foot, font=ff)
+    draw.text((margin - fb[0], by + int(h * 0.018) - fb[1]), foot, fill=muted, font=ff)
+
+
+RETRO_ACCENTS = {
+    "fresco": (216, 154, 46),    # mustard
+    "premium": (38, 110, 102),   # teal
+    "atrevido": (198, 82, 40),   # burnt orange
+    "local": (150, 92, 44),      # brown
+}
+
+
+def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
+    """Retro / vintage: aged cream paper, sunburst, starburst price seal,
+    heavy headline and a double border."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    tall = h / w > 1.12
+    margin = int(w * 0.07)
+    cream = (243, 230, 202)
+    ink = (58, 40, 22)
+    accent = RETRO_ACCENTS.get(_enum_val(spec.tone), RETRO_ACCENTS["fresco"])
+    deep = _darken(accent, 0.2)
+
+    canvas.paste(_vertical_gradient((w, h), _lighten(cream, 0.2), _darken(cream, 0.06)), (0, 0))
+    # faint retro sunburst rays from centre
+    _draw_retro_rays(canvas, w // 2, int(h * 0.42), int(max(w, h) * 0.8), 36, _mix(accent, cream, 0.55))
+    # double border
+    for i, off in enumerate((int(w * 0.035), int(w * 0.045))):
+        wdt = max(2, w // (300 if i == 0 else 900))
+        draw.rectangle((off, off, w - off, h - off), outline=ink, width=wdt)
+    draw = ImageDraw.Draw(canvas)
+
+    if tall:
+        pz = Zone(margin * 2, int(h * 0.13), w - margin * 4, int(h * 0.36))
+        star_cx, star_cy, star_r = int(w * 0.72), int(h * 0.56), int(w * 0.17)
+        head_y = int(h * 0.66)
+    else:
+        pz = Zone(margin * 2, int(h * 0.14), w - margin * 4, int(h * 0.44))
+        star_cx, star_cy, star_r = int(w * 0.78), int(h * 0.66), int(w * 0.145)
+        head_y = int(h * 0.68)
+
+    _paste_product(canvas, spec, pz, shadow=70, name_color=ink)
+
+    # Vintage wordmark top-centre.
+    _draw_brand_top(canvas, margin * 2, int(h * 0.06), int(h * (0.055 if tall else 0.07)), ink)
+    _draw_kicker(draw, w - margin * 2 - _kicker_width(draw, "SEIT 1907", int(h * 0.016)), int(h * 0.075), "SEIT 1907", int(h * 0.016), deep)
+
+    # Heavy headline + claim.
+    kh = int(h * 0.02)
+    _draw_kicker(draw, margin * 2, head_y, (spec.category or "Frischemarkt"), kh, deep)
+    nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, int(w * 0.5), int(h * 0.2),
+                          int(h * 0.085), int(h * 0.045), max_lines=2, line_spacing=1.0)
+    ny = _draw_wrapped(draw, nl, margin * 2, int(w * 0.5), head_y + int(kh * 1.9), nf, ink, align="left", line_spacing=1.0)
+    if spec.claim:
+        cf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.024))
+        for line in _wrap_text(draw, spec.claim, cf, int(w * 0.46), 2):
+            b = draw.textbbox((0, 0), line, font=cf)
+            draw.text((margin * 2 - b[0], ny + int(h * 0.012) - b[1]), line, fill=deep, font=cf)
+            ny += int((b[3] - b[1]) * 1.3)
+
+    # Starburst price seal in retro colours.
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, ink, accent, rot_deg=-6)
+
+    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
+    ff = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.016))
+    fb = draw.textbbox((0, 0), foot, font=ff)
+    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.062) - fb[1]), foot, fill=deep, font=ff)
+
+
+def _draw_retro_rays(canvas, cx, cy, radius, rays, color):
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    step = math.pi / rays
+    for i in range(rays):
+        a0 = 2 * step * i
+        a1 = a0 + step
+        d.polygon([(cx, cy), (cx + radius * math.cos(a0), cy + radius * math.sin(a0)),
+                   (cx + radius * math.cos(a1), cy + radius * math.sin(a1))], fill=(*color, 90))
+    canvas.alpha_composite(layer)
 
 
 @dataclass
@@ -1415,6 +1644,12 @@ def compose_promotion(
         _layout_editorial(canvas, spec, format_type)
     elif style == "colorblock":
         _layout_colorblock(canvas, spec, format_type)
+    elif style == "lifestyle":
+        _layout_lifestyle(canvas, spec, format_type)
+    elif style == "magazine":
+        _layout_magazine(canvas, spec, format_type)
+    elif style == "retro":
+        _layout_retro(canvas, spec, format_type)
     else:
         # EDEKA Style: bold Knaller layout, fixed brand colours.
         primary = _hex_to_rgb(BRAND_BLUE)
