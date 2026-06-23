@@ -556,6 +556,10 @@ def _aa_polygon(canvas: Image.Image, points, fill, outline=None, width: int = 0,
     canvas.alpha_composite(layer, (minx, miny))
 
 
+def _circle_points(cx: float, cy: float, radius: float, n: int = 72):
+    return [(cx + radius * math.cos(2 * math.pi * i / n), cy + radius * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+
 def _star_points(cx: float, cy: float, outer: float, inner: float, points: int, rot: float = 0.0):
     pts = []
     for i in range(points * 2):
@@ -674,6 +678,48 @@ def _draw_price_star(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
 
+def _draw_price_disc(
+    canvas: Image.Image,
+    spec: PromotionSpec,
+    cx: int,
+    cy: int,
+    radius: int,
+    fill: tuple[int, int, int],
+    text_color: tuple[int, int, int],
+    ring: tuple[int, int, int] | None = None,
+):
+    """Clean round price seal (no spikes) for the editorial Kreativ style."""
+    draw = ImageDraw.Draw(canvas)
+    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sh)
+    sd.ellipse((cx - radius, cy - radius + int(radius * 0.16), cx + radius, cy + radius + int(radius * 0.16)),
+               fill=(0, 0, 0, 65))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 10))))
+
+    if ring is not None:
+        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=ring)
+        ri = int(radius * 0.9)
+    else:
+        ri = radius
+    draw.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=fill)
+
+    top_cursor = cy - int(ri * 0.64)
+    if spec.old_price:
+        old_text = f"statt {spec.old_price}"
+        of = _fit_font_width(draw, old_text, FONT_PATH_BOLD, int(ri * 1.4), int(radius * 0.17), int(radius * 0.1))
+        ob = draw.textbbox((0, 0), old_text, font=of)
+        ow, oh = ob[2] - ob[0], ob[3] - ob[1]
+        ox = cx - ow // 2
+        draw.text((ox - ob[0], top_cursor - ob[1]), old_text, fill=text_color, font=of)
+        draw.line((ox, top_cursor + oh * 0.5, ox + ow, top_cursor + oh * 0.5), fill=RED, width=max(3, radius // 38))
+        price_cy = cy + int(radius * 0.08)
+        price_h = int(ri * 0.58)
+    else:
+        price_cy = cy
+        price_h = int(ri * 0.76)
+    _draw_price_value(draw, cx, price_cy, int(ri * 1.5), price_h, spec.price, text_color)
+
+
 def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
     """Small red explosion badge for the discount percentage."""
     white = (255, 255, 255)
@@ -764,14 +810,15 @@ def _load_mascot(target_h: int) -> Image.Image | None:
     return logo.resize((max(1, int(logo.width * ratio)), target_h), Image.Resampling.LANCZOS)
 
 
-def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accent: tuple[int, int, int]):
+def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accent: tuple[int, int, int],
+                       sub_color: tuple[int, int, int] = (255, 255, 255), halo: bool = True):
     """The Waschbär mascot + EDEKA wordmark — the store's brand mark, top-left."""
     draw = ImageDraw.Draw(canvas)
     text_x = x
     mascot = _load_mascot(mascot_h)
     if mascot is not None:
-        # soft halo so the dark mascot reads on the blue background
-        _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(mascot_h * 0.75), (255, 255, 255), 70)
+        if halo:  # soft halo so the dark mascot reads on a dark background
+            _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(mascot_h * 0.75), (255, 255, 255), 70)
         canvas.alpha_composite(mascot, (x, y))
         text_x = x + mascot.width + int(mascot_h * 0.14)
 
@@ -786,7 +833,7 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     ty = y + (mascot_h - block_h) // 2
     draw.text((text_x - eb[0], ty - eb[1]), "EDEKA", fill=accent, font=ed_font)
     ty2 = ty + (eb[3] - eb[1]) + gap
-    draw.text((text_x - sbb[0], ty2 - sbb[1]), sub, fill=(255, 255, 255), font=sub_font)
+    draw.text((text_x - sbb[0], ty2 - sbb[1]), sub, fill=sub_color, font=sub_font)
 
 
 def _draw_angebot_badge(canvas: Image.Image, cx: int, cy: int, height: int, accent: tuple[int, int, int], primary: tuple[int, int, int]):
@@ -870,26 +917,94 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 
 CLAIM_LIGHT = (205, 222, 245)
 
-def _kreativ_colors(spec: PromotionSpec, tone: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
-    """Kreativ style: background colour derived from the chosen product, the
-    Tonalität then shades it. Clearly different from the brand-blue EDEKA Style.
-    The accent (price star) stays bright for contrast/readability."""
+def _kreativ_palette(spec: PromotionSpec) -> tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]:
+    """Editorial Kreativ palette derived from the product, shaded by Tonalität.
+    Returns (accent vivid colour, ink dark text, bg light)."""
+    tone = _enum_val(spec.tone)
     base = _product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb("#1565C0")
-    base = _hsv_adjust(base, sat=1.2, val=1.0)  # make the hue vivid first
+    accent = _hsv_adjust(base, sat=1.25, val=1.0)
 
-    if tone == "premium":          # deep, desaturated + gold
-        primary = _hsv_adjust(base, sat=0.5, val=0.34)
-        accent = _hex_to_rgb("#D9B45B")
-    elif tone == "atrevido":       # punchy, saturated + yellow
-        primary = _hsv_adjust(base, sat=1.4, val=0.6)
-        accent = _hex_to_rgb(BRAND_YELLOW)
-    elif tone == "local":          # warm shift + cream
-        primary = _mix(_hsv_adjust(base, sat=1.0, val=0.52), (120, 74, 38), 0.32)
-        accent = _hex_to_rgb("#F2C879")
-    else:                          # fresco: bright product tint + yellow
-        primary = _hsv_adjust(base, sat=1.1, val=0.62)
-        accent = _hex_to_rgb(BRAND_YELLOW)
-    return primary, accent
+    if tone == "premium":
+        accent = _hsv_adjust(accent, sat=0.7, val=0.7)
+        ink = _hsv_adjust(accent, sat=0.5, val=0.16)
+        bg = (244, 243, 240)            # warm off-white, elegant
+    elif tone == "atrevido":
+        accent = _hsv_adjust(accent, sat=1.4, val=1.0)
+        ink = _hsv_adjust(accent, sat=0.6, val=0.18)
+        bg = (255, 255, 255)
+    elif tone == "local":
+        accent = _mix(accent, (196, 120, 54), 0.30)
+        ink = _hsv_adjust(accent, sat=0.55, val=0.20)
+        bg = (247, 242, 234)            # warm cream
+    else:                               # fresco
+        ink = _hsv_adjust(accent, sat=0.5, val=0.20)
+        bg = _lighten(accent, 0.92)     # very light product tint
+
+    return accent, ink, bg
+
+
+def _layout_kreativ(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType,
+                    accent: tuple[int, int, int], ink: tuple[int, int, int], bg: tuple[int, int, int]):
+    """Editorial / modern style: light background, product on a colour disc,
+    clean round price seal, big typography. A different design language than
+    the bold EDEKA-blue Knaller."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    margin = int(w * 0.07)
+    white = (255, 255, 255)
+    tall = h / w > 1.12
+    muted = _mix(ink, bg, 0.45)
+
+    draw.rectangle((0, 0, w, h), fill=bg)
+
+    if tall:
+        disc_cx, disc_cy, disc_r = int(w * 0.52), int(h * 0.34), int(w * 0.46)
+        prod = Zone(int(w * 0.10), int(h * 0.10), int(w * 0.80), int(h * 0.46))
+        price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.55), int(w * 0.205)
+        head_y, head_h = int(h * 0.70), int(h * 0.13)
+        tags_y = int(h * 0.12)
+    else:
+        disc_cx, disc_cy, disc_r = int(w * 0.58), int(h * 0.40), int(w * 0.37)
+        prod = Zone(int(w * 0.16), int(h * 0.10), int(w * 0.66), int(h * 0.56))
+        price_cx, price_cy, price_r = int(w * 0.82), int(h * 0.62), int(w * 0.155)
+        head_y, head_h = int(h * 0.72), int(h * 0.15)
+        tags_y = int(h * 0.16)
+
+    # Big colour disc behind the product (the editorial 'pop').
+    softer = _hsv_adjust(accent, sat=0.9, val=1.0)
+    _aa_polygon(canvas, _circle_points(disc_cx, disc_cy, disc_r), fill=softer)
+
+    # Brand lockup, top-left, dark on light.
+    _draw_brand_lockup(canvas, margin, int(h * 0.045), int(h * (0.072 if tall else 0.10)), ink,
+                       sub_color=muted, halo=False)
+
+    # Product hero over the disc.
+    _draw_product_or_name(canvas, draw, spec, prod, ink)
+
+    # Contextual badges.
+    _draw_context_tags(canvas, spec, margin, tags_y, int(w * 0.052))
+
+    # Discount badge (kept as a small accent) near the disc top.
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.86), int(price_cy - price_r * 0.92), int(price_r * 0.5))
+
+    # Clean round price seal: dark ink disc, white text, thin light ring.
+    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, fill=ink, text_color=white, ring=bg)
+
+    # Validity pill under the price.
+    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.12), int(w * 0.05), accent, _hsv_adjust(accent, 0.6, 0.2))
+
+    # Headline + claim, bottom-left, big dark type.
+    _draw_headline_block(draw, spec, Zone(margin, head_y, int(w * 0.60), head_h), ink, align="left", claim_color=muted)
+
+    # Footer: thin rule + brand line.
+    line_y = h - int(h * 0.075)
+    draw.line((margin, line_y, w - margin, line_y), fill=_mix(ink, bg, 0.7), width=max(2, h // 700))
+    ffont = _fit_font_width(draw, f"{STORE_NAME}   ·   {INSTAGRAM}", FONT_PATH_BOLD, int(w * 0.86), int(h * 0.03), int(h * 0.016))
+    fb = draw.textbbox((0, 0), f"{STORE_NAME}   ·   {INSTAGRAM}", font=ffont)
+    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], line_y + int(h * 0.02) - fb[1]),
+              f"{STORE_NAME}   ·   {INSTAGRAM}", fill=ink, font=ffont)
 
 
 @dataclass
@@ -1063,22 +1178,21 @@ def compose_promotion(
     canvas = Image.new("RGBA", (cw, ch), (255, 255, 255, 255))
 
     style = (getattr(spec, "style", None) or "edeka").lower()
-    if style == "edeka":
-        # EDEKA Style: fixed brand colours, identical look every time.
+    if style == "kreativ":
+        # Editorial style: own layout + product-derived palette.
+        accent, ink, bg = _kreativ_palette(spec)
+        _layout_kreativ(canvas, spec, format_type, accent, ink, bg)
+    else:
+        # EDEKA Style: bold Knaller layout, fixed brand colours.
         primary = _hex_to_rgb(BRAND_BLUE)
         accent = _hex_to_rgb(BRAND_YELLOW)
-    else:
-        # Kreativ: colour derived from the chosen product, shaded by Tonalität.
-        primary, accent = _kreativ_colors(spec, _enum_val(spec.tone))
-
-    cfg = _build_style_config(spec, primary, accent, style)
-
-    if format_type == FormatType.POST:
-        _layout_post(canvas, spec, cfg)
-    elif format_type == FormatType.STORY:
-        _layout_story(canvas, spec, cfg)
-    else:
-        _layout_poster(canvas, spec, cfg)
+        cfg = _build_style_config(spec, primary, accent, "edeka")
+        if format_type == FormatType.POST:
+            _layout_post(canvas, spec, cfg)
+        elif format_type == FormatType.STORY:
+            _layout_story(canvas, spec, cfg)
+        else:
+            _layout_poster(canvas, spec, cfg)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(str(output_path), quality=96, optimize=True)
