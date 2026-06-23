@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import colorsys
 import math
 import unicodedata
 from dataclasses import dataclass
@@ -68,6 +69,48 @@ def _lighten(rgb: tuple[int, int, int], t: float) -> tuple[int, int, int]:
 
 def _darken(rgb: tuple[int, int, int], t: float) -> tuple[int, int, int]:
     return _mix(rgb, (0, 0, 0), t)
+
+
+def _hsv_adjust(rgb: tuple[int, int, int], sat: float = 1.0, val: float = 1.0) -> tuple[int, int, int]:
+    h, s, v = colorsys.rgb_to_hsv(*[c / 255 for c in rgb])
+    s = max(0.0, min(1.0, s * sat))
+    v = max(0.0, min(1.0, v * val))
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+_DOMINANT_CACHE: dict[str, tuple[int, int, int]] = {}
+
+
+def _product_dominant_color(asset_path: Path | None) -> tuple[int, int, int] | None:
+    """Saturation-weighted average colour of the opaque product pixels."""
+    if not asset_path:
+        return None
+    key = str(asset_path)
+    if key in _DOMINANT_CACHE:
+        return _DOMINANT_CACHE[key]
+    try:
+        img = Image.open(asset_path).convert("RGBA")
+    except Exception:  # noqa: BLE001
+        return None
+    img.thumbnail((72, 72), Image.Resampling.LANCZOS)
+    tr = tg = tb = wsum = 0.0
+    for r, g, b, a in img.getdata():
+        if a < 180:
+            continue
+        _, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        if v < 0.15:
+            continue
+        w = 0.15 + s  # favour vivid pixels, but keep some weight for all
+        tr += r * w
+        tg += g * w
+        tb += b * w
+        wsum += w
+    if wsum <= 0:
+        return None
+    color = (int(tr / wsum), int(tg / wsum), int(tb / wsum))
+    _DOMINANT_CACHE[key] = color
+    return color
 
 
 # ---------------------------------------------------------------------------
@@ -827,14 +870,26 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 
 CLAIM_LIGHT = (205, 222, 245)
 
-# Kreativ: colour themes by Tonalität — deliberately different from the
-# brand-blue EDEKA Style so the two styles are clearly distinguishable.
-KREATIV_THEMES: dict[str, tuple[str, str]] = {
-    "fresco": ("#0F8A5F", "#FFE000"),    # fresh green + yellow
-    "premium": ("#23272E", "#D9B45B"),   # charcoal + gold (elegant)
-    "atrevido": ("#C01828", "#FFD200"),  # bold red + yellow
-    "local": ("#7A4A24", "#F2C879"),     # warm brown + cream
-}
+def _kreativ_colors(spec: PromotionSpec, tone: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Kreativ style: background colour derived from the chosen product, the
+    Tonalität then shades it. Clearly different from the brand-blue EDEKA Style.
+    The accent (price star) stays bright for contrast/readability."""
+    base = _product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb("#1565C0")
+    base = _hsv_adjust(base, sat=1.2, val=1.0)  # make the hue vivid first
+
+    if tone == "premium":          # deep, desaturated + gold
+        primary = _hsv_adjust(base, sat=0.5, val=0.34)
+        accent = _hex_to_rgb("#D9B45B")
+    elif tone == "atrevido":       # punchy, saturated + yellow
+        primary = _hsv_adjust(base, sat=1.4, val=0.6)
+        accent = _hex_to_rgb(BRAND_YELLOW)
+    elif tone == "local":          # warm shift + cream
+        primary = _mix(_hsv_adjust(base, sat=1.0, val=0.52), (120, 74, 38), 0.32)
+        accent = _hex_to_rgb("#F2C879")
+    else:                          # fresco: bright product tint + yellow
+        primary = _hsv_adjust(base, sat=1.1, val=0.62)
+        accent = _hex_to_rgb(BRAND_YELLOW)
+    return primary, accent
 
 
 @dataclass
@@ -998,9 +1053,14 @@ def compose_promotion(
     direction: CreativeDirection,
     format_type: FormatType,
     output_path: Path,
+    scale: float = 1.0,
 ) -> Path:
     fmt = EXPORT_FORMATS[format_type]
-    canvas = Image.new("RGBA", (fmt.width, fmt.height), (255, 255, 255, 255))
+    # `scale` < 1 renders a smaller canvas for fast previews; the layout is
+    # fully proportional so the result is identical, just lower resolution.
+    cw = max(1, round(fmt.width * scale))
+    ch = max(1, round(fmt.height * scale))
+    canvas = Image.new("RGBA", (cw, ch), (255, 255, 255, 255))
 
     style = (getattr(spec, "style", None) or "edeka").lower()
     if style == "edeka":
@@ -1008,11 +1068,8 @@ def compose_promotion(
         primary = _hex_to_rgb(BRAND_BLUE)
         accent = _hex_to_rgb(BRAND_YELLOW)
     else:
-        # Kreativ: a distinct colour theme chosen by the Tonalität, so it looks
-        # clearly different from the brand-blue EDEKA Style.
-        theme = KREATIV_THEMES.get(_enum_val(spec.tone), KREATIV_THEMES["fresco"])
-        primary = _hex_to_rgb(theme[0])
-        accent = _hex_to_rgb(theme[1])
+        # Kreativ: colour derived from the chosen product, shaded by Tonalität.
+        primary, accent = _kreativ_colors(spec, _enum_val(spec.tone))
 
     cfg = _build_style_config(spec, primary, accent, style)
 

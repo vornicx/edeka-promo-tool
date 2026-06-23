@@ -125,7 +125,7 @@ export default function PromoForm({ onCreated }: Props) {
         category: form.category || "",
         product_image: form.product_image || "",
       });
-    }, 400);
+    }, 220);
     return () => clearTimeout(t);
   }, [form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image]);
 

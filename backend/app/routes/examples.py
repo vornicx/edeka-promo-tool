@@ -8,11 +8,11 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Response
-from PIL import Image
 
 from app.schemas.promotion import (
     CreativeDirection,
     DifferentiationLevel,
+    EXPORT_FORMATS,
     FormatType,
     PromotionSpec,
     ToneType,
@@ -27,28 +27,22 @@ _LEVELS = {d.value for d in DifferentiationLevel}
 _STYLES = {"edeka", "kreativ"}
 _FORMATS = {f.value for f in FormatType}
 
-_THUMB_MAX = 640  # downscale previews; full quality is for the real export
+_THUMB_LONG = 460  # render previews small (and fast); export keeps full quality
 _cache: dict[str, bytes] = {}
 
 
-def _render(spec: PromotionSpec, fmt: FormatType, style: str) -> bytes:
-    palette = ["#004C96", "#FFD600"] if style == "edeka" else ["#1565C0", "#FFA000"]
+def _render(spec: PromotionSpec, fmt: FormatType) -> bytes:
     direction = CreativeDirection(
-        name="beispiel", intent="", composition="", palette=palette,
+        name="beispiel", intent="", composition="", palette=["#004C96", "#FFD600"],
         text_safe_area="bottom", boldness="high", waschbaer_presence="featured",
     )
+    f = EXPORT_FORMATS[fmt]
+    scale = min(1.0, _THUMB_LONG / max(f.width, f.height))
     fd, tmp = tempfile.mkstemp(suffix=".png")
     os.close(fd)
     try:
-        compose_promotion(spec, direction, fmt, Path(tmp))
-        img = Image.open(tmp).convert("RGB")
-        if max(img.size) > _THUMB_MAX:
-            img.thumbnail((_THUMB_MAX, _THUMB_MAX), Image.Resampling.LANCZOS)
-        out = tmp + ".thumb.png"
-        img.save(out, optimize=True)
-        data = Path(out).read_bytes()
-        os.unlink(out)
-        return data
+        compose_promotion(spec, direction, fmt, Path(tmp), scale=scale)
+        return Path(tmp).read_bytes()
     finally:
         try:
             os.unlink(tmp)
@@ -110,5 +104,9 @@ async def example(
     if key not in _cache:
         if len(_cache) > 240:
             _cache.clear()
-        _cache[key] = _render(spec, fmt, style)
-    return Response(content=_cache[key], media_type="image/png")
+        _cache[key] = _render(spec, fmt)
+    return Response(
+        content=_cache[key],
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
