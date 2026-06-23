@@ -680,68 +680,43 @@ def _draw_price_star(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
 
-def _draw_price_disc(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    cx: int,
-    cy: int,
-    radius: int,
-    fill: tuple[int, int, int],
-    text_color: tuple[int, int, int],
-    ring: tuple[int, int, int] | None = None,
-    gradient: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
-    inner_ring: tuple[int, int, int] | None = None,
-    show_validity: bool = False,
-    accent: tuple[int, int, int] | None = None,
-):
-    """Polished round price seal: anti-aliased edges, a thin inner ring, a soft
-    gloss and well-spaced type (statt / big price / optional validity)."""
-    # Soft drop shadow.
-    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).ellipse((cx - radius, cy - radius + int(radius * 0.14),
-                                cx + radius, cy + radius + int(radius * 0.14)), fill=(0, 0, 0, 80))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 9))))
-
-    # Outer ring + body (anti-aliased circles).
-    if ring is not None:
-        _aa_polygon(canvas, _circle_points(cx, cy, radius), fill=ring)
-        ri = int(radius * 0.9)
-    else:
-        ri = radius
-    if gradient:
-        _fill_gradient_shape(canvas, _circle_points(cx, cy, ri), top=gradient[0], bottom=gradient[1])
-    else:
-        _aa_polygon(canvas, _circle_points(cx, cy, ri), fill=fill)
-
-    # Thin inner ring (seal/stamp detail) + soft top gloss for depth.
-    ic = inner_ring if inner_ring is not None else _mix(text_color, fill, 0.55)
-    _aa_polygon(canvas, _circle_points(cx, cy, int(ri * 0.84)), fill=None, outline=ic, width=max(2, radius // 46))
-    _draw_spotlight(canvas, cx, cy - int(ri * 0.32), int(ri * 0.72), (255, 255, 255), 42, falloff=1.7)
+def _draw_price_block(canvas, spec, x, y, anchor, price_color, muted, accent, big_h, rule=True):
+    """Clean typographic price (no seal): accent rule + struck old price + big
+    price + validity/discount. `anchor` is left|right|center at x."""
     draw = ImageDraw.Draw(canvas)
+    w, h = canvas.size
 
-    has_old = bool(spec.old_price)
-    vt = spec.validity.upper() if show_validity else None
+    def place(yy, text, font, fill):
+        b = draw.textbbox((0, 0), text, font=font)
+        tw, th = b[2] - b[0], b[3] - b[1]
+        tx = x - tw if anchor == "right" else (x - tw // 2 if anchor == "center" else x)
+        draw.text((tx - b[0], yy - b[1]), text, fill=fill, font=font)
+        return tx, tw, th
 
-    # "statt" struck-through, upper band.
-    if has_old:
-        old_text = f"statt {spec.old_price}"
-        of = _fit_font_width(draw, old_text, FONT_PATH_SEMIBOLD, int(ri * 1.25), int(radius * 0.16), int(radius * 0.09))
-        ob = draw.textbbox((0, 0), old_text, font=of)
-        ow, oh = ob[2] - ob[0], ob[3] - ob[1]
-        ox = cx - ow // 2
-        oy = cy - int(ri * 0.50)
-        draw.text((ox - ob[0], oy - ob[1]), old_text, fill=_mix(text_color, fill, 0.22), font=of)
-        draw.line((ox, oy + oh * 0.55, ox + ow, oy + oh * 0.55), fill=RED, width=max(2, radius // 46))
+    cur = y
+    if rule:
+        rw = int(h * 0.055)
+        rx = x - rw if anchor == "right" else (x - rw // 2 if anchor == "center" else x)
+        draw.rectangle((rx, cur, rx + rw, cur + max(3, int(h * 0.006))), fill=accent)
+        cur += int(h * 0.026)
 
-    # Big price (superscript cents), centred — shifts to keep bands balanced.
-    price_cy = cy + (int(ri * 0.04) if has_old else 0) - (int(ri * 0.08) if vt else 0)
-    price_h = int(ri * (0.50 if (has_old and vt) else 0.60 if (has_old or vt) else 0.74))
-    _draw_price_value(draw, cx, price_cy, int(ri * 1.45), price_h, spec.price, text_color)
+    if spec.old_price:
+        ot = f"statt {spec.old_price}"
+        of = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.026))
+        tx, tw, th = place(cur, ot, of, muted)
+        draw.line((tx, cur + th * 0.6, tx + tw, cur + th * 0.6), fill=muted, width=max(2, h // 600))
+        cur += int(th * 1.55)
 
-    # Validity, lower band.
-    if vt:
-        vf = _fit_font_width(draw, vt, FONT_PATH_SEMIBOLD, int(ri * 1.25), int(radius * 0.15), int(radius * 0.09))
-        _center_text(draw, cx, cy + int(ri * 0.50), vt, vf, accent or text_color)
+    pf = _load_font(FONT_PATH_EXTRABOLD, max(12, big_h))
+    _, _, ph = place(cur, spec.price, pf, price_color)
+    cur += int(ph * 1.18)
+
+    disc = _discount_percent(spec.old_price or "", spec.price)
+    meta = spec.validity.upper()
+    if disc:
+        meta = f"{meta}   ·   −{disc}%"
+    mf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.021))
+    place(cur, meta, mf, accent)
 
 
 def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
@@ -1015,13 +990,11 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw = ImageDraw.Draw(canvas)
 
     if tall:
-        pz = Zone(margin, int(h * 0.14), w - margin * 2, int(h * 0.34))
-        price_cx, price_cy, price_r = int(w * 0.72), int(h * 0.585), int(w * 0.185 * pm)
-        head_y = int(h * 0.70)
+        pz = Zone(margin, int(h * 0.14), w - margin * 2, int(h * 0.36))
+        head_y = int(h * 0.68)
     else:
-        pz = Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.40))
-        price_cx, price_cy, price_r = int(w * 0.78), int(h * 0.70), int(w * 0.16 * pm)
-        head_y = int(h * 0.64)
+        pz = Zone(margin, int(h * 0.15), w - margin * 2, int(h * 0.42))
+        head_y = int(h * 0.66)
 
     # Spotlight: product-coloured glow + warm white core so the product pops.
     _draw_spotlight(canvas, pz.cx, pz.cy, int(pz.w * 0.62), glow, 120, falloff=1.9)
@@ -1058,29 +1031,14 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
         ck = int(h * 0.016)
         _draw_kicker(draw, margin, ny + int(h * 0.02), ctx[0][0], ck, accent)
 
-    # Refined round price seal: gold ring, deep fill, warm-white price.
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    _draw_luxe_price(canvas, spec, price_cx, price_cy, price_r, accent, ink, _darken(bg, 0.25), muted)
-    if discount:
-        dk = int(h * 0.02)
-        dt = f"−{discount}%"
-        _draw_kicker(draw, int(price_cx - _kicker_width(draw, dt, dk) / 2), int(price_cy - price_r * 1.18), dt, dk, accent)
+    # Clean typographic price, right-aligned to the right margin.
+    _draw_price_block(canvas, spec, w - margin, head_y, "right", (245, 242, 235), muted, accent, int(h * 0.075 * pm))
 
     # Tiny footer.
     foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
     foot_font = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
     fb = draw.textbbox((0, 0), foot, font=foot_font)
     draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=foot_font)
-
-
-def _draw_luxe_price(canvas, spec, cx, cy, r, accent, ink, fill, muted):
-    """Dark-luxe seal: gold outer + inner ring, deep gradient body, white type."""
-    _draw_price_disc(
-        canvas, spec, cx, cy, r,
-        fill=fill, text_color=(245, 242, 235), ring=accent,
-        gradient=(_lighten(fill, 0.16), _darken(fill, 0.12)),
-        inner_ring=accent, show_validity=True, accent=accent,
-    )
 
 
 def _product_accent(spec: PromotionSpec) -> tuple[int, int, int]:
@@ -1145,12 +1103,8 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.06 if tall else 0.085)), ink, sub_color=muted, halo=False)
     _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
 
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    if discount:
-        _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.9), int(price_cy - price_r * 0.95), int(price_r * 0.5))
-    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, accent, white, ring=white,
-                     gradient=(_lighten(accent, 0.16), _darken(accent, 0.18)))
-    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), ink, white)
+    # Clean typographic price, right-aligned.
+    _draw_price_block(canvas, spec, w - margin, head_y, "right", accent, muted, _hsv_adjust(accent, 1.0, 0.7), int(h * 0.078 * pm))
 
     # Kicker + accent rule + oversized headline + claim.
     kh = int(h * 0.02)
@@ -1324,12 +1278,8 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.10), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.028), int(w * 0.58), int(h * 0.14)), ink, align="left", claim_color=muted)
 
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    if discount:
-        _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.9), int(price_cy - price_r * 0.95), int(price_r * 0.5))
-    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, accent, white, ring=white,
-                     gradient=(_lighten(accent, 0.12), _darken(accent, 0.14)))
-    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), ink, white)
+    # Clean typographic price, right-aligned.
+    _draw_price_block(canvas, spec, w - margin, head_y, "right", ink, muted, _hsv_adjust(accent, 1.0, 0.85), int(h * 0.078 * pm))
 
     foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
     ff = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
