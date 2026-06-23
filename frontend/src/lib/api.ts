@@ -215,11 +215,17 @@ export interface ExampleParams {
   product_image?: string;
 }
 
+// Cache-buster fixed per page load: each reload fetches fresh previews
+// (so design changes show up), but identical thumbnails stay cached within a
+// session. Avoids the browser serving stale previews after a redesign.
+const PREVIEW_BUST = Date.now().toString(36);
+
 export function exampleImageUrl(p: ExampleParams): string {
   const params = new URLSearchParams();
   Object.entries(p).forEach(([k, v]) => {
     if (v) params.set(k, String(v));
   });
+  params.set("_", PREVIEW_BUST);
   return `${API_ROOT}/api/examples?${params.toString()}`;
 }
 
