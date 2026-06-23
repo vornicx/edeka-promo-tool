@@ -690,41 +690,58 @@ def _draw_price_disc(
     text_color: tuple[int, int, int],
     ring: tuple[int, int, int] | None = None,
     gradient: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
+    inner_ring: tuple[int, int, int] | None = None,
+    show_validity: bool = False,
+    accent: tuple[int, int, int] | None = None,
 ):
-    """Clean round price seal (no spikes) for the editorial Kreativ style."""
-    draw = ImageDraw.Draw(canvas)
+    """Polished round price seal: anti-aliased edges, a thin inner ring, a soft
+    gloss and well-spaced type (statt / big price / optional validity)."""
+    # Soft drop shadow.
     sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(sh)
-    sd.ellipse((cx - radius, cy - radius + int(radius * 0.16), cx + radius, cy + radius + int(radius * 0.16)),
-               fill=(0, 0, 0, 65))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 10))))
+    ImageDraw.Draw(sh).ellipse((cx - radius, cy - radius + int(radius * 0.14),
+                                cx + radius, cy + radius + int(radius * 0.14)), fill=(0, 0, 0, 80))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 9))))
 
+    # Outer ring + body (anti-aliased circles).
     if ring is not None:
-        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=ring)
+        _aa_polygon(canvas, _circle_points(cx, cy, radius), fill=ring)
         ri = int(radius * 0.9)
     else:
         ri = radius
     if gradient:
         _fill_gradient_shape(canvas, _circle_points(cx, cy, ri), top=gradient[0], bottom=gradient[1])
-        draw = ImageDraw.Draw(canvas)
     else:
-        draw.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=fill)
+        _aa_polygon(canvas, _circle_points(cx, cy, ri), fill=fill)
 
-    top_cursor = cy - int(ri * 0.64)
-    if spec.old_price:
+    # Thin inner ring (seal/stamp detail) + soft top gloss for depth.
+    ic = inner_ring if inner_ring is not None else _mix(text_color, fill, 0.55)
+    _aa_polygon(canvas, _circle_points(cx, cy, int(ri * 0.84)), fill=None, outline=ic, width=max(2, radius // 46))
+    _draw_spotlight(canvas, cx, cy - int(ri * 0.32), int(ri * 0.72), (255, 255, 255), 42, falloff=1.7)
+    draw = ImageDraw.Draw(canvas)
+
+    has_old = bool(spec.old_price)
+    vt = spec.validity.upper() if show_validity else None
+
+    # "statt" struck-through, upper band.
+    if has_old:
         old_text = f"statt {spec.old_price}"
-        of = _fit_font_width(draw, old_text, FONT_PATH_BOLD, int(ri * 1.4), int(radius * 0.17), int(radius * 0.1))
+        of = _fit_font_width(draw, old_text, FONT_PATH_SEMIBOLD, int(ri * 1.25), int(radius * 0.16), int(radius * 0.09))
         ob = draw.textbbox((0, 0), old_text, font=of)
         ow, oh = ob[2] - ob[0], ob[3] - ob[1]
         ox = cx - ow // 2
-        draw.text((ox - ob[0], top_cursor - ob[1]), old_text, fill=text_color, font=of)
-        draw.line((ox, top_cursor + oh * 0.5, ox + ow, top_cursor + oh * 0.5), fill=RED, width=max(3, radius // 38))
-        price_cy = cy + int(radius * 0.08)
-        price_h = int(ri * 0.58)
-    else:
-        price_cy = cy
-        price_h = int(ri * 0.76)
-    _draw_price_value(draw, cx, price_cy, int(ri * 1.5), price_h, spec.price, text_color)
+        oy = cy - int(ri * 0.50)
+        draw.text((ox - ob[0], oy - ob[1]), old_text, fill=_mix(text_color, fill, 0.22), font=of)
+        draw.line((ox, oy + oh * 0.55, ox + ow, oy + oh * 0.55), fill=RED, width=max(2, radius // 46))
+
+    # Big price (superscript cents), centred — shifts to keep bands balanced.
+    price_cy = cy + (int(ri * 0.04) if has_old else 0) - (int(ri * 0.08) if vt else 0)
+    price_h = int(ri * (0.50 if (has_old and vt) else 0.60 if (has_old or vt) else 0.74))
+    _draw_price_value(draw, cx, price_cy, int(ri * 1.45), price_h, spec.price, text_color)
+
+    # Validity, lower band.
+    if vt:
+        vf = _fit_font_width(draw, vt, FONT_PATH_SEMIBOLD, int(ri * 1.25), int(radius * 0.15), int(radius * 0.09))
+        _center_text(draw, cx, cy + int(ri * 0.50), vt, vf, accent or text_color)
 
 
 def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
@@ -1057,32 +1074,13 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
 
 def _draw_luxe_price(canvas, spec, cx, cy, r, accent, ink, fill, muted):
-    """Round price seal with a thin gold ring and clean type (no spikes)."""
-    draw = ImageDraw.Draw(canvas)
-    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).ellipse((cx - r, cy - r + int(r * 0.12), cx + r, cy + r + int(r * 0.12)), fill=(0, 0, 0, 110))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, r // 9))))
-    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=accent)
-    ri = int(r * 0.93)
-    draw.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=fill)
-
-    y = cy - int(ri * 0.5)
-    if spec.old_price:
-        ot = f"statt {spec.old_price}"
-        of = _fit_font_width(draw, ot, FONT_PATH_REGULAR, int(ri * 1.3), int(r * 0.2), int(r * 0.12))
-        ob = draw.textbbox((0, 0), ot, font=of)
-        ow = ob[2] - ob[0]
-        ox = cx - ow // 2
-        draw.text((ox - ob[0], y - ob[1]), ot, fill=muted, font=of)
-        draw.line((ox, y + (ob[3] - ob[1]) * 0.55, ox + ow, y + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, r // 40))
-        py = cy + int(r * 0.06)
-    else:
-        py = cy
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_BOLD, int(ri * 1.45), int(r * 0.5), int(r * 0.3))
-    _center_text(draw, cx, py - draw.textbbox((0, 0), spec.price, font=pf)[3] // 2, spec.price, pf, ink)
-    vt = spec.validity.upper()
-    vf = _fit_font_width(draw, vt, FONT_PATH_SEMIBOLD, int(ri * 1.3), int(r * 0.16), int(r * 0.1))
-    _center_text(draw, cx, cy + int(ri * 0.5), vt, vf, accent)
+    """Dark-luxe seal: gold outer + inner ring, deep gradient body, white type."""
+    _draw_price_disc(
+        canvas, spec, cx, cy, r,
+        fill=fill, text_color=(245, 242, 235), ring=accent,
+        gradient=(_lighten(fill, 0.16), _darken(fill, 0.12)),
+        inner_ring=accent, show_validity=True, accent=accent,
+    )
 
 
 def _product_accent(spec: PromotionSpec) -> tuple[int, int, int]:
