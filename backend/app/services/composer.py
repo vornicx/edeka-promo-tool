@@ -13,6 +13,8 @@ from app.assets.brand import (
     BRAND_YELLOW,
     FONT_PATH_BOLD,
     FONT_PATH_EXTRABOLD,
+    FONT_PATH_REGULAR,
+    FONT_PATH_SEMIBOLD,
     WASCHBAER_LOGO_PATH,
 )
 from app.schemas.promotion import (
@@ -923,126 +925,153 @@ def _draw_context_tags(canvas: Image.Image, spec: PromotionSpec, x_left: int, y_
 CLAIM_LIGHT = (205, 222, 245)
 
 def _kreativ_palette(spec: PromotionSpec) -> tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]:
-    """Editorial Kreativ palette derived from the product, shaded by Tonalität.
-    Returns (accent vivid colour, ink dark text, bg light)."""
+    """Refined minimal-premium palette: one product-derived accent, near-black
+    ink, and an airy near-white background shaded by Tonalität."""
     tone = _enum_val(spec.tone)
     base = _product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb("#1565C0")
-    accent = _hsv_adjust(base, sat=1.25, val=1.0)
 
     if tone == "premium":
-        accent = _hsv_adjust(accent, sat=0.7, val=0.7)
-        ink = _hsv_adjust(accent, sat=0.5, val=0.16)
-        bg = (244, 243, 240)            # warm off-white, elegant
+        accent = _hsv_adjust(base, sat=0.7, val=0.78)
+        ink = (32, 32, 36)
+        bg = (245, 244, 241)            # warm off-white, elegant
     elif tone == "atrevido":
-        accent = _hsv_adjust(accent, sat=1.4, val=1.0)
-        ink = _hsv_adjust(accent, sat=0.6, val=0.18)
+        accent = _hsv_adjust(base, sat=1.3, val=1.0)
+        ink = (26, 26, 28)
         bg = (255, 255, 255)
     elif tone == "local":
-        accent = _mix(accent, (196, 120, 54), 0.30)
-        ink = _hsv_adjust(accent, sat=0.55, val=0.20)
-        bg = (247, 242, 234)            # warm cream
+        accent = _mix(_hsv_adjust(base, sat=1.0, val=0.9), (190, 120, 60), 0.25)
+        ink = (44, 38, 32)
+        bg = (248, 244, 237)            # warm cream
     else:                               # fresco
-        ink = _hsv_adjust(accent, sat=0.5, val=0.20)
-        bg = _lighten(accent, 0.92)     # very light product tint
+        accent = _hsv_adjust(base, sat=1.05, val=0.95)
+        ink = (32, 32, 36)
+        bg = (252, 251, 249)
 
     return accent, ink, bg
+
+
+def _center_text(draw, cx, y, text, font, fill) -> int:
+    b = draw.textbbox((0, 0), text, font=font)
+    draw.text((cx - (b[2] - b[0]) // 2 - b[0], y - b[1]), text, fill=fill, font=font)
+    return y + (b[3] - b[1])
 
 
 def _draw_kicker(draw, x, y, text, height, color):
     """Small uppercase, letter-spaced label (editorial kicker)."""
     text = text.upper()
-    font = _load_font(FONT_PATH_EXTRABOLD, height)
+    font = _load_font(FONT_PATH_SEMIBOLD, height)
     cx = x
     for ch in text:
         b = draw.textbbox((0, 0), ch, font=font)
         draw.text((cx - b[0], y - b[1]), ch, fill=color, font=font)
-        cw = b[2] - b[0]
-        cx += cw + max(2, int(height * (0.32 if ch == " " else 0.22)))
+        cx += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22)))
     return cx
+
+
+def _kicker_width(draw, text, height) -> int:
+    font = _load_font(FONT_PATH_SEMIBOLD, height)
+    total = 0
+    for ch in text.upper():
+        b = draw.textbbox((0, 0), ch, font=font)
+        total += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22)))
+    return total
 
 
 def _layout_kreativ(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType,
                     accent: tuple[int, int, int], ink: tuple[int, int, int], bg: tuple[int, int, int]):
-    """Editorial / modern style: airy light background, product on a colour
-    disc that bleeds off the canvas, gradients + shadows for depth, oversized
-    typography with a kicker and accent rule. A different design language than
-    the bold EDEKA-blue Knaller."""
+    """Minimal premium style: airy near-white canvas, product as the hero,
+    refined centred typography, one thin accent rule, discreet price."""
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
-    margin = int(w * 0.075)
-    white = (255, 255, 255)
     tall = h / w > 1.12
+    cx = w // 2
+    margin = int(w * 0.10)
     muted = _mix(ink, bg, 0.42)
 
-    # Soft vertical background gradient (white -> light product tint).
-    canvas.paste(_vertical_gradient((w, h), _lighten(bg, 0.6), _darken(bg, 0.06)), (0, 0))
+    draw.rectangle((0, 0, w, h), fill=bg)
 
+    # --- Small, restrained brand mark, centred at the top ---
+    mascot_h = int(h * (0.055 if tall else 0.072))
+    mascot = _load_mascot(mascot_h)
+    wm_font = _load_font(FONT_PATH_EXTRABOLD, int(mascot_h * 0.5))
+    wb = draw.textbbox((0, 0), "EDEKA", font=wm_font)
+    ww = wb[2] - wb[0]
+    gap = int(mascot_h * 0.18)
+    total = (mascot.width + gap if mascot else 0) + ww
+    bx = cx - total // 2
+    top_y = int(h * 0.055)
+    if mascot:
+        canvas.alpha_composite(mascot, (bx, top_y))
+        bx += mascot.width + gap
+    draw.text((bx - wb[0], top_y + (mascot_h - (wb[3] - wb[1])) // 2 - wb[1]), "EDEKA", fill=ink, font=wm_font)
+    sub_font = _load_font(FONT_PATH_REGULAR, int(mascot_h * 0.26))
+    _center_text(draw, cx, top_y + mascot_h + int(h * 0.006), "Mühlenbein", sub_font, muted)
+
+    # --- Optional single context label (BIO / Region) as fine spaced caps ---
+    ctx = _context_tags(spec)
+    if ctx:
+        label = ctx[0][0]
+        lf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.016))
+        _draw_kicker(draw, cx - _kicker_width(draw, label, int(h * 0.016)) // 2,
+                     int(h * 0.155 if not tall else h * 0.125), label, int(h * 0.016), accent)
+
+    # --- Product hero, large, centred, with a soft grounding shadow ---
     if tall:
-        disc_cx, disc_cy, disc_r = int(w * 0.74), int(h * 0.20), int(w * 0.62)
-        prod = Zone(int(w * 0.08), int(h * 0.12), int(w * 0.84), int(h * 0.44))
-        price_cx, price_cy, price_r = int(w * 0.76), int(h * 0.52), int(w * 0.205)
-        head_y = int(h * 0.66)
-        tags_y = int(h * 0.135)
+        pz = Zone(margin, int(h * 0.17), w - margin * 2, int(h * 0.36))
     else:
-        disc_cx, disc_cy, disc_r = int(w * 0.80), int(h * 0.20), int(w * 0.50)
-        prod = Zone(int(w * 0.12), int(h * 0.12), int(w * 0.66), int(h * 0.56))
-        price_cx, price_cy, price_r = int(w * 0.83), int(h * 0.60), int(w * 0.155)
-        head_y = int(h * 0.70)
-        tags_y = int(h * 0.165)
+        pz = Zone(margin, int(h * 0.19), w - margin * 2, int(h * 0.40))
+    sw, sh_h = int(pz.w * 0.46), int(pz.h * 0.06)
+    _draw_soft_shadow(canvas, pz.cx - sw // 2, int(pz.cy + pz.h * 0.34), sw, sh_h,
+                      blur=max(14, pz.w // 16), intensity=55)
+    _draw_product_or_name(canvas, draw, spec, pz, ink)
 
-    # Colour disc that bleeds off the corner — shadow + gradient for depth.
-    disc_shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(disc_shadow).ellipse(
-        (disc_cx - disc_r, disc_cy - disc_r + int(disc_r * 0.05),
-         disc_cx + disc_r, disc_cy + disc_r + int(disc_r * 0.05)), fill=(*_darken(accent, 0.4), 60))
-    canvas.alpha_composite(disc_shadow.filter(ImageFilter.GaussianBlur(radius=max(12, disc_r // 14))))
-    _fill_gradient_shape(canvas, _circle_points(disc_cx, disc_cy, disc_r),
-                         top=_lighten(accent, 0.22), bottom=_darken(accent, 0.16))
-    # gentle top gloss
-    _draw_spotlight(canvas, disc_cx, disc_cy - int(disc_r * 0.3), int(disc_r * 0.7), white, 55, falloff=1.7)
-    draw = ImageDraw.Draw(canvas)
+    # --- Centred type block below the product ---
+    y = pz.bottom + int(h * (0.05 if tall else 0.045))
+    name_font = _fit_font_width(draw, spec.product, FONT_PATH_SEMIBOLD, int(w * 0.82), int(h * 0.062), int(h * 0.035))
+    y = _center_text(draw, cx, y, spec.product, name_font, ink) + int(h * 0.022)
 
-    # Grounding shadow + product hero over the disc.
-    sw = int(prod.w * 0.5)
-    sh_h = int(prod.h * 0.07)
-    _draw_soft_shadow(canvas, prod.cx - sw // 2, int(prod.cy + prod.h * 0.30), sw, sh_h,
-                      blur=max(14, prod.w // 14), intensity=70)
-    _draw_product_or_name(canvas, draw, spec, prod, ink)
+    # one thin accent rule
+    rule_w = int(w * 0.07)
+    draw.rectangle((cx - rule_w // 2, y, cx + rule_w // 2, y + max(3, int(h * 0.006))), fill=accent)
+    y += int(h * 0.030)
 
-    # Brand lockup, top-left, dark on light.
-    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.072 if tall else 0.10)), ink,
-                       sub_color=muted, halo=False)
-    _draw_context_tags(canvas, spec, margin, tags_y, int(w * 0.052))
+    if spec.claim:
+        claim_font = _load_font(FONT_PATH_REGULAR, int(h * 0.026))
+        lines = _wrap_text(draw, spec.claim, claim_font, int(w * 0.7), 2)
+        for line in lines:
+            y = _center_text(draw, cx, y, line, claim_font, muted) + int(h * 0.008)
+    y += int(h * 0.02)
 
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    if discount:
-        _draw_discount_burst(canvas, discount, int(price_cx - price_r * 0.92), int(price_cy - price_r * 0.95), int(price_r * 0.52))
+    # --- Discreet price ---
+    if spec.old_price:
+        of = _load_font(FONT_PATH_REGULAR, int(h * 0.026))
+        ot = f"statt {spec.old_price}"
+        ob = draw.textbbox((0, 0), ot, font=of)
+        ox = cx - (ob[2] - ob[0]) // 2
+        draw.text((ox - ob[0], y - ob[1]), ot, fill=muted, font=of)
+        draw.line((ox, y + (ob[3] - ob[1]) * 0.55, ox + (ob[2] - ob[0]), y + (ob[3] - ob[1]) * 0.55),
+                  fill=muted, width=max(2, h // 600))
+        y += int(h * 0.040)
+    price_font = _load_font(FONT_PATH_BOLD, int(h * 0.060))
+    y = _center_text(draw, cx, y, spec.price, price_font, ink) + int(h * 0.018)
 
-    # Price seal: gradient ink disc, white text, thin accent ring.
-    _draw_price_disc(canvas, spec, price_cx, price_cy, price_r, ink, white, ring=accent,
-                     gradient=(_lighten(ink, 0.18), _darken(ink, 0.12)))
-    _draw_validity_tag(canvas, spec, price_cx, int(price_cy + price_r * 1.16), int(w * 0.05), accent, _hsv_adjust(accent, 0.6, 0.2))
+    # validity + discount, tiny, muted/accent
+    meta = [spec.validity.strip()]
+    disc = _discount_percent(spec.old_price or "", spec.price)
+    meta_font = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.020))
+    vb = draw.textbbox((0, 0), meta[0], font=meta_font)
+    vx = cx - (vb[2] - vb[0]) // 2
+    draw.text((vx - vb[0], y - vb[1]), meta[0], fill=muted, font=meta_font)
+    if disc:
+        dt = f"−{disc}%"
+        df = _load_font(FONT_PATH_EXTRABOLD, int(h * 0.020))
+        _center_text(draw, cx, y + int(h * 0.034), dt, df, accent)
 
-    # Editorial headline: kicker + accent rule + oversized product name + claim.
-    kicker = (spec.category or "Aktion").strip() or "Aktion"
-    kh = int(h * 0.022)
-    _draw_kicker(draw, margin, head_y, kicker, kh, _hsv_adjust(accent, 1.1, 0.85))
-    bar_y = head_y + int(kh * 1.7)
-    draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.12), bar_y + max(4, int(h * 0.010))),
-                           radius=h // 200, fill=accent)
-    _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.03), int(w * 0.60), int(h * 0.13)),
-                         ink, align="left", claim_color=muted)
-
-    # Thin editorial frame.
-    fm = int(w * 0.03)
-    draw.rectangle((fm, fm, w - fm, h - fm), outline=_mix(ink, bg, 0.6), width=max(1, w // 540))
-
-    # Footer brand line.
-    line_y = h - int(h * 0.075)
-    sub = f"{STORE_NAME}   ·   {INSTAGRAM}"
-    ffont = _fit_font_width(draw, sub, FONT_PATH_BOLD, int(w * 0.80), int(h * 0.028), int(h * 0.015))
-    fb = draw.textbbox((0, 0), sub, font=ffont)
-    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], line_y - fb[1]), sub, fill=muted, font=ffont)
+    # --- Tiny footer ---
+    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
+    foot_font = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
+    fb = draw.textbbox((0, 0), foot, font=foot_font)
+    draw.text((cx - (fb[2] - fb[0]) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=foot_font)
 
 
 @dataclass
