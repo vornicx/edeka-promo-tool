@@ -108,5 +108,5 @@ async def example(
     return Response(
         content=_cache[key],
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers={"Cache-Control": "no-store"},
     )
