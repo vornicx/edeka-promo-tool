@@ -680,43 +680,70 @@ def _draw_price_star(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
 
-def _draw_price_block(canvas, spec, x, y, anchor, price_color, muted, accent, big_h, rule=True):
-    """Clean typographic price (no seal): accent rule + struck old price + big
-    price + validity/discount. `anchor` is left|right|center at x."""
+def _contrast_text(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+    lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+    return (26, 26, 28) if lum > 150 else (255, 255, 255)
+
+
+def _draw_price_card(canvas: Image.Image, spec: PromotionSpec, zone: Zone, fill: tuple[int, int, int]):
+    """High-contrast rounded price card (rectangular, not a seal) with a big,
+    clearly readable price — the clarity of the EDEKA card, recoloured."""
     draw = ImageDraw.Draw(canvas)
-    w, h = canvas.size
+    x, y, w, h = zone.x, zone.y, zone.w, zone.h
+    text = _contrast_text(fill)
+    sub = _mix(text, fill, 0.3)
+    pill = _darken(fill, 0.42)
+    pill_text = _contrast_text(pill)
+    radius = min(w, h) // 7
 
-    def place(yy, text, font, fill):
-        b = draw.textbbox((0, 0), text, font=font)
-        tw, th = b[2] - b[0], b[3] - b[1]
-        tx = x - tw if anchor == "right" else (x - tw // 2 if anchor == "center" else x)
-        draw.text((tx - b[0], yy - b[1]), text, fill=fill, font=font)
-        return tx, tw, th
+    # Soft drop shadow.
+    pad = max(16, w // 26)
+    layer = Image.new("RGBA", (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle((pad, pad, w + pad, h + pad), radius=radius + 8, fill=(0, 0, 0, 95))
+    canvas.alpha_composite(layer.filter(ImageFilter.GaussianBlur(radius=pad // 2)), (x - pad, y - pad + pad // 3))
+    draw.rounded_rectangle((x, y, x + w, y + h), radius=radius, fill=fill)
 
-    cur = y
-    if rule:
-        rw = int(h * 0.055)
-        rx = x - rw if anchor == "right" else (x - rw // 2 if anchor == "center" else x)
-        draw.rectangle((rx, cur, rx + rw, cur + max(3, int(h * 0.006))), fill=accent)
-        cur += int(h * 0.026)
+    px, py = int(w * 0.08), int(h * 0.11)
+    ix, iy, iw = x + px, y + py, w - px * 2
+    bottom = y + h - py
 
+    # Validity pill, bottom-left.
+    vt = spec.validity.upper()
+    pill_h = int(h * 0.17)
+    vf = _fit_font_height(draw, vt, FONT_PATH_BOLD, int(pill_h * 0.52), int(pill_h * 0.6), int(pill_h * 0.34))
+    vb = draw.textbbox((0, 0), vt, font=vf)
+    vw = vb[2] - vb[0]
+    ppx = int(pill_h * 0.5)
+    pill_w = min(iw, vw + ppx * 2)
+    pill_y = bottom - pill_h
+    draw.rounded_rectangle((ix, pill_y, ix + pill_w, pill_y + pill_h), radius=pill_h // 2, fill=pill)
+    draw.text((ix + (pill_w - vw) // 2 - vb[0], pill_y + (pill_h - (vb[3] - vb[1])) // 2 - vb[1]), vt, fill=pill_text, font=vf)
+
+    # "ANGEBOT" label (left) + struck old price (right), top band.
+    lh = int(h * 0.15)
+    lf = _fit_font_height(draw, "ANGEBOT", FONT_PATH_EXTRABOLD, lh, int(lh * 1.1), int(lh * 0.6))
+    lb = draw.textbbox((0, 0), "ANGEBOT", font=lf)
+    draw.text((ix - lb[0], iy - lb[1]), "ANGEBOT", fill=text, font=lf)
+    label_bottom = iy + (lb[3] - lb[1])
     if spec.old_price:
         ot = f"statt {spec.old_price}"
-        of = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.026))
-        tx, tw, th = place(cur, ot, of, muted)
-        draw.line((tx, cur + th * 0.6, tx + tw, cur + th * 0.6), fill=muted, width=max(2, h // 600))
-        cur += int(th * 1.55)
+        of = _fit_font_height(draw, ot, FONT_PATH_BOLD, int(lh * 0.74), int(lh), int(lh * 0.45))
+        ob = draw.textbbox((0, 0), ot, font=of)
+        ow, oh = ob[2] - ob[0], ob[3] - ob[1]
+        ox = x + w - px - ow
+        oy = label_bottom - oh
+        draw.text((ox - ob[0], oy - ob[1]), ot, fill=sub, font=of)
+        draw.line((ox, oy + oh * 0.55, ox + ow, oy + oh * 0.55), fill=RED, width=max(2, h // 80))
 
-    pf = _load_font(FONT_PATH_EXTRABOLD, max(12, big_h))
-    _, _, ph = place(cur, spec.price, pf, price_color)
-    cur += int(ph * 1.18)
-
-    disc = _discount_percent(spec.old_price or "", spec.price)
-    meta = spec.validity.upper()
-    if disc:
-        meta = f"{meta}   ·   −{disc}%"
-    mf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.021))
-    place(cur, meta, mf, accent)
+    # Big, dominant price.
+    pt = label_bottom + int(h * 0.05)
+    pb = pill_y - int(h * 0.05)
+    band = max(int(h * 0.2), pb - pt)
+    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, iw, int(band * 1.05), int(band * 0.45))
+    pf = _fit_font_height(draw, spec.price, FONT_PATH_EXTRABOLD, band, pf.size, int(band * 0.4))
+    bbox = draw.textbbox((0, 0), spec.price, font=pf)
+    pw = bbox[2] - bbox[0]
+    draw.text((ix + (iw - pw) // 2 - bbox[0], pt + (band - (bbox[3] - bbox[1])) // 2 - bbox[1]), spec.price, fill=text, font=pf)
 
 
 def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
@@ -1031,8 +1058,9 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
         ck = int(h * 0.016)
         _draw_kicker(draw, margin, ny + int(h * 0.02), ctx[0][0], ck, accent)
 
-    # Clean typographic price, right-aligned to the right margin.
-    _draw_price_block(canvas, spec, w - margin, head_y, "right", (245, 242, 235), muted, accent, int(h * 0.075 * pm))
+    # High-contrast price card (gold), bottom-right.
+    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
+    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
 
     # Tiny footer.
     foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
@@ -1103,8 +1131,9 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.06 if tall else 0.085)), ink, sub_color=muted, halo=False)
     _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
 
-    # Clean typographic price, right-aligned.
-    _draw_price_block(canvas, spec, w - margin, head_y, "right", accent, muted, _hsv_adjust(accent, 1.0, 0.7), int(h * 0.078 * pm))
+    # High-contrast price card (product colour), bottom-right.
+    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
+    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
 
     # Kicker + accent rule + oversized headline + claim.
     kh = int(h * 0.02)
@@ -1278,8 +1307,9 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.10), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.028), int(w * 0.58), int(h * 0.14)), ink, align="left", claim_color=muted)
 
-    # Clean typographic price, right-aligned.
-    _draw_price_block(canvas, spec, w - margin, head_y, "right", ink, muted, _hsv_adjust(accent, 1.0, 0.85), int(h * 0.078 * pm))
+    # High-contrast price card (product colour), bottom-right.
+    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
+    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
 
     foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
     ff = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
