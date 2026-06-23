@@ -28,8 +28,10 @@ const CATEGORIES = [
 ];
 
 const STYLES = [
-  { value: "edeka", label: "EDEKA Style", meta: "Markenlook" },
-  { value: "kreativ", label: "Kreativ", meta: "KI-Farben" },
+  { value: "edeka", label: "EDEKA Style", meta: "Knaller" },
+  { value: "luxe", label: "Dark Luxe", meta: "Premium" },
+  { value: "editorial", label: "Editorial", meta: "Hell & klar" },
+  { value: "colorblock", label: "Color Block", meta: "Grafisch" },
 ];
 
 const TONES = [
@@ -378,7 +380,7 @@ export default function PromoForm({ onCreated }: Props) {
                 form.style,
                 (v) => update("style", v),
                 (v) => exampleImageUrl({ ...exampleCtx, style: v, tone: form.tone, level: form.differentiation_level, format: "post" }),
-                "grid-cols-2",
+                "grid-cols-2 sm:grid-cols-4",
               )}
             </div>
 
