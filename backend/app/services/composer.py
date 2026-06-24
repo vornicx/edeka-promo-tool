@@ -267,6 +267,7 @@ def _fit_wrapped(
     """Find the largest font where ``text`` wraps into <= max_lines and fits the box."""
     size = max(start_size, min_size + 1)
     step = max(2, start_size // 28)
+    want_words = len(text.split())
     best: tuple[ImageFont.ImageFont, list[str]] | None = None
     while size >= min_size:
         font = _load_font(font_path, size)
@@ -274,7 +275,9 @@ def _fit_wrapped(
         widest = max((_text_size(draw, line, font)[0] for line in lines), default=0)
         line_h = _text_size(draw, "Ág", font)[1]
         total_h = int(line_h * line_spacing * len(lines))
-        if widest <= max_width and total_h <= max_height:
+        # Must fit the box AND keep every word (no truncation by max_lines).
+        got_words = sum(len(line.split()) for line in lines)
+        if widest <= max_width and total_h <= max_height and got_words >= want_words:
             best = (font, lines)
             break
         size -= step
