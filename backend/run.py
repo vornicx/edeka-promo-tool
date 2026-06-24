@@ -117,6 +117,12 @@ def _open_app_window() -> bool:
 
 
 def main() -> None:
+    # Server-only mode: the Linux launcher runs the API here and opens the
+    # native window separately (system WebKitGTK), so we don't open a window.
+    if os.environ.get("EDEKA_SERVER_ONLY") == "1":
+        _run_server()
+        return
+
     threading.Thread(target=_run_server, daemon=True).start()
     if not _wait_ready():
         print(f"Server konnte nicht gestartet werden. Bitte {URL} manuell öffnen.")

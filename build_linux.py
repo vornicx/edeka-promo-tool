@@ -57,13 +57,49 @@ cp "$SCRIPT_DIR/edeka-promo-tool" "$APP_DIR/edeka-promo-tool-server"
 chmod +x "$APP_DIR/edeka-promo-tool-server"
 cp "$SCRIPT_DIR/icon.png" "$APP_DIR/icon.png" 2>/dev/null || true
 
+# Ventana nativa real (WebKitGTK del sistema) mediante un venv con acceso a gi.
+if command -v python3 >/dev/null 2>&1; then
+  python3 -m venv --system-site-packages "$APP_DIR/webview-venv" >/dev/null 2>&1 || true
+  "$APP_DIR/webview-venv/bin/pip" install -q --disable-pip-version-check pywebview >/dev/null 2>&1 || true
+fi
+
+cat > "$APP_DIR/native_window.py" <<'NATIVE'
+import sys
+import webview
+webview.create_window(
+    "EDEKA Mühlenbein – Promo Studio",
+    sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000",
+    width=1280, height=860, min_size=(1024, 720),
+)
+webview.start()
+NATIVE
+
 cat > "$APP_DIR/edeka-promo-tool" <<'LAUNCHER'
 #!/usr/bin/env bash
-set -euo pipefail
-# El binario levanta el servidor y abre la ventana de la app por si mismo.
+set -uo pipefail
 APP_DIR="$HOME/.local/share/edeka-promo-tool"
 LOG_FILE="$APP_DIR/edeka-promo-tool.log"
-exec "$APP_DIR/edeka-promo-tool-server" > "$LOG_FILE" 2>&1
+URL="http://127.0.0.1:8000"
+
+SERVER_PID=""
+if ! curl -fsS "$URL/health" >/dev/null 2>&1; then
+  EDEKA_SERVER_ONLY=1 "$APP_DIR/edeka-promo-tool-server" > "$LOG_FILE" 2>&1 &
+  SERVER_PID=$!
+  for _ in $(seq 1 60); do
+    curl -fsS "$URL/health" >/dev/null 2>&1 && break
+    sleep 0.25
+  done
+fi
+
+cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+if [ -x "$APP_DIR/webview-venv/bin/python" ] && "$APP_DIR/webview-venv/bin/python" -c "import webview" >/dev/null 2>&1; then
+  "$APP_DIR/webview-venv/bin/python" "$APP_DIR/native_window.py" "$URL"
+else
+  command -v xdg-open >/dev/null 2>&1 && xdg-open "$URL" >/dev/null 2>&1 || true
+  [ -n "$SERVER_PID" ] && wait "$SERVER_PID"
+fi
 LAUNCHER
 
 chmod +x "$APP_DIR/edeka-promo-tool"
