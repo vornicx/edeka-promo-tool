@@ -96,7 +96,7 @@ def build_exe():
         pyinstaller_args += ["--add-data", d]
     for h in hidden:
         pyinstaller_args += ["--hidden-import", h]
-    pyinstaller_args += ["--collect-all", "app", "backend/run.py"]
+    pyinstaller_args += ["--collect-all", "webview", "--collect-all", "app", "backend/run.py"]
 
     build_command = (
         "pip install -r backend/requirements.txt && "

@@ -108,7 +108,7 @@ def main() -> None:
     ]
     for h in HIDDEN:
         cmd += ["--hidden-import", h]
-    cmd += ["--collect-all", "app", str(BACKEND / "run.py")]
+    cmd += ["--collect-all", "webview", "--collect-all", "app", str(BACKEND / "run.py")]
     run(cmd)
 
     app_path = MAC_DIST / f"{APP_NAME}.app"

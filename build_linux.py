@@ -60,40 +60,10 @@ cp "$SCRIPT_DIR/icon.png" "$APP_DIR/icon.png" 2>/dev/null || true
 cat > "$APP_DIR/edeka-promo-tool" <<'LAUNCHER'
 #!/usr/bin/env bash
 set -euo pipefail
-
+# El binario levanta el servidor y abre la ventana de la app por si mismo.
 APP_DIR="$HOME/.local/share/edeka-promo-tool"
 LOG_FILE="$APP_DIR/edeka-promo-tool.log"
-URL="http://127.0.0.1:8000"
-
-if curl -fsS "$URL/health" >/dev/null 2>&1; then
-  if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL" >/dev/null 2>&1 &
-  else
-    echo "$URL"
-  fi
-  exit 0
-fi
-
-"$APP_DIR/edeka-promo-tool-server" > "$LOG_FILE" 2>&1 &
-SERVER_PID=$!
-trap 'kill "$SERVER_PID" >/dev/null 2>&1 || true' INT TERM
-
-for _ in $(seq 1 40); do
-  if curl -fsS "$URL/health" >/dev/null 2>&1; then
-    if command -v xdg-open >/dev/null 2>&1; then
-      xdg-open "$URL" >/dev/null 2>&1 &
-    else
-      echo "$URL"
-    fi
-    wait "$SERVER_PID"
-    exit $?
-  fi
-  sleep 0.25
-done
-
-kill "$SERVER_PID" >/dev/null 2>&1 || true
-echo "EDEKA Promo Tool konnte nicht gestartet werden. Logdatei: $LOG_FILE" >&2
-exit 1
+exec "$APP_DIR/edeka-promo-tool-server" > "$LOG_FILE" 2>&1
 LAUNCHER
 
 chmod +x "$APP_DIR/edeka-promo-tool"
@@ -187,7 +157,7 @@ def build_binary(pyinstaller: Path):
     ]
     for item in hidden:
         cmd += ["--hidden-import", item]
-    cmd += ["--collect-all", "app", str(BACKEND / "run.py")]
+    cmd += ["--collect-all", "webview", "--collect-all", "app", str(BACKEND / "run.py")]
     run(cmd)
 
 

@@ -73,7 +73,7 @@ def main() -> None:
     ]
     for h in HIDDEN:
         cmd += ["--hidden-import", h]
-    cmd += ["--collect-all", "app", str(BACKEND / "run.py")]
+    cmd += ["--collect-all", "webview", "--collect-all", "app", str(BACKEND / "run.py")]
     run(cmd)
 
     exe = DIST / "edeka-promo-tool.exe"

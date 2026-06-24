@@ -6,3 +6,7 @@ httpx==0.28.1
 pillow==10.2.0
 python-dotenv==1.0.1
 openai==1.82.0
+
+# Native desktop window (WebView2 on Windows, WKWebView on macOS, WebKitGTK on Linux)
+pywebview==5.4
+pythonnet==3.0.5; sys_platform == "win32"
