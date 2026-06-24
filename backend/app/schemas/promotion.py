@@ -84,11 +84,12 @@ class ExportFormat(BaseModel):
 
 
 EXPORT_FORMATS: dict[FormatType, ExportFormat] = {
+    # 4K-class social formats for wide, high-quality use.
     FormatType.STORY: ExportFormat(
-        format=FormatType.STORY, width=1080, height=1920, label="Instagram Story"
+        format=FormatType.STORY, width=2160, height=3840, label="Instagram Story"
     ),
     FormatType.POST: ExportFormat(
-        format=FormatType.POST, width=1080, height=1080, label="Instagram Post"
+        format=FormatType.POST, width=2160, height=2160, label="Instagram Post"
     ),
     FormatType.POSTER_A4: ExportFormat(
         format=FormatType.POSTER_A4, width=2480, height=3508, label="Poster A4"

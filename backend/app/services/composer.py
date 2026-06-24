@@ -402,7 +402,13 @@ def _load_product_image(spec: PromotionSpec, max_size: tuple[int, int]) -> Image
     mw, mh = max_size
     scale = min(mw / product.width, mh / product.height)
     new_size = (max(1, round(product.width * scale)), max(1, round(product.height * scale)))
-    return product.resize(new_size, Image.Resampling.LANCZOS)
+    product = product.resize(new_size, Image.Resampling.LANCZOS)
+    # When upscaling for high-res output, a gentle unsharp keeps the product crisp.
+    if scale > 1.12:
+        rgb = product.convert("RGB").filter(ImageFilter.UnsharpMask(radius=2.4, percent=90, threshold=2))
+        rgb.putalpha(product.getchannel("A"))
+        product = rgb
+    return product
 
 
 # ---------------------------------------------------------------------------
