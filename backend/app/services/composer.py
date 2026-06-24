@@ -26,6 +26,8 @@ from app.schemas.promotion import (
 
 PRODUCT_ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "product_photos"
 BANNER_PATH = Path(__file__).resolve().parent.parent / "assets" / "banner.png"
+QR_PATH = Path(__file__).resolve().parent.parent / "assets" / "insta_qr.png"
+STORE_ADDRESS = "Wolfsangerstr. 100 · 34125 Kassel · Mo–Sa 7–21 Uhr"
 
 PRODUCT_ASSETS: dict[str, list[str]] = {
     "strawberries": ["fresa", "fresas", "erdbeer", "erdbeere", "erdbeeren", "strawberry", "strawberries"],
@@ -681,45 +683,76 @@ def _draw_price_star(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
 
-def _draw_footer_banner(canvas: Image.Image) -> int:
-    """Brand footer banner as a rounded, inset 'plate' so it integrates as a
-    designed element instead of a hard edge-to-edge bar. Returns the bottom
-    space it occupies."""
-    if not BANNER_PATH.exists():
-        return 0
+def _avg_region(canvas: Image.Image, x: int, y: int, s: int) -> tuple[int, int, int]:
+    box = canvas.crop((x, y, x + s, y + s)).convert("RGB")
+    px = list(box.getdata())
+    n = len(px)
+    return (sum(p[0] for p in px) // n, sum(p[1] for p in px) // n, sum(p[2] for p in px) // n)
+
+
+def _draw_footer_banner(canvas: Image.Image, spec: PromotionSpec) -> int:
+    """Footer rebuilt to match each design: it blends with the canvas colour at
+    the bottom and shows EDEKA Mühlenbein + address + the Instagram QR in the
+    design's own tones, instead of pasting the dark banner image."""
     w, h = canvas.size
-    banner = Image.open(BANNER_PATH).convert("RGBA")
-    bg = banner.getpixel((4, banner.height // 2))[:3]  # banner's dark base
+    band_h = int(h * 0.105)
+    top = h - band_h
 
-    side = int(w * 0.035)
-    bottom = int(h * 0.026)
-    plate_h = int(h * 0.07)
-    plate_w = w - side * 2
-    px, py = side, h - bottom - plate_h
-    radius = max(8, int(plate_h * 0.30))
+    # Adopt the design's bottom colour so the footer blends in. If the two
+    # bottom corners differ a lot (e.g. Color Block), fall back to a light bar.
+    bl = _avg_region(canvas, 4, h - 18, 14)
+    br = _avg_region(canvas, w - 18, h - 18, 14)
+    dist = sum(abs(bl[i] - br[i]) for i in range(3))
+    bg = _mix(bl, br, 0.5) if dist < 60 else (249, 248, 246)
+    lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+    ink = (245, 243, 238) if lum < 140 else (32, 30, 30)
+    muted = _mix(ink, bg, 0.42)
+    wordmark = _hex_to_rgb(BRAND_YELLOW) if lum < 140 else _hex_to_rgb(BRAND_BLUE)
 
-    # Soft drop shadow under the plate.
-    pad_s = max(12, plate_h // 4)
-    sh = Image.new("RGBA", (plate_w + pad_s * 2, plate_h + pad_s * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(sh).rounded_rectangle((pad_s, pad_s, plate_w + pad_s, plate_h + pad_s),
-                                         radius=radius + 6, fill=(0, 0, 0, 78))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=pad_s // 2)), (px - pad_s, py - pad_s + pad_s // 3))
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle((0, top, w, h), fill=bg)
+    draw.rectangle((0, top, w, top + max(2, h // 520)), fill=_mix(ink, bg, 0.72))
 
-    # Plate (banner colour, slightly translucent so the design breathes through).
-    plate = Image.new("RGBA", (plate_w, plate_h), (0, 0, 0, 0))
-    pdraw = ImageDraw.Draw(plate)
-    pdraw.rounded_rectangle((0, 0, plate_w, plate_h), radius=radius, fill=(*bg, 244))
-    # Thin EDEKA-yellow accent along the top edge (echoes the banner's yellow).
-    yellow = _hex_to_rgb(BRAND_YELLOW)
-    inset = radius
-    pdraw.rounded_rectangle((inset, 0, plate_w - inset, max(3, int(plate_h * 0.045))), radius=0, fill=(*yellow, 230))
+    margin = int(w * 0.05)
+    cy = top + band_h // 2
 
-    pad = int(plate_h * 0.17)
-    scale = min((plate_w - pad * 2) / banner.width, (plate_h - pad * 2) / banner.height)
-    bw, bh = max(1, int(banner.width * scale)), max(1, int(banner.height * scale))
-    plate.alpha_composite(banner.resize((bw, bh), Image.Resampling.LANCZOS), ((plate_w - bw) // 2, (plate_h - bh) // 2))
-    canvas.alpha_composite(plate, (px, py))
-    return bottom + plate_h
+    # Mascot, left.
+    tx = margin
+    mh = int(band_h * 0.66)
+    mascot = _load_mascot(mh)
+    if mascot is not None:
+        if lum < 140:
+            _draw_spotlight(canvas, margin + mascot.width // 2, cy, int(mh * 0.7), (255, 255, 255), 55)
+        canvas.alpha_composite(mascot, (margin, cy - mascot.height // 2))
+        tx = margin + mascot.width + int(band_h * 0.14)
+
+    # EDEKA Mühlenbein + address.
+    f1 = _load_font(FONT_PATH_EXTRABOLD, int(band_h * 0.27))
+    eb = draw.textbbox((0, 0), "EDEKA", font=f1)
+    line1_y = cy - int(band_h * 0.27)
+    draw.text((tx - eb[0], line1_y - eb[1]), "EDEKA", fill=wordmark, font=f1)
+    mx = tx + (eb[2] - eb[0]) + int(band_h * 0.07)
+    mb = draw.textbbox((0, 0), "Mühlenbein", font=f1)
+    draw.text((mx - mb[0], line1_y - mb[1]), "Mühlenbein", fill=ink, font=f1)
+    f2 = _load_font(FONT_PATH_SEMIBOLD, int(band_h * 0.15))
+    ab = draw.textbbox((0, 0), STORE_ADDRESS, font=f2)
+    draw.text((tx - ab[0], line1_y + (eb[3] - eb[1]) + int(band_h * 0.09) - ab[1]), STORE_ADDRESS, fill=muted, font=f2)
+
+    # Instagram QR + handle, right.
+    if QR_PATH.exists():
+        qr = Image.open(QR_PATH).convert("RGBA")
+        qh = int(band_h * 0.78)
+        qr = qr.resize((max(1, int(qr.width * qh / qr.height)), qh), Image.Resampling.LANCZOS)
+        qx = w - margin - qr.width
+        cp = int(qh * 0.05)
+        draw.rounded_rectangle((qx - cp, cy - qr.height // 2 - cp, qx + qr.width + cp, cy + qr.height // 2 + cp),
+                               radius=int(qh * 0.1), fill=(255, 255, 255))
+        canvas.alpha_composite(qr, (qx, cy - qr.height // 2))
+        hf = _load_font(FONT_PATH_BOLD, int(band_h * 0.165))
+        ht = INSTAGRAM
+        hb = draw.textbbox((0, 0), ht, font=hf)
+        draw.text((qx - int(band_h * 0.2) - (hb[2] - hb[0]) - hb[0], cy - (hb[3] - hb[1]) // 2 - hb[1]), ht, fill=ink, font=hf)
+    return band_h
 
 
 def _contrast_text(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -1696,8 +1729,8 @@ def compose_promotion(
         else:
             _layout_poster(canvas, spec, cfg)
 
-    # Brand footer banner on every design.
-    _draw_footer_banner(canvas)
+    # Brand footer (adapted to the design) on every promotion.
+    _draw_footer_banner(canvas, spec)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(str(output_path), quality=96, optimize=True)
