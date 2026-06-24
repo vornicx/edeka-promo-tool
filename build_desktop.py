@@ -64,8 +64,10 @@ def build_exe():
     print("=== Building Windows .exe (Docker PyInstaller) ===")
     ensure_docker_access()
 
-    if DIST.exists():
-        shutil.rmtree(DIST)
+    # Keep other platform artifacts in dist/ (only clean the Windows output).
+    win_exe = DIST / "edeka-promo-tool.exe"
+    if win_exe.exists():
+        win_exe.unlink()
 
     data = [
         "frontend/out:frontend/out",
