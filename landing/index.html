@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDEKA Mühlenbein – Promo Studio</title>
+<meta name="description" content="Desktop-App für EDEKA Mühlenbein: Aktionsmotive für Post, Story und Plakat in 4K – in Minuten." />
+<link rel="icon" href="waschbaer.png" />
+<style>
+  :root{
+    --blue:#004C96; --blue2:#0a5aab; --dark:#003366; --yellow:#FFD600;
+    --ink:#0f1b2d; --muted:#5b6b80; --line:#e6eaf0; --bg:#f4f6f9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* Header */
+  header{
+    background:
+      radial-gradient(700px 240px at 10% -40%, rgba(255,214,0,.22), rgba(255,214,0,0) 70%),
+      linear-gradient(105deg,var(--blue) 0%,var(--blue2) 55%,var(--dark) 100%);
+    color:#fff;
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 0}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{height:46px;width:46px;border-radius:14px;background:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+  .brand .logo img{height:38px;width:38px;object-fit:contain}
+  .brand b{font-size:16px;font-weight:800;letter-spacing:.2px;line-height:1}
+  .brand small{display:block;color:var(--yellow);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin-top:3px}
+  .nav .ig{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);padding:8px 14px;border-radius:999px}
+
+  /* Hero */
+  .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:46px 0 64px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--yellow)}
+  .eyebrow span{height:12px;width:6px;border-radius:6px;background:var(--yellow)}
+  .hero h1{font-size:44px;line-height:1.05;font-weight:900;margin:14px 0 0;letter-spacing:-.5px}
+  .hero p.lead{margin-top:16px;font-size:17px;line-height:1.6;color:rgba(255,255,255,.86);max-width:42ch}
+  .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+  .btn{display:inline-flex;align-items:center;gap:10px;font-weight:800;border-radius:12px;padding:14px 22px;font-size:15px;transition:transform .12s ease,box-shadow .12s ease,background .12s ease}
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--yellow);color:var(--dark);box-shadow:0 10px 24px rgba(255,214,0,.3)}
+  .btn-primary:hover{filter:brightness(.97)}
+  .btn-ghost{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2)}
+  .btn-ghost:hover{background:rgba(255,255,255,.2)}
+  .hero .shot{position:relative}
+  .hero .shot img{width:100%;border-radius:20px;box-shadow:0 30px 70px rgba(0,0,0,.35);border:6px solid #fff;transform:rotate(2deg)}
+  .hero .shot .badge{position:absolute;left:-14px;top:18px;background:var(--yellow);color:var(--dark);font-weight:900;font-size:13px;padding:8px 14px;border-radius:999px;box-shadow:0 8px 20px rgba(0,0,0,.2);transform:rotate(-4deg)}
+
+  /* Downloads */
+  .section{padding:64px 0}
+  .section h2{font-size:30px;font-weight:900;letter-spacing:-.3px}
+  .section .sub{color:var(--muted);margin-top:8px;font-size:16px}
+  .dl-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin-top:30px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:6px;transition:transform .12s ease,box-shadow .12s ease,border-color .12s}
+  .card:hover{transform:translateY(-3px);box-shadow:0 16px 40px rgba(15,27,45,.08)}
+  .card.primary{border:2px solid var(--blue);box-shadow:0 14px 36px rgba(0,76,150,.14)}
+  .os{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  .os .ico{height:34px;width:34px}
+  .tag{align-self:flex-start;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);background:#e8f0fe;padding:4px 10px;border-radius:999px;margin-bottom:4px}
+  .card p{color:var(--muted);font-size:13px;line-height:1.5}
+  .card .dlbtn{margin-top:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:800;border-radius:11px;padding:12px 16px;font-size:14px}
+  .card.primary .dlbtn{background:var(--blue);color:#fff}
+  .card.primary .dlbtn:hover{background:var(--dark)}
+  .card .dlbtn.alt{background:#f1f4f8;color:var(--ink)}
+  .card .dlbtn.alt:hover{background:#e7ecf3}
+
+  /* Features */
+  .features{background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .feat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:30px}
+  .feat{padding:6px}
+  .feat .k{font-weight:900;font-size:20px;color:var(--blue)}
+  .feat .t{font-weight:800;margin-top:6px}
+  .feat .d{color:var(--muted);font-size:13px;line-height:1.5;margin-top:4px}
+
+  /* Steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+  .step{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px}
+  .step .n{height:34px;width:34px;border-radius:999px;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:900;box-shadow:0 8px 20px rgba(0,76,150,.18)}
+  .step h3{margin-top:14px;font-size:16px}
+  .step p{color:var(--muted);font-size:14px;line-height:1.55;margin-top:6px}
+
+  /* Footer */
+  footer{background:var(--dark);color:#fff;margin-top:30px}
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:26px 0;flex-wrap:wrap}
+  .foot .b{display:flex;align-items:center;gap:12px}
+  .foot .b img{height:40px;width:40px}
+  .foot small{color:rgba(255,255,255,.7);font-size:12px;line-height:1.6}
+  .note{font-size:12px;color:var(--muted);margin-top:16px}
+
+  @media(max-width:860px){
+    .hero{grid-template-columns:1fr;gap:30px;padding:34px 0 44px}
+    .hero h1{font-size:34px}
+    .dl-grid,.feat-grid,.steps{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">
+        <span class="logo"><img src="waschbaer.png" alt="Waschbär" /></span>
+        <div><b>EDEKA Mühlenbein</b><small>Promo Studio</small></div>
+      </div>
+      <a class="ig" href="https://www.instagram.com/waschbaer_edeka/" target="_blank" rel="noopener">@waschbaer_edeka</a>
+    </div>
+
+    <div class="hero">
+      <div>
+        <span class="eyebrow"><span></span>Desktop-App · 4K</span>
+        <h1>Aktionsmotive in Minuten. In gestochen scharfem 4K.</h1>
+        <p class="lead">Produkt, Preis und Stil wählen – fertig ist die Promotion für Instagram-Post, Story oder Plakat. Mit Waschbär-Branding, eigenen Produktfotos und sieben Design-Stilen.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/vornicx/edeka-promo-tool/releases/latest/download/edeka-promo-tool-windows.zip">⬇ Für Windows herunterladen</a>
+          <a class="btn btn-ghost" href="#download">Andere Systeme</a>
+        </div>
+      </div>
+      <div class="shot">
+        <span class="badge">★ 4K · PNG</span>
+        <img src="sample.jpg" alt="Beispiel-Promotion" />
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="download">
+  <div class="wrap">
+    <h2>App herunterladen</h2>
+    <p class="sub">Wähle dein Betriebssystem. Keine Installation von Zusatzsoftware nötig – einfach starten.</p>
+    <div class="dl-grid">
+      <div class="card primary">
+        <span class="tag">Empfohlen</span>
+        <div class="os">🪟 Windows</div>
+        <p>Windows 10 / 11. Öffnet sich als eigenes Programmfenster mit dem Waschbär-Symbol.</p>
+        <a class="dlbtn" href="https://github.com/vornicx/edeka-promo-tool/releases/latest/download/edeka-promo-tool-windows.zip">⬇ edeka-promo-tool-windows.zip</a>
+      </div>
+      <div class="card">
+        <div class="os">🍎 macOS</div>
+        <p>macOS-App. Beim ersten Start: Rechtsklick → „Öffnen".</p>
+        <a class="dlbtn alt" href="https://github.com/vornicx/edeka-promo-tool/releases/latest/download/edeka-promo-tool-mac.zip">⬇ edeka-promo-tool-mac.zip</a>
+      </div>
+      <div class="card">
+        <div class="os">🐧 Linux</div>
+        <p>Paket entpacken und <code>./install.sh</code> ausführen.</p>
+        <a class="dlbtn alt" href="https://github.com/vornicx/edeka-promo-tool/releases/latest/download/edeka-promo-tool-linux.tar.gz">⬇ edeka-promo-tool-linux.tar.gz</a>
+      </div>
+    </div>
+    <p class="note">Hinweis (Windows): Falls eine Warnung erscheint → „Weitere Informationen" → „Trotzdem ausführen". Die App läuft lokal und sicher auf deinem Rechner.</p>
+  </div>
+</section>
+
+<section class="features">
+  <div class="wrap section">
+    <h2>Was die App kann</h2>
+    <div class="feat-grid">
+      <div class="feat"><div class="k">4K</div><div class="t">Höchste Qualität</div><div class="d">Post, Story und Plakat A4/A5 in 4K als PNG.</div></div>
+      <div class="feat"><div class="k">7</div><div class="t">Design-Stile</div><div class="d">EDEKA Style, Dark Luxe, Editorial, Color Block, Lifestyle, Magazin, Retro.</div></div>
+      <div class="feat"><div class="k">∞</div><div class="t">Eigene Produkte</div><div class="d">Produktfotos hochladen – Hintergrund wird automatisch entfernt.</div></div>
+      <div class="feat"><div class="k">KI</div><div class="t">Optional</div><div class="d">Mit API-Key KI-optimiert, ohne Key im lokalen Profi-Modus.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>In drei Schritten</h2>
+    <p class="sub">Vom Angebot zur fertigen Promotion.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Herunterladen &amp; starten</h3><p>App für dein System laden und öffnen – sie startet als eigenes Fenster.</p></div>
+      <div class="step"><div class="n">2</div><h3>Briefing &amp; Stil</h3><p>Produkt, Preis und Aktionszeitraum eintragen, Stil und Format wählen.</p></div>
+      <div class="step"><div class="n">3</div><h3>Exportieren</h3><p>„Promotion erstellen &amp; exportieren" – fertiges 4K-Bild herunterladen.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <div class="b">
+      <img src="waschbaer.png" alt="Waschbär" />
+      <div><b>EDEKA Mühlenbein</b><br><small>Wolfsangerstr. 100 · 34125 Kassel · Mo–Sa 7–21 Uhr</small></div>
+    </div>
+    <small>Instagram: <a href="https://www.instagram.com/waschbaer_edeka/" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:700">@waschbaer_edeka</a></small>
+  </div>
+</footer>
+
+</body>
+</html>
