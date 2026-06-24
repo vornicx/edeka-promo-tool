@@ -426,7 +426,7 @@ export default function PromoForm({ onCreated }: Props) {
 
       <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <p className="text-sm font-medium text-slate-600">
-          Wir erstellen mehrere visuelle Richtungen zum Vergleichen.
+          Die Promotion wird direkt erstellt und kann sofort exportiert werden.
         </p>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? (
@@ -435,7 +435,7 @@ export default function PromoForm({ onCreated }: Props) {
               Wird erstellt
             </span>
           ) : (
-            "Richtungen erstellen"
+            "Promotion erstellen & exportieren"
           )}
         </button>
       </div>

@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import Confetti from "@/components/Confetti";
-import DirectionPicker from "@/components/DirectionPicker";
 import ExportPanel from "@/components/ExportPanel";
 import PreviewPanel from "@/components/PreviewPanel";
 import PromoForm from "@/components/PromoForm";
@@ -14,17 +13,12 @@ import { CreativeDirection, composePromo } from "@/lib/api";
 const STEPS = [
   {
     label: "Briefing",
-    description: "Produkt, Preis und Kontext",
+    description: "Produkt, Preis und Stil",
     icon: "M8 7h8M8 11h8M8 15h5M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z",
   },
   {
-    label: "Richtung",
-    description: "Kreativen Ansatz wählen",
-    icon: "M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4 6.7 19.1l1-5.8-4.2-4.1 5.9-.9L12 3z",
-  },
-  {
     label: "Gestaltung",
-    description: "Finale Promotion erstellen",
+    description: "Promotion wird erstellt",
     icon: "M4 7h16M4 12h10M4 17h16M18 10l3 3-3 3",
   },
   {
@@ -57,51 +51,22 @@ export default function Home() {
   const [productsOpen, setProductsOpen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
-  const step = !sessionId ? 1 : selectedIndex === null ? 2 : !composed ? 3 : 4;
-  const selectedDirection = selectedIndex !== null ? directions[selectedIndex] : null;
+  const step = !sessionId ? 1 : !composed ? 2 : 3;
 
-  const handleCreated = (sid: string, dirs: CreativeDirection[], mode: string, note: string) => {
+  // Direct flow: after the briefing we compose immediately and go to export —
+  // no separate "choose direction/colours" page.
+  const handleCreated = async (sid: string, dirs: CreativeDirection[], mode: string, note: string) => {
     setSessionId(sid);
     setDirections(dirs);
-    setSelectedIndex(null);
+    setSelectedIndex(0);
     setComposed(false);
     setGenerationMode(mode);
     setGenerationNote(note);
     setError("");
-    showToast("success", mode === "ai" ? "Richtungen mit KI erstellt" : "Richtungen lokal erstellt");
-    setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-  };
-
-  const handleSelectDirection = (index: number) => {
-    if (index !== selectedIndex) setComposed(false);
-    setSelectedIndex(index);
-    setError("");
-  };
-
-  const handleTryAnother = () => {
-    setComposed(false);
-    setError("");
-    setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-  };
-
-  const handleReset = () => {
-    setSessionId(null);
-    setDirections([]);
-    setSelectedIndex(null);
-    setComposed(false);
-    setComposing(false);
-    setError("");
-    setGenerationMode("");
-    setGenerationNote("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleCompose = async () => {
-    if (!sessionId || selectedIndex === null) return;
     setComposing(true);
-    setError("");
+    setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     try {
-      await composePromo(sessionId, selectedIndex);
+      await composePromo(sid, 0);
       setComposed(true);
       setComposeVersion((v) => v + 1);
       setShowConfetti(true);
@@ -114,6 +79,18 @@ export default function Home() {
     } finally {
       setComposing(false);
     }
+  };
+
+  const handleReset = () => {
+    setSessionId(null);
+    setDirections([]);
+    setSelectedIndex(null);
+    setComposed(false);
+    setComposing(false);
+    setError("");
+    setGenerationMode("");
+    setGenerationNote("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -159,7 +136,7 @@ export default function Home() {
             <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:flex">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               <span className="text-xs font-semibold text-slate-600">
-                {sessionId ? `Aktive Sitzung · Schritt ${step}/4` : "Bereit zum Erstellen"}
+                {sessionId ? `Aktive Sitzung · Schritt ${step}/${STEPS.length}` : "Bereit zum Erstellen"}
               </span>
             </div>
           </div>
@@ -172,7 +149,7 @@ export default function Home() {
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Workflow</p>
             <h2 className="mt-2 text-2xl font-extrabold leading-tight text-slate-950">Vom Angebot zur fertigen Promotion</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Briefing ausfüllen, kreative Richtungen vergleichen und im passenden Format exportieren.
+              Briefing ausfüllen, Stil wählen und direkt im passenden Format exportieren.
             </p>
           </section>
 
@@ -208,22 +185,13 @@ export default function Home() {
             })}
           </nav>
 
-          {selectedDirection && (
+          {generationMode && (
             <section className="panel p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Gewählte Richtung</p>
-              <h3 className="mt-2 text-sm font-extrabold capitalize text-slate-950">
-                {selectedDirection.name.replace(/_/g, " ")}
-              </h3>
-              <div className="mt-3 flex gap-1.5">
-                {selectedDirection.palette.slice(0, 5).map((color, index) => (
-                  <span
-                    key={`${color}-${index}`}
-                    className="h-7 flex-1 rounded-md border border-white shadow-sm"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{selectedDirection.intent}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Modus</p>
+              <p className="mt-2 text-sm font-bold text-slate-900">
+                {generationMode === "ai" ? "KI-optimiert" : "Lokaler Profi-Modus"}
+              </p>
+              {generationNote && <p className="mt-2 text-xs leading-5 text-slate-500">{generationNote}</p>}
             </section>
           )}
         </aside>
@@ -235,50 +203,17 @@ export default function Home() {
             </section>
           )}
 
-          {directions.length > 0 && step >= 2 && (
-            <section className="animate-slide-up space-y-5">
-              <DirectionPicker directions={directions} selectedIndex={selectedIndex} onSelect={handleSelectDirection} />
-
-              {generationMode && (
-                <div className="panel flex flex-col gap-2 p-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Erstellungsmodus</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {generationMode === "ai" ? "KI-optimierter Plan" : "Lokaler Profi-Modus"}
-                    </p>
-                  </div>
-                  {generationNote && <p className="max-w-2xl text-sm leading-6 text-slate-500">{generationNote}</p>}
-                </div>
-              )}
-
-              {selectedIndex !== null && !composed && (
-                <div className="panel flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Nächster Schritt</p>
-                    <h2 className="mt-1 text-xl font-extrabold text-slate-950">Promotion gestalten</h2>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Die gewählte Richtung wird zur finalen Promotion ausgearbeitet.
-                    </p>
-                  </div>
-                  <button onClick={handleCompose} disabled={composing} className="btn-primary md:w-auto">
-                    {composing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="spinner" />
-                        Wird gestaltet
-                      </span>
-                    ) : (
-                      "Promotion gestalten"
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {error && (
-                <div className="animate-shake rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-                  {error}
-                </div>
-              )}
+          {sessionId && !composed && composing && (
+            <section className="panel flex items-center gap-3 p-6 animate-slide-up">
+              <span className="spinner" />
+              <p className="text-sm font-semibold text-slate-700">Promotion wird gestaltet …</p>
             </section>
+          )}
+
+          {error && !composed && (
+            <div className="animate-shake rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+              {error}
+            </div>
           )}
 
           {composed && (
@@ -287,17 +222,12 @@ export default function Home() {
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Fertig</p>
                   <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Promotion erstellt. Du kannst eine andere Richtung testen oder neu starten.
+                    Promotion erstellt — Format wählen und exportieren.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleTryAnother}>
-                    Andere Richtung testen
-                  </button>
-                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
-                    Neue Aktion
-                  </button>
-                </div>
+                <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
+                  Neue Aktion
+                </button>
               </div>
 
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">

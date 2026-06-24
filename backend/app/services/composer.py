@@ -25,6 +25,7 @@ from app.schemas.promotion import (
 )
 
 PRODUCT_ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "product_photos"
+BANNER_PATH = Path(__file__).resolve().parent.parent / "assets" / "banner.png"
 
 PRODUCT_ASSETS: dict[str, list[str]] = {
     "strawberries": ["fresa", "fresas", "erdbeer", "erdbeere", "erdbeeren", "strawberry", "strawberries"],
@@ -680,6 +681,24 @@ def _draw_price_star(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
 
 
+def _draw_footer_banner(canvas: Image.Image) -> int:
+    """Brand footer banner (EDEKA Mühlenbein + Instagram) along the bottom.
+    Returns the band height so layouts can keep content above it."""
+    if not BANNER_PATH.exists():
+        return 0
+    w, h = canvas.size
+    band_h = int(h * 0.12)
+    banner = Image.open(BANNER_PATH).convert("RGBA")
+    bg = banner.getpixel((4, banner.height // 2))[:3]  # banner's dark base
+    ImageDraw.Draw(canvas).rectangle((0, h - band_h, w, h), fill=bg)
+    pad = int(band_h * 0.16)
+    scale = min((w - pad * 2) / banner.width, (band_h - pad * 2) / banner.height)
+    bw, bh = max(1, int(banner.width * scale)), max(1, int(banner.height * scale))
+    banner = banner.resize((bw, bh), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(banner, ((w - bw) // 2, h - band_h + (band_h - bh) // 2))
+    return band_h
+
+
 def _contrast_text(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
     lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
     return (26, 26, 28) if lum > 150 else (255, 255, 255)
@@ -1058,15 +1077,15 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
         ck = int(h * 0.016)
         _draw_kicker(draw, margin, ny + int(h * 0.02), ctx[0][0], ck, accent)
 
-    # High-contrast price card (gold), bottom-right.
-    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
-    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
-
-    # Tiny footer.
-    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
-    foot_font = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
-    fb = draw.textbbox((0, 0), foot, font=foot_font)
-    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=foot_font)
+    # Price star (gold), the clear retail seal — bottom-right.
+    ink_dark = (28, 26, 22)
+    scx, scy = int(w * 0.74), int(h * (0.50 if tall else 0.49))
+    sr = int(w * (0.175 if tall else 0.165) * pm)
+    _draw_price_star(canvas, spec, scx, scy, sr, ink_dark, accent, rot_deg=-7)
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+    _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, ink_dark)
 
 
 def _product_accent(spec: PromotionSpec) -> tuple[int, int, int]:
@@ -1131,9 +1150,14 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.06 if tall else 0.085)), ink, sub_color=muted, halo=False)
     _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
 
-    # High-contrast price card (product colour), bottom-right.
-    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
-    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
+    # Price star (product colour), the clear retail seal — bottom-right.
+    scx, scy = int(w * 0.77), int(h * (0.54 if tall else 0.56))
+    sr = int(w * (0.175 if tall else 0.165) * pm)
+    _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+    _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, _contrast_text(accent))
 
     # Kicker + accent rule + oversized headline + claim.
     kh = int(h * 0.02)
@@ -1307,14 +1331,14 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.10), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.028), int(w * 0.58), int(h * 0.14)), ink, align="left", claim_color=muted)
 
-    # High-contrast price card (product colour), bottom-right.
-    cw = int(w * (0.42 if tall else 0.40)); ch = int(h * (0.17 if tall else 0.22))
-    _draw_price_card(canvas, spec, Zone(w - margin - cw, head_y, cw, ch), accent)
-
-    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
-    ff = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
-    fb = draw.textbbox((0, 0), foot, font=ff)
-    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=ff)
+    # Price star (warm), the clear retail seal — bottom-right.
+    scx, scy = int(w * 0.77), int(h * (0.55 if tall else 0.58))
+    sr = int(w * (0.17 if tall else 0.16) * pm)
+    _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+    _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, _contrast_text(accent))
 
 
 def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
@@ -1659,6 +1683,9 @@ def compose_promotion(
             _layout_story(canvas, spec, cfg)
         else:
             _layout_poster(canvas, spec, cfg)
+
+    # Brand footer banner on every design.
+    _draw_footer_banner(canvas)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(str(output_path), quality=96, optimize=True)
