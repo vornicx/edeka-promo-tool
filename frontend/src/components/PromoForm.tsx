@@ -175,13 +175,13 @@ export default function PromoForm({ onCreated }: Props) {
             type="button"
             aria-pressed={active}
             onClick={() => onPick(o.value)}
-            className={`overflow-hidden rounded-lg border bg-white text-left transition-all ${
+            className={`group relative overflow-hidden rounded-xl border text-left transition-all ${
               active
-                ? "border-edeka-blue ring-2 ring-edeka-blue/30 shadow-card"
-                : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card"
+                ? "border-edeka-blue ring-2 ring-edeka-blue/25 shadow-brand"
+                : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-edeka-blue/40 hover:shadow-card"
             }`}
           >
-            <div className="aspect-square w-full bg-slate-100">
+            <div className="relative aspect-square w-full bg-slate-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={urlFor(o.value)}
@@ -189,9 +189,16 @@ export default function PromoForm({ onCreated }: Props) {
                 loading="lazy"
                 className={`h-full w-full ${fit === "contain" ? "object-contain p-1" : "object-cover"}`}
               />
+              {active && (
+                <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-edeka-blue text-white shadow-brand ring-2 ring-white">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+              )}
             </div>
-            <div className="px-2.5 py-2">
-              <p className="text-xs font-bold text-slate-900">{o.label}</p>
+            <div className={`px-2.5 py-2 ${active ? "bg-edeka-lightblue" : "bg-white"}`}>
+              <p className={`text-xs font-bold ${active ? "text-edeka-blue" : "text-slate-900"}`}>{o.label}</p>
               {o.meta && <p className="text-[10px] font-medium text-slate-500">{o.meta}</p>}
             </div>
           </button>
