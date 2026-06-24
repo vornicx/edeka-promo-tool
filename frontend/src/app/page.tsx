@@ -104,43 +104,45 @@ export default function Home() {
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ProductLibraryPanel open={productsOpen} onClose={() => setProductsOpen(false)} />
 
-      <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur">
+      <header className="header-brand text-white shadow-brand">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/waschbaer_logo.png" alt="EDEKA Waschbär" className="h-14 w-14 shrink-0 object-contain" />
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/waschbaer_logo.png" alt="EDEKA Waschbär" className="h-10 w-10 object-contain" />
+            </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-extrabold text-slate-950">EDEKA Mühlenbein Promo Studio</h1>
-              <p className="text-xs font-medium text-slate-500">Aktionen für Markt und Social Media erstellen</p>
+              <h1 className="truncate text-base font-extrabold leading-tight text-white sm:text-lg">EDEKA Mühlenbein</h1>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-yellow">Promo Studio</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             {sessionId && (
-              <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={handleReset}>
+              <button type="button" className="btn-header hidden md:inline-flex" onClick={handleReset}>
                 Neue Aktion
               </button>
             )}
-            <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={() => setProductsOpen(true)}>
+            <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setProductsOpen(true)}>
               Produkte
             </button>
-            <button type="button" className="icon-btn md:hidden" aria-label="Produkte verwalten" onClick={() => setProductsOpen(true)}>
+            <button type="button" className="icon-btn-header md:hidden" aria-label="Produkte verwalten" onClick={() => setProductsOpen(true)}>
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7l8-4 8 4-8 4-8-4zm0 0v10l8 4 8-4V7M12 11v10" />
               </svg>
             </button>
-            <button type="button" className="btn-ghost hidden w-auto md:inline-flex" onClick={() => setSettingsOpen(true)}>
+            <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setSettingsOpen(true)}>
               KI-Einstellungen
             </button>
-            <button type="button" className="icon-btn md:hidden" aria-label="KI-Einstellungen öffnen" onClick={() => setSettingsOpen(true)}>
+            <button type="button" className="icon-btn-header md:hidden" aria-label="KI-Einstellungen öffnen" onClick={() => setSettingsOpen(true)}>
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.3 4.3l.6-1.3h2.2l.6 1.3 1.4.6 1.3-.5 1.6 1.6-.5 1.3.6 1.4 1.3.6v2.2l-1.3.6-.6 1.4.5 1.3-1.6 1.6-1.3-.5-1.4.6-.6 1.3h-2.2l-.6-1.3-1.4-.6-1.3.5L6 14.8l.5-1.3-.6-1.4-1.3-.6V9.3l1.3-.6.6-1.4L6 6l1.6-1.6 1.3.5 1.4-.6zM12 9a3 3 0 100 6 3 3 0 000-6z" />
               </svg>
             </button>
-            <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:flex">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs font-semibold text-slate-600">
-                {sessionId ? `Aktive Sitzung · Schritt ${step}/${STEPS.length}` : "Bereit zum Erstellen"}
+            <div className="hidden items-center gap-2 rounded-pill bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15 lg:flex">
+              <span className="h-2 w-2 rounded-full bg-edeka-yellow" />
+              <span className="text-xs font-semibold text-white/90">
+                {sessionId ? `Schritt ${step}/${STEPS.length}` : "Bereit"}
               </span>
             </div>
           </div>
@@ -149,15 +151,17 @@ export default function Home() {
 
       <main ref={workspaceRef} className="mx-auto grid max-w-7xl gap-6 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-8">
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <section className="panel p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Workflow</p>
-            <h2 className="mt-2 text-2xl font-extrabold leading-tight text-slate-950">Vom Angebot zur fertigen Promotion</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+          <section className="panel overflow-hidden">
+            <div className="header-brand p-5 text-white">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-yellow">Workflow</p>
+              <h2 className="mt-2 text-xl font-extrabold leading-tight text-white">Vom Angebot zur fertigen Promotion</h2>
+            </div>
+            <p className="p-5 text-sm leading-6 text-slate-600">
               Briefing ausfüllen, Stil wählen und direkt im passenden Format exportieren.
             </p>
           </section>
 
-          <nav className="panel p-3" aria-label="Erstellungsfortschritt">
+          <nav className="panel p-2.5" aria-label="Erstellungsfortschritt">
             {STEPS.map((item, index) => {
               const position = index + 1;
               const active = step === position;
@@ -165,23 +169,29 @@ export default function Home() {
               return (
                 <div
                   key={item.label}
-                  className={`flex items-start gap-3 rounded-lg p-3 transition-colors ${
-                    active ? "bg-edeka-lightblue text-edeka-blue" : done ? "text-emerald-700" : "text-slate-400"
+                  className={`flex items-center gap-3 rounded-xl p-2.5 transition-colors ${
+                    active ? "bg-edeka-lightblue" : ""
                   }`}
                 >
                   <span
-                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold transition-colors ${
                       active
-                        ? "border-edeka-blue/20 bg-white"
+                        ? "bg-edeka-blue text-white shadow-brand"
                         : done
-                          ? "border-emerald-200 bg-emerald-50"
-                          : "border-slate-200 bg-white"
+                          ? "bg-edeka-yellow text-edeka-blue"
+                          : "bg-slate-100 text-slate-400"
                     }`}
                   >
-                    <Icon d={item.icon} className="h-4 w-4" />
+                    {done ? (
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      position
+                    )}
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-slate-900">{item.label}</span>
+                    <span className={`block text-sm font-bold ${active ? "text-edeka-blue" : "text-slate-900"}`}>{item.label}</span>
                     <span className="block text-xs font-medium leading-5 text-slate-500">{item.description}</span>
                   </span>
                 </div>
