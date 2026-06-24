@@ -89,6 +89,7 @@ def build_exe():
 
     pyinstaller_args = [
         "pyinstaller", "--onefile", "--name", "edeka-promo-tool",
+        "--icon", "backend/app/assets/icon.ico",
         "-p", "backend",
     ]
     for d in data:

@@ -61,6 +61,7 @@ def main() -> None:
     cmd = [
         VENV_PY, "-m", "PyInstaller", "--onefile", "--clean", "--noconfirm",
         "--name", "edeka-promo-tool",
+        "--icon", str(BACKEND / "app" / "assets" / "icon.ico"),
         "--distpath", str(DIST),
         "--workpath", str(DIST / "win-build"),
         "--specpath", str(DIST),

@@ -56,12 +56,32 @@ def run(cmd: list[str], cwd: Path = ROOT) -> None:
         sys.exit(result.returncode)
 
 
+def build_icns() -> Path | None:
+    """Generate an .icns app icon from the Waschbär PNG (macOS tools only)."""
+    png = BACKEND / "app" / "assets" / "waschbaer_logo.png"
+    if not png.exists() or not shutil.which("iconutil") or not shutil.which("sips"):
+        return None
+    iconset = DIST / "icon.iconset"
+    if iconset.exists():
+        shutil.rmtree(iconset)
+    iconset.mkdir(parents=True)
+    for size in (16, 32, 64, 128, 256, 512):
+        run(["sips", "-z", str(size), str(size), str(png),
+             "--out", str(iconset / f"icon_{size}x{size}.png")])
+        run(["sips", "-z", str(size * 2), str(size * 2), str(png),
+             "--out", str(iconset / f"icon_{size}x{size}@2x.png")])
+    icns = DIST / "icon.icns"
+    run(["iconutil", "-c", "icns", str(iconset), "-o", str(icns)])
+    return icns if icns.exists() else None
+
+
 def main() -> None:
     if sys.platform != "darwin":
         sys.exit("Dieser Build muss auf einem Mac (macOS) ausgefuehrt werden.")
 
     run(["npm", "install"], cwd=FRONTEND)
     run(["npm", "run", "build"], cwd=FRONTEND)
+    icns = build_icns()
 
     if not VENV.exists():
         run([sys.executable, "-m", "venv", str(VENV)])
@@ -75,6 +95,10 @@ def main() -> None:
     cmd = [
         str(pyinstaller), "--noconfirm", "--clean", "--windowed", "--onedir",
         "--name", APP_NAME,
+    ]
+    if icns:
+        cmd += ["--icon", str(icns)]
+    cmd += [
         "--distpath", str(MAC_DIST),
         "--workpath", str(DIST / "mac-build"),
         "--specpath", str(DIST),

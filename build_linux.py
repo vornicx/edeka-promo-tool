@@ -55,6 +55,7 @@ LOG_FILE="$APP_DIR/edeka-promo-tool.log"
 mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR"
 cp "$SCRIPT_DIR/edeka-promo-tool" "$APP_DIR/edeka-promo-tool-server"
 chmod +x "$APP_DIR/edeka-promo-tool-server"
+cp "$SCRIPT_DIR/icon.png" "$APP_DIR/icon.png" 2>/dev/null || true
 
 cat > "$APP_DIR/edeka-promo-tool" <<'LAUNCHER'
 #!/usr/bin/env bash
@@ -98,12 +99,13 @@ LAUNCHER
 chmod +x "$APP_DIR/edeka-promo-tool"
 ln -sf "$APP_DIR/edeka-promo-tool" "$BIN_DIR/edeka-promo-tool"
 
-cat > "$DESKTOP_DIR/edeka-promo-tool.desktop" <<'DESKTOP'
+cat > "$DESKTOP_DIR/edeka-promo-tool.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=EDEKA Promo Tool
 Comment=Promotionen mit KI und lokalem Profi-Modus erstellen
 Exec=edeka-promo-tool
+Icon=$APP_DIR/icon.png
 Terminal=false
 Categories=Office;Graphics;
 DESKTOP
@@ -200,6 +202,9 @@ def package_linux():
     PACKAGE_DIR.mkdir(parents=True)
 
     shutil.copy2(binary, PACKAGE_DIR / APP_NAME)
+    icon_src = BACKEND / "app" / "assets" / "icon.png"
+    if icon_src.exists():
+        shutil.copy2(icon_src, PACKAGE_DIR / "icon.png")
     (PACKAGE_DIR / "LEEME_LINUX.txt").write_text(CLIENT_README, encoding="utf-8")
     install_path = PACKAGE_DIR / "install.sh"
     install_path.write_text(INSTALL_SCRIPT, encoding="utf-8")
