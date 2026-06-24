@@ -13,7 +13,14 @@ import {
 } from "@/lib/api";
 
 interface Props {
-  onCreated: (sessionId: string, directions: CreativeDirection[], mode: string, note: string) => void;
+  onCreated: (
+    sessionId: string,
+    directions: CreativeDirection[],
+    mode: string,
+    note: string,
+    format: string,
+    product: string,
+  ) => void;
 }
 
 const CATEGORIES = [
@@ -210,7 +217,7 @@ export default function PromoForm({ onCreated }: Props) {
     setLoading(true);
     try {
       const res = await createPromo(form);
-      onCreated(res.session_id, res.directions, res.generation_mode, res.generation_note);
+      onCreated(res.session_id, res.directions, res.generation_mode, res.generation_note, form.format, form.product);
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : "Promotion konnte nicht erstellt werden");
     } finally {

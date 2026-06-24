@@ -43,6 +43,8 @@ export default function Home() {
   const [composed, setComposed] = useState(false);
   const [composeVersion, setComposeVersion] = useState(0);
   const [composing, setComposing] = useState(false);
+  const [exportFormat, setExportFormat] = useState("post");
+  const [productName, setProductName] = useState("");
   const [error, setError] = useState("");
   const [generationMode, setGenerationMode] = useState("");
   const [generationNote, setGenerationNote] = useState("");
@@ -55,13 +57,15 @@ export default function Home() {
 
   // Direct flow: after the briefing we compose immediately and go to export —
   // no separate "choose direction/colours" page.
-  const handleCreated = async (sid: string, dirs: CreativeDirection[], mode: string, note: string) => {
+  const handleCreated = async (sid: string, dirs: CreativeDirection[], mode: string, note: string, format: string, product: string) => {
     setSessionId(sid);
     setDirections(dirs);
     setSelectedIndex(0);
     setComposed(false);
     setGenerationMode(mode);
     setGenerationNote(note);
+    setExportFormat(format);
+    setProductName(product);
     setError("");
     setComposing(true);
     setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
@@ -218,21 +222,21 @@ export default function Home() {
 
           {composed && (
             <section className="animate-slide-up space-y-5">
-              <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion} />
+
+              <div className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Fertig</p>
                   <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Promotion erstellt — Format wählen und exportieren.
+                    Deine Promotion ist bereit zum Herunterladen.
                   </p>
                 </div>
-                <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
-                  Neue Aktion
-                </button>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion} />
-                <ExportPanel sessionId={sessionId} composed={composed} />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
+                    Neue Aktion
+                  </button>
+                  <ExportPanel sessionId={sessionId} format={exportFormat} productName={productName} />
+                </div>
               </div>
             </section>
           )}
