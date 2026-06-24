@@ -60,6 +60,7 @@ def main() -> None:
     if sys.platform != "darwin":
         sys.exit("Dieser Build muss auf einem Mac (macOS) ausgefuehrt werden.")
 
+    run(["npm", "install"], cwd=FRONTEND)
     run(["npm", "run", "build"], cwd=FRONTEND)
 
     if not VENV.exists():

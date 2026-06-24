@@ -10,7 +10,11 @@ __pycache__/
 *.pyc
 .venv/
 .venv-build-linux/
+.venv-build-mac/
 .commandcode/
 
 # Generated promo samples
 test_outputs/
+
+# PyInstaller spec (generado)
+*.spec

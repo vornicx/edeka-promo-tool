@@ -127,6 +127,7 @@ def run(cmd: list[str], cwd: Path = ROOT):
 
 def build_frontend():
     print("=== Building frontend (Next.js static export) ===")
+    run(["npm", "install"], cwd=FRONTEND)
     run(["npm", "run", "build"], cwd=FRONTEND)
 
 

@@ -52,7 +52,7 @@ def run(cmd: list[str], cwd: Path = ROOT) -> None:
 
 
 def main() -> None:
-    run(["npm", "ci"], cwd=FRONTEND)
+    run(["npm", "install"], cwd=FRONTEND)
     run(["npm", "run", "build"], cwd=FRONTEND)
     run([VENV_PY, "-m", "pip", "install", "-r", str(BACKEND / "requirements.txt"), "pyinstaller==6.11.1"])
 
