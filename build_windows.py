@@ -22,6 +22,8 @@ FRONTEND = ROOT / "frontend"
 BACKEND = ROOT / "backend"
 DIST = ROOT / "dist"
 VENV_PY = sys.executable
+# On Windows npm is a .cmd shim; subprocess needs the explicit name.
+NPM = "npm.cmd" if sys.platform == "win32" else "npm"
 
 CLIENT_README = """EDEKA Promo Tool fuer Windows
 
@@ -52,8 +54,8 @@ def run(cmd: list[str], cwd: Path = ROOT) -> None:
 
 
 def main() -> None:
-    run(["npm", "install"], cwd=FRONTEND)
-    run(["npm", "run", "build"], cwd=FRONTEND)
+    run([NPM, "install"], cwd=FRONTEND)
+    run([NPM, "run", "build"], cwd=FRONTEND)
     run([VENV_PY, "-m", "pip", "install", "-r", str(BACKEND / "requirements.txt"), "pyinstaller==6.11.1"])
 
     # On Windows the --add-data separator is ';'
