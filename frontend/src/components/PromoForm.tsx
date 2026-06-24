@@ -226,9 +226,12 @@ export default function PromoForm({ onCreated }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="panel overflow-hidden">
+    <form onSubmit={handleSubmit} className="panel overflow-hidden border-t-4 border-edeka-yellow">
       <div className="border-b border-slate-200 bg-white p-5 sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Aktionsbriefing</p>
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">
+          <span className="h-3 w-1.5 rounded-full bg-edeka-yellow" />
+          Aktionsbriefing
+        </p>
         <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-2xl font-extrabold text-slate-950">Angebot definieren</h2>

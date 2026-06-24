@@ -102,7 +102,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 p-3 backdrop-blur-sm" onClick={onClose}>
       <form
         onSubmit={handleSave}
-        className="flex h-full w-full max-w-lg animate-slide-up flex-col overflow-hidden rounded-lg bg-white shadow-modal"
+        className="flex h-full w-full max-w-lg animate-slide-up flex-col overflow-hidden rounded-lg border-t-4 border-edeka-yellow bg-white shadow-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
