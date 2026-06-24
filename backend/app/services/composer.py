@@ -718,16 +718,9 @@ def _draw_footer_banner(canvas: Image.Image, spec: PromotionSpec) -> int:
 
     margin = int(w * 0.05)
     cy = top + band_h // 2
-
-    # Mascot, left.
+    # No mascot here — the brand lockup at the top already shows it (avoid
+    # duplicating the Waschbär). The footer is the contact strip.
     tx = margin
-    mh = int(band_h * 0.66)
-    mascot = _load_mascot(mh)
-    if mascot is not None:
-        if lum < 140:
-            _draw_spotlight(canvas, margin + mascot.width // 2, cy, int(mh * 0.7), (255, 255, 255), 55)
-        canvas.alpha_composite(mascot, (margin, cy - mascot.height // 2))
-        tx = margin + mascot.width + int(band_h * 0.14)
 
     # Instagram QR at the far right first, so the text block knows its limit.
     # (The QR already prints "WASCHBAER_EDEKA", so no separate handle is drawn.)
