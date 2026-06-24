@@ -687,11 +687,11 @@ def _draw_footer_banner(canvas: Image.Image) -> int:
     if not BANNER_PATH.exists():
         return 0
     w, h = canvas.size
-    band_h = int(h * 0.12)
+    band_h = int(h * 0.082)
     banner = Image.open(BANNER_PATH).convert("RGBA")
     bg = banner.getpixel((4, banner.height // 2))[:3]  # banner's dark base
     ImageDraw.Draw(canvas).rectangle((0, h - band_h, w, h), fill=bg)
-    pad = int(band_h * 0.16)
+    pad = int(band_h * 0.14)
     scale = min((w - pad * 2) / banner.width, (band_h - pad * 2) / banner.height)
     bw, bh = max(1, int(banner.width * scale)), max(1, int(banner.height * scale))
     banner = banner.resize((bw, bh), Image.Resampling.LANCZOS)
@@ -918,8 +918,9 @@ def _draw_product_or_name(canvas, draw, spec, product_zone, name_color):
 
 
 def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
-    txt = spec.validity if spec.validity.lower().startswith(("nur", "bis", "kw", "gültig")) else f"nur {spec.validity}"
-    _draw_tag(canvas, txt, cx, cy, height, accent, primary, angle=-3.0)
+    # Show the validity exactly as entered (e.g. "nur heute", "KW 24",
+    # "bis 22.06.") — no automatic "nur" prefix.
+    _draw_tag(canvas, spec.validity, cx, cy, height, accent, primary, angle=-3.0)
 
 
 def _context_tags(spec: PromotionSpec) -> list[tuple[str, tuple[int, int, int], tuple[int, int, int]]]:

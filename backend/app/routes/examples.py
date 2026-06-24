@@ -86,7 +86,7 @@ async def example(
         category=category.strip() or None,
         price=normalize_price(price) if price.strip() else "—",
         old_price=normalize_price(old_price) if old_price.strip() else None,
-        validity=validity.strip() or "Angebot",
+        validity=validity.strip() or "nur heute",
         origin=origin.strip() or None,
         claim=claim.strip() or None,
         product_image=product_image.strip() or None,
