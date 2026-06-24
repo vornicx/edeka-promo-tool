@@ -691,24 +691,30 @@ def _draw_footer_banner(canvas: Image.Image) -> int:
     banner = Image.open(BANNER_PATH).convert("RGBA")
     bg = banner.getpixel((4, banner.height // 2))[:3]  # banner's dark base
 
-    side = int(w * 0.05)
-    bottom = int(h * 0.028)
-    plate_h = int(h * 0.072)
+    side = int(w * 0.035)
+    bottom = int(h * 0.026)
+    plate_h = int(h * 0.07)
     plate_w = w - side * 2
     px, py = side, h - bottom - plate_h
-    radius = max(8, int(plate_h * 0.28))
+    radius = max(8, int(plate_h * 0.30))
 
     # Soft drop shadow under the plate.
-    pad_s = max(10, plate_h // 5)
+    pad_s = max(12, plate_h // 4)
     sh = Image.new("RGBA", (plate_w + pad_s * 2, plate_h + pad_s * 2), (0, 0, 0, 0))
     ImageDraw.Draw(sh).rounded_rectangle((pad_s, pad_s, plate_w + pad_s, plate_h + pad_s),
-                                         radius=radius + 6, fill=(0, 0, 0, 70))
+                                         radius=radius + 6, fill=(0, 0, 0, 78))
     canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=pad_s // 2)), (px - pad_s, py - pad_s + pad_s // 3))
 
-    # Plate (banner colour) with the banner centred inside.
+    # Plate (banner colour, slightly translucent so the design breathes through).
     plate = Image.new("RGBA", (plate_w, plate_h), (0, 0, 0, 0))
-    ImageDraw.Draw(plate).rounded_rectangle((0, 0, plate_w, plate_h), radius=radius, fill=(*bg, 255))
-    pad = int(plate_h * 0.16)
+    pdraw = ImageDraw.Draw(plate)
+    pdraw.rounded_rectangle((0, 0, plate_w, plate_h), radius=radius, fill=(*bg, 244))
+    # Thin EDEKA-yellow accent along the top edge (echoes the banner's yellow).
+    yellow = _hex_to_rgb(BRAND_YELLOW)
+    inset = radius
+    pdraw.rounded_rectangle((inset, 0, plate_w - inset, max(3, int(plate_h * 0.045))), radius=0, fill=(*yellow, 230))
+
+    pad = int(plate_h * 0.17)
     scale = min((plate_w - pad * 2) / banner.width, (plate_h - pad * 2) / banner.height)
     bw, bh = max(1, int(banner.width * scale)), max(1, int(banner.height * scale))
     plate.alpha_composite(banner.resize((bw, bh), Image.Resampling.LANCZOS), ((plate_w - bw) // 2, (plate_h - bh) // 2))
