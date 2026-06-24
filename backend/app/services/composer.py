@@ -682,21 +682,38 @@ def _draw_price_star(
 
 
 def _draw_footer_banner(canvas: Image.Image) -> int:
-    """Brand footer banner (EDEKA Mühlenbein + Instagram) along the bottom.
-    Returns the band height so layouts can keep content above it."""
+    """Brand footer banner as a rounded, inset 'plate' so it integrates as a
+    designed element instead of a hard edge-to-edge bar. Returns the bottom
+    space it occupies."""
     if not BANNER_PATH.exists():
         return 0
     w, h = canvas.size
-    band_h = int(h * 0.082)
     banner = Image.open(BANNER_PATH).convert("RGBA")
     bg = banner.getpixel((4, banner.height // 2))[:3]  # banner's dark base
-    ImageDraw.Draw(canvas).rectangle((0, h - band_h, w, h), fill=bg)
-    pad = int(band_h * 0.14)
-    scale = min((w - pad * 2) / banner.width, (band_h - pad * 2) / banner.height)
+
+    side = int(w * 0.05)
+    bottom = int(h * 0.028)
+    plate_h = int(h * 0.072)
+    plate_w = w - side * 2
+    px, py = side, h - bottom - plate_h
+    radius = max(8, int(plate_h * 0.28))
+
+    # Soft drop shadow under the plate.
+    pad_s = max(10, plate_h // 5)
+    sh = Image.new("RGBA", (plate_w + pad_s * 2, plate_h + pad_s * 2), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((pad_s, pad_s, plate_w + pad_s, plate_h + pad_s),
+                                         radius=radius + 6, fill=(0, 0, 0, 70))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=pad_s // 2)), (px - pad_s, py - pad_s + pad_s // 3))
+
+    # Plate (banner colour) with the banner centred inside.
+    plate = Image.new("RGBA", (plate_w, plate_h), (0, 0, 0, 0))
+    ImageDraw.Draw(plate).rounded_rectangle((0, 0, plate_w, plate_h), radius=radius, fill=(*bg, 255))
+    pad = int(plate_h * 0.16)
+    scale = min((plate_w - pad * 2) / banner.width, (plate_h - pad * 2) / banner.height)
     bw, bh = max(1, int(banner.width * scale)), max(1, int(banner.height * scale))
-    banner = banner.resize((bw, bh), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(banner, ((w - bw) // 2, h - band_h + (band_h - bh) // 2))
-    return band_h
+    plate.alpha_composite(banner.resize((bw, bh), Image.Resampling.LANCZOS), ((plate_w - bw) // 2, (plate_h - bh) // 2))
+    canvas.alpha_composite(plate, (px, py))
+    return bottom + plate_h
 
 
 def _contrast_text(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -1166,11 +1183,7 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     bar_y = head_y + int(kh * 1.8)
     draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.11), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.028), int(w * 0.58), int(h * 0.14)), ink, align="left", claim_color=muted)
-
-    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
-    ff = _load_font(FONT_PATH_REGULAR, int(h * 0.016))
-    fb = draw.textbbox((0, 0), foot, font=ff)
-    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.05) - fb[1]), foot, fill=muted, font=ff)
+    # (footer handled globally by the brand banner)
 
 
 def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
@@ -1255,10 +1268,10 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     mb = draw.textbbox((0, 0), meta, font=mf)
     draw.text((col_x - mb[0], ny - mb[1]), meta, fill=ink, font=mf)
 
-    # Context badge bottom of text column.
+    # Context badge just under the meta line (kept clear of the footer banner).
     ctx = _context_tags(spec)
     if ctx:
-        _draw_kicker(draw, col_x, int(h * 0.9), ctx[0][0], int(h * 0.016), accent)
+        _draw_kicker(draw, col_x, ny + int(h * 0.05), ctx[0][0], int(h * 0.016), accent)
 
 
 def _duotone(img: Image.Image, dark: tuple[int, int, int], light: tuple[int, int, int]) -> Image.Image:
@@ -1401,14 +1414,10 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, hw, int(h * 0.10 * pm), int(h * 0.055))
     pb = draw.textbbox((0, 0), spec.price, font=pf)
     draw.text((hx - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
-
-    # bottom rule + footer
-    by = h - int(h * 0.07)
-    draw.line((margin, by, w - margin, by), fill=deep, width=max(2, h // 500))
-    foot = f"{STORE_NAME}  ·  {spec.validity}  ·  {INSTAGRAM}"
-    ff = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.016))
-    fb = draw.textbbox((0, 0), foot, font=ff)
-    draw.text((margin - fb[0], by + int(h * 0.018) - fb[1]), foot, fill=muted, font=ff)
+    # validity, small, under the price (footer is the global brand banner)
+    vf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.02))
+    vb = draw.textbbox((0, 0), spec.validity.upper(), font=vf)
+    draw.text((hx - vb[0], ny + int((pb[3] - pb[1]) * 1.2) - vb[1]), spec.validity.upper(), fill=muted, font=vf)
 
 
 RETRO_ACCENTS = {
@@ -1471,11 +1480,7 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     # Starburst price seal in retro colours.
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, ink, accent, rot_deg=-6)
-
-    foot = f"{STORE_NAME}   ·   {INSTAGRAM}"
-    ff = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.016))
-    fb = draw.textbbox((0, 0), foot, font=ff)
-    draw.text(((w - (fb[2] - fb[0])) // 2 - fb[0], h - int(h * 0.062) - fb[1]), foot, fill=deep, font=ff)
+    # (footer handled globally by the brand banner)
 
 
 def _draw_retro_rays(canvas, cx, cy, radius, rays, color):
@@ -1583,7 +1588,7 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.0), int(w * 0.052), accent, primary)
 
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.62), int(h * 0.14)), white, align="left", claim_color=CLAIM_LIGHT)
-    _draw_footer_text(canvas, accent, margin)
+    # (footer handled globally by the brand banner)
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
@@ -1611,7 +1616,7 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
 
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.60), int(h * 0.13)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_validity_tag(canvas, spec, int(w * 0.30), int(h * 0.85), int(w * 0.058), accent, primary)
-    _draw_footer_text(canvas, accent, margin)
+    # (footer handled globally by the brand banner)
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
@@ -1639,7 +1644,7 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
 
     _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.52), int(h * 0.15)), white, align="left", claim_color=CLAIM_LIGHT)
     _draw_validity_tag(canvas, spec, int(w * 0.28), int(h * 0.87), int(w * 0.05), accent, primary)
-    _draw_footer_text(canvas, accent, margin)
+    # (footer handled globally by the brand banner)
 
 
 # ---------------------------------------------------------------------------
