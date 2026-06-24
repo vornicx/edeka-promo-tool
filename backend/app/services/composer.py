@@ -729,32 +729,34 @@ def _draw_footer_banner(canvas: Image.Image, spec: PromotionSpec) -> int:
         canvas.alpha_composite(mascot, (margin, cy - mascot.height // 2))
         tx = margin + mascot.width + int(band_h * 0.14)
 
-    # EDEKA Mühlenbein + address.
-    f1 = _load_font(FONT_PATH_EXTRABOLD, int(band_h * 0.27))
-    eb = draw.textbbox((0, 0), "EDEKA", font=f1)
-    line1_y = cy - int(band_h * 0.27)
-    draw.text((tx - eb[0], line1_y - eb[1]), "EDEKA", fill=wordmark, font=f1)
-    mx = tx + (eb[2] - eb[0]) + int(band_h * 0.07)
-    mb = draw.textbbox((0, 0), "Mühlenbein", font=f1)
-    draw.text((mx - mb[0], line1_y - mb[1]), "Mühlenbein", fill=ink, font=f1)
-    f2 = _load_font(FONT_PATH_SEMIBOLD, int(band_h * 0.15))
-    ab = draw.textbbox((0, 0), STORE_ADDRESS, font=f2)
-    draw.text((tx - ab[0], line1_y + (eb[3] - eb[1]) + int(band_h * 0.09) - ab[1]), STORE_ADDRESS, fill=muted, font=f2)
-
-    # Instagram QR + handle, right.
+    # Instagram QR at the far right first, so the text block knows its limit.
+    # (The QR already prints "WASCHBAER_EDEKA", so no separate handle is drawn.)
+    right_limit = w - margin
     if QR_PATH.exists():
         qr = Image.open(QR_PATH).convert("RGBA")
-        qh = int(band_h * 0.78)
+        qh = int(band_h * 0.80)
         qr = qr.resize((max(1, int(qr.width * qh / qr.height)), qh), Image.Resampling.LANCZOS)
         qx = w - margin - qr.width
         cp = int(qh * 0.05)
         draw.rounded_rectangle((qx - cp, cy - qr.height // 2 - cp, qx + qr.width + cp, cy + qr.height // 2 + cp),
                                radius=int(qh * 0.1), fill=(255, 255, 255))
         canvas.alpha_composite(qr, (qx, cy - qr.height // 2))
-        hf = _load_font(FONT_PATH_BOLD, int(band_h * 0.165))
-        ht = INSTAGRAM
-        hb = draw.textbbox((0, 0), ht, font=hf)
-        draw.text((qx - int(band_h * 0.2) - (hb[2] - hb[0]) - hb[0], cy - (hb[3] - hb[1]) // 2 - hb[1]), ht, fill=ink, font=hf)
+        right_limit = qx - int(band_h * 0.22)
+
+    # EDEKA Mühlenbein + address, fitted to the remaining width (never overflow).
+    text_w = max(int(w * 0.2), right_limit - tx)
+    f1 = _fit_font_width(draw, "EDEKA Mühlenbein", FONT_PATH_EXTRABOLD, text_w, int(band_h * 0.30), int(band_h * 0.15))
+    eb = draw.textbbox((0, 0), "EDEKA", font=f1)
+    f2 = _fit_font_width(draw, STORE_ADDRESS, FONT_PATH_SEMIBOLD, text_w, int(band_h * 0.17), int(band_h * 0.085))
+    ab = draw.textbbox((0, 0), STORE_ADDRESS, font=f2)
+    gap = int(band_h * 0.08)
+    block_h = (eb[3] - eb[1]) + gap + (ab[3] - ab[1])
+    line1_y = cy - block_h // 2
+    draw.text((tx - eb[0], line1_y - eb[1]), "EDEKA", fill=wordmark, font=f1)
+    mx = tx + (eb[2] - eb[0]) + int(f1.size * 0.22)
+    mb = draw.textbbox((0, 0), "Mühlenbein", font=f1)
+    draw.text((mx - mb[0], line1_y - mb[1]), "Mühlenbein", fill=ink, font=f1)
+    draw.text((tx - ab[0], line1_y + (eb[3] - eb[1]) + gap - ab[1]), STORE_ADDRESS, fill=muted, font=f2)
     return band_h
 
 
