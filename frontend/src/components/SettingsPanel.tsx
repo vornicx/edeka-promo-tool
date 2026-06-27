@@ -186,6 +186,19 @@ export default function SettingsPanel({ open, onClose }: Props) {
           </button>
         </div>
 
+        <div className="border-b border-slate-200 bg-edeka-lightblue/60 p-3 text-xs leading-5 text-edeka-blue">
+          <strong>Kostenlose APIs:</strong> Modelle mit Vision und gratis Zugang findest du auf{" "}
+          <a
+            href="https://freellm.net/models/?modality=vision&free=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-edeka-darkblue"
+          >
+            freellm.net
+          </a>
+          . API-Key dort beim jeweiligen Anbieter holen und hier eintragen.
+        </div>
+
         <div className="grid flex-1 content-start gap-4 overflow-y-auto p-5">
           {loading ? (
             <div className="grid min-h-40 place-items-center text-sm font-bold text-slate-500">
