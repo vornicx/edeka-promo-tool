@@ -1838,6 +1838,150 @@ def _auto_ai_style(spec: PromotionSpec, direction: CreativeDirection) -> str:
 
 
 # ---------------------------------------------------------------------------
+# AI-driven layout: renders the AI's creative direction directly
+# ---------------------------------------------------------------------------
+
+def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType):
+    """AI-designed layout using the direction's palette, composition and boldness."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    is_event = _is_event(spec)
+    is_tall = h / w > 1.12
+    margin = int(w * 0.07)
+
+    # Parse palette from AI direction (always at least 4 colours)
+    palette = direction.palette if len(direction.palette) >= 4 else direction.palette + ["#FFFFFF", "#111111"]
+    c1 = _hex_to_rgb(palette[0])  # primary / EDEKA blue variant
+    c2 = _hex_to_rgb(palette[1])  # accent / EDEKA yellow variant
+    c3 = _hex_to_rgb(palette[2])  # thematic accent 1
+    c4 = _hex_to_rgb(palette[3])  # thematic accent 2 or white
+
+    # Choose white or dark text based on background luminance
+    bg_lum = 0.299 * c1[0] + 0.587 * c1[1] + 0.114 * c1[2]
+    ink = (255, 255, 255) if bg_lum < 140 else (26, 26, 28)
+    muted = _mix(ink, c1, 0.45)
+    white = (255, 255, 255)
+    dark = (18, 18, 22)
+
+    boldness = direction.boldness
+    pm, hm, am = 1.0, 1.0, 1.0
+    if boldness == "high":
+        pm, hm, am = 1.2, 1.12, 1.3
+    elif boldness == "low":
+        pm, hm, am = 0.85, 0.9, 0.78
+
+    # Base background: gradient from c1 to c3
+    canvas.paste(_diagonal_gradient((w, h), c1, _darken(c1, 0.35)), (0, 0))
+
+    # Accent colour block / shape based on composition keywords
+    composition = direction.composition.lower()
+    acc_color = c3 if _luminance(c3) > 100 else _lighten(c3, 0.3)
+
+    if "dreieck" in composition or "diagonal" in composition:
+        _draw_diagonal_band(canvas, int(h * 0.08), int(h * 0.45), int(h * 0.38), acc_color)
+    elif "kreis" in composition or "rund" in composition or "ellipse" in composition:
+        disc_r = int(min(w, h) * 0.45)
+        _fill_gradient_shape(canvas, _circle_points(w // 2, int(h * 0.48), disc_r),
+                             top=_lighten(c3, 0.1), bottom=_darken(c3, 0.15))
+    elif "block" in composition or "rechteck" in composition or "band" in composition:
+        block_w = int(w * 0.55)
+        block_h = int(h * 0.32)
+        bx = (w - block_w) // 2
+        by = int(h * 0.38)
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).rounded_rectangle((bx, by, bx + block_w, by + block_h),
+                                                  radius=max(8, w // 50), fill=(*c2, 200))
+        canvas.alpha_composite(layer)
+
+    # Spotlight for the product or headline area
+    spot_cx = int(w * 0.35)
+    spot_cy = int(h * (0.30 if is_tall else 0.38))
+    _draw_spotlight(canvas, spot_cx, spot_cy, int(w * 0.40), _lighten(c2, 0.3), 140, falloff=2.0)
+
+    # Brand lockup
+    mascot_h = int(h * (0.065 if is_tall else 0.080))
+    _draw_brand_lockup(canvas, margin, int(h * 0.04), mascot_h, c2, sub_color=white if bg_lum < 140 else muted, halo=bg_lum < 140)
+
+    # Waschbär presence from AI
+    if direction.waschbaer_presence in ("featured", "graphic_accent"):
+        extra_mascot = _load_mascot(int(h * 0.14))
+        if extra_mascot:
+            canvas.alpha_composite(extra_mascot, (int(w * 0.78), int(h * 0.72)))
+
+    # Headline zone
+    text_zone = direction.text_safe_area
+    if text_zone == "center":
+        hx, hw, h_align = w // 2, int(w * 0.72), "center"
+        hy = int(h * (0.52 if is_tall else 0.58))
+    elif text_zone == "bottom_left":
+        hx, hw, h_align = margin, int(w * 0.55), "left"
+        hy = int(h * (0.64 if is_tall else 0.62))
+    elif text_zone == "bottom_right":
+        hx, hw, h_align = int(w * 0.45), int(w * 0.50), "right"
+        hy = int(h * (0.64 if is_tall else 0.62))
+    elif text_zone == "top_left":
+        hx, hw, h_align = margin, int(w * 0.55), "left"
+        hy = int(h * (0.38 if is_tall else 0.35))
+    else:
+        hx, hw, h_align = int(w * 0.45), int(w * 0.50), "right"
+        hy = int(h * (0.38 if is_tall else 0.35))
+
+    # Headline in large type
+    nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, hw, int(h * 0.22 * hm),
+                          int(h * 0.08 * hm), int(h * 0.04), max_lines=2 if is_tall else 1, line_spacing=1.02)
+    ny = _draw_wrapped(draw, nl, hx, hw, hy, nf, white, align=h_align, line_spacing=1.02)
+
+    # Accent rule under headline
+    rule_w = int(w * 0.12)
+    rule_x = hx - rule_w // 2 if h_align == "center" else (hx if h_align == "left" else hx + hw - rule_w)
+    draw.rounded_rectangle((rule_x, ny + int(h * 0.016), rule_x + rule_w, ny + int(h * 0.016) + max(4, int(h * 0.009))),
+                           radius=h // 220, fill=c2)
+
+    # Claim or event description
+    if is_event and spec.event_description:
+        desc_text = spec.event_description
+        df = _load_font(FONT_PATH_BOLD, int(h * 0.024))
+        for line in _wrap_text(draw, desc_text, df, int(w * 0.65), 3):
+            b = draw.textbbox((0, 0), line, font=df)
+            lx = hx - b[0] if h_align == "center" else (hx - b[0] if h_align == "left" else hx + hw - (b[2] - b[0]) - b[0])
+            draw.text((lx, ny + int(h * 0.035)), line, fill=muted, font=df)
+            ny += int((b[3] - b[1]) * 1.35)
+    elif spec.claim:
+        cf = _load_font(FONT_PATH_REGULAR, int(h * 0.024))
+        for line in _wrap_text(draw, spec.claim, cf, int(w * 0.55), 2):
+            b = draw.textbbox((0, 0), line, font=cf)
+            lx = hx - b[0] if h_align == "center" else (hx - b[0] if h_align == "left" else hx + hw - (b[2] - b[0]) - b[0])
+            draw.text((lx, ny + int(h * 0.035)), line, fill=muted, font=cf)
+            ny += int((b[3] - b[1]) * 1.35)
+
+    # Product image if available
+    if not is_event:
+        prod_zone = Zone(int(w * 0.04), int(h * 0.18), int(w * 0.42), int(h * 0.48))
+        product = _load_product_image(spec, (int(prod_zone.w * 0.90), int(prod_zone.h * 0.90)))
+        if product:
+            _draw_product(canvas, product, prod_zone.cx, prod_zone.cy)
+
+    # Price / Value block
+    value = _offer_value(spec)
+    if value and value != "—":
+        price_h = int(h * 0.085 * pm)
+        pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, int(w * 0.45), price_h, int(price_h * 0.5))
+        pb = draw.textbbox((0, 0), value, font=pf)
+        pw = pb[2] - pb[0]
+        price_x = int(w * 0.75) - pw // 2
+        price_y = int(h * (0.42 if is_tall else 0.46))
+        _draw_price_card(canvas, spec, Zone(price_x, price_y, pw + int(w * 0.10), int(h * 0.16)), _darken(c1, 0.25))
+
+    # Validity tag
+    validity_h = int(w * 0.055)
+    _draw_validity_tag(canvas, spec, int(w * 0.50), int(h * (0.80 if is_tall else 0.78)), validity_h, c2, dark if _luminance(c2) > 150 else white)
+
+    # Context tags at top-right
+    if not is_event:
+        _draw_context_tags(canvas, spec, int(w * 0.52), int(h * 0.08), int(w * 0.048))
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -1857,8 +2001,8 @@ def compose_promotion(
 
     style = (getattr(spec, "style", None) or "edeka").lower()
     if style == "ai":
-        style = _auto_ai_style(spec, direction)
-    if style == "luxe":
+        _layout_ai(canvas, spec, direction, format_type)
+    elif style == "luxe":
         _layout_luxe(canvas, spec, format_type)
     elif style == "editorial":
         _layout_editorial(canvas, spec, format_type)

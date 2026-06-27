@@ -33,7 +33,8 @@ _cache: dict[str, bytes] = {}
 
 def _render(spec: PromotionSpec, fmt: FormatType) -> bytes:
     direction = CreativeDirection(
-        name="beispiel", intent="", composition="", palette=["#004C96", "#FFD600"],
+        name="beispiel", intent="", composition="",
+        palette=["#004C96", "#FFD600", "#E8612C", "#FFF8F0"],
         text_safe_area="bottom", boldness="high", waschbaer_presence="featured",
     )
     f = EXPORT_FORMATS[fmt]
