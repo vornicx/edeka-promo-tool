@@ -4,6 +4,7 @@ npm-debug.log*
 .yarn/
 
 # Build artifacts and local environments
+.next/
 dist/
 build/
 __pycache__/
@@ -15,6 +16,11 @@ __pycache__/
 
 # Generated promo samples
 test_outputs/
+
+# Temp source copied during build
+.next/
+src/
+public/
 
 # PyInstaller spec (generado)
 *.spec
