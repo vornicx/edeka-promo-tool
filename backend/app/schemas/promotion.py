@@ -37,6 +37,7 @@ class PromotionSpec(BaseModel):
     validity: str = Field(..., min_length=1, description="Gültigkeit des Angebots")
     origin: Optional[str] = Field(None, description="Herkunft des Produkts")
     claim: Optional[str] = Field(None, description="Kurzer Werbeclaim")
+    event_description: Optional[str] = Field(None, description="Beschreibung des Events (nur bei Art=event)")
     product_image: Optional[str] = Field(
         None,
         description="Bildquelle: leer/auto = nach Name, 'builtin:<key>' = integriertes Motiv, 'custom:<id>' = eigenes Foto",

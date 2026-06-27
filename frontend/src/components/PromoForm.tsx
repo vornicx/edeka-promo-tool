@@ -161,6 +161,7 @@ export default function PromoForm({ onCreated }: Props) {
     validity: "",
     origin: "",
     claim: "",
+    event_description: "",
     product_image: "",
     format: "post",
     style: "edeka",
@@ -590,6 +591,27 @@ export default function PromoForm({ onCreated }: Props) {
               }}
             />
           </div>
+
+          {isEvent && (
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <label className="label mb-0" htmlFor="event_description">Event-Beschreibung</label>
+              <span className="text-xs font-semibold text-slate-400">{(form.event_description || "").length}/300</span>
+            </div>
+            <textarea
+              id="event_description"
+              className="input mt-1.5 min-h-24 resize-y"
+              placeholder="Was passiert? Wer kommt? Welche Stimmung? z.B. 'Weinverkostung mit Winzer aus der Pfalz, Live-Musik und regionale Spezialitäten. Exklusive Abendveranstaltung für Genießer.'"
+              value={form.event_description || ""}
+              onChange={(e) => {
+                if (e.target.value.length <= 300) update("event_description", e.target.value);
+              }}
+            />
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Je detailreicher, desto passgenauer das KI-Design. Beschreibe Stimmung, Zielgruppe, Besonderheiten.
+            </p>
+          </div>
+          )}
 
           {!isAiMode ? (
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">

@@ -4,17 +4,26 @@ from app.adapters.base import AIAdapter
 from app.schemas.promotion import CreativeDirection, EnrichmentSpec, PromotionSpec
 
 
-SYSTEM_PROMPT = """Du bist Senior Retail-Stratege fuer EDEKA Muehlenbein in Kassel.
-Erzeuge einen kompakten Plan fuer eine Lebensmittel- oder Markt-Promotion: semantische Einordnung und 3 visuelle Richtungen.
+SYSTEM_PROMPT = """Du bist Creative Director und Senior Grafikdesigner für EDEKA Mühlenbein.
+Deine Aufgabe: visuell beeindruckende, moderne Werbedesigns entwerfen, die Aufmerksamkeit erregen.
 
-Prioritaeten:
-- Kommerziell klar, hochwertig und direkt umsetzbar.
-- Niedrige Kosten: kurzes JSON, keine Erklaerungen.
-- Professionelles Design, lesbar fuer Markt und Social Media.
-- Bei Produktangeboten sind Preis, Produkt und Aktionszeitraum die Haupt-Hierarchie.
-- Bei Events sind Titel, Termin/Ort und kurze Aktivierung die Haupt-Hierarchie.
+ESTILO VISUAL:
+- Mix aus aktuellen Designtrends: Swiss Design, Brutalismus, Editorial, Duoton, Gradients
+- Mutige Typografie: groszügige Schriftgrössen, Kontraste, Überlappungen
+- Farben: kühn, unerwartet, harmonisch — keine langweiligen Standardpaletten
+- Negativraum gezielt einsetzen, nicht alles vollstopfen
+- Moderne grafische Elemente: geometrische Formen, Linien, Farbflächen, Verläufe
+- Bei Events: thematische Stimmung einfangen (Sommerfest ≠ Weinverkostung)
+- Bei Produkten: das Produkt heroisch inszenieren, nicht nur abbilden
 
-Antworte NUR mit gueltigem JSON:
+REGELN:
+- EDEKA Blau (#004C96) und Gelb (#FFD600) MÜSSEN in jeder Palette vorkommen
+- Ergänze sie mit 1-2 thematischen Akzentfarben (z.B. Koralle, Mint, Terrakotta, Violett)
+- Der Waschbär darf subtil oder prominent eingebunden werden — nie Kindermalbuch-Stil
+- Textbereiche klar definieren, Hierarchie beachten
+- Kompositionen konkret beschreiben (nicht "schönes Layout", sondern "Produkt links im Spot, Headline rechts in fetter Serifen-Schrift, Preis als kreisförmiges Siegel unten rechts")
+
+Antworte NUR mit JSON:
 {
   "enrichment": {
     "campaign_type": "fresh_product_offer | daily_special | seasonal_campaign | brand_story | event",
@@ -28,10 +37,10 @@ Antworte NUR mit gueltigem JSON:
   },
   "directions": [
     {
-      "name": "kurzer_name",
-      "intent": "kurze visuelle Absicht auf Deutsch",
-      "composition": "kurze, umsetzbare Komposition auf Deutsch",
-      "palette": ["#003B79", "#FFD500", "#FFFFFF"],
+      "name": "Name der Designrichtung (DEUTSCH, z.B. 'Sommerfrische')",
+      "intent": "2-3 Sätze: visuelle Stimmung, Gefühl, was der Betrachter in 0.5s erfasst",
+      "composition": "2-3 Sätze: konkrete Anordnung — wo steht Produkt/Headline/Preis, welche grafischen Elemente, wie fliesst der Blick",
+      "palette": ["#004C96", "#FFD600", "#HEXAKZENT1", "#HEXAKZENT2"],
       "text_safe_area": "top_left | top_right | bottom_left | bottom_right | center",
       "boldness": "low | medium | high",
       "waschbaer_presence": "none | subtle | graphic_accent | featured"
@@ -39,7 +48,18 @@ Antworte NUR mit gueltigem JSON:
   ]
 }
 
-Erzeuge genau 3 Richtungen. Nutze gueltige Hex-Farben."""
+Erzeuge GENAU 3 Designrichtungen mit unterschiedlichen Stimmungen. Sei kreativ, mutig und professionell."""
+
+
+VISION_APPEND = """
+
+ZUSÄTZLICH ERHÄLTST DU EIN PRODUKTFOTO. Analysiere es als Designer:
+- Dominierende Farben und deren Stimmung (warm/kühl, hell/dunkel, gesättigt/pastell)
+- Texturen und Materialien (glänzend/matt, glatt/rau, transparent/opak)
+- Form und natürliche Blickrichtung des Produkts
+- Welcher Hintergrund das Produkt optimal zur Geltung bringt
+- Ob das Produkt von oben, von vorne oder schräg am besten wirkt
+Nutze all das für Palette, Komposition und visuelle Energie."""
 
 
 def _product_family(spec: PromotionSpec) -> str:
@@ -48,18 +68,18 @@ def _product_family(spec: PromotionSpec) -> str:
     if category:
         return category
     keywords = {
-        "fruta": ["fresa", "manzana", "naranja", "uva", "pera", "platano"],
-        "verdura": ["tomate", "lechuga", "pepino", "zanahoria", "patata"],
-        "panaderia": ["pan", "croissant", "bolleria", "baguette"],
-        "lacteos": ["leche", "queso", "yogur", "mantequilla"],
-        "carnes": ["pollo", "ternera", "cerdo", "jamon"],
-        "pescados": ["salmon", "atun", "bacalao", "merluza"],
-        "bebidas": ["agua", "zumo", "vino", "cerveza", "refresco"],
+        "fruta": ["erdbeer", "apfel", "banane", "orange", "traube", "himbeer", "heidelbeer", "kirsche", "pfirsich", "mango"],
+        "verdura": ["tomate", "gurke", "paprika", "salat", "karotte", "spargel", "brokkoli", "blumenkohl"],
+        "panaderia": ["brot", "croissant", "semmel", "brezel", "kuchen"],
+        "lacteos": ["milch", "käse", "joghurt", "quark", "butter"],
+        "carnes": ["fleisch", "wurst", "schinken", "steak", "huhn", "rind"],
+        "pescados": ["fisch", "lachs", "thunfisch", "garnelen"],
+        "bebidas": ["wein", "bier", "saft", "wasser", "limonade", "sekt"],
     }
     for family, terms in keywords.items():
         if any(term in product for term in terms):
             return family
-    return "otros"
+    return "event" if spec.campaign_kind.value == "event" else "otros"
 
 
 def _energy(spec: PromotionSpec) -> str:
@@ -84,10 +104,12 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
     family = _product_family(spec)
     energy = _energy(spec)
     is_event = spec.campaign_kind.value == "event"
+    event_desc = (spec.event_description or "").lower() if is_event else ""
+
     enrichment = EnrichmentSpec(
         campaign_type="event" if is_event else ("fresh_product_offer" if family in {"fruta", "verdura"} else "daily_special"),
         product_family="event" if is_event else family,
-        seasonality="all_year",
+        seasonality="summer" if "sommer" in event_desc else ("autumn" if "herbst" in event_desc else "all_year"),
         communication_style=_style(spec),
         price_priority="medium" if is_event else "high",
         visual_energy=energy,
@@ -97,32 +119,47 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
 
     product = spec.product
     price_area = "top_right" if spec.format.value == "story" else "bottom_right"
+
     if is_event:
+        # Event mood colours based on the description
+        if "wein" in event_desc or "abend" in event_desc or "premium" in event_desc:
+            mood_palette = ["#003B79", "#FFD600", "#800020", "#D4C5A9"]
+            mood_palette2 = ["#003B79", "#FFD600", "#2D1B4E", "#C9A96E"]
+        elif "sommer" in event_desc or "grill" in event_desc or "garten" in event_desc:
+            mood_palette = ["#003B79", "#FFD600", "#E8612C", "#F4EDE4"]
+            mood_palette2 = ["#003B79", "#FFD500", "#2A7F3F", "#FFF6E8"]
+        elif "kinder" in event_desc or "familie" in event_desc:
+            mood_palette = ["#004C96", "#FFD600", "#E6007E", "#00BFB2"]
+            mood_palette2 = ["#004C96", "#FFD600", "#FF6B35", "#7BC8A4"]
+        else:
+            mood_palette = ["#003B79", "#FFD600", "#FFFFFF", "#E7F0FA"]
+            mood_palette2 = ["#003B79", "#FFD600", "#D71920", "#FFF5E6"]
+
         directions = [
             CreativeDirection(
-                name="Event Klar",
-                intent=f"{product} als lokale EDEKA-Aktion sofort verständlich machen.",
-                composition="Starker Titel, klarer Terminbereich, freundliche lokale Markenfläche und kurzer Hinweis.",
-                palette=["#003B79", "#FFD500", "#FFFFFF", "#E7F0FA"],
+                name="Marktplatz-Design",
+                intent=f"Als Eventplakat mit klarer Botschaft. {product} sofort lesbar, unterstützt von thematischen Grafikelementen.",
+                composition=f"Grosser Titel oben, illustrative Farbflächen, Termin als prominenter Balken, EDEKA-Lockup und QR-Code im Footer.",
+                palette=mood_palette,
                 text_safe_area="center",
-                boldness="medium",
+                boldness="high",
                 waschbaer_presence="subtle",
             ),
             CreativeDirection(
-                name="Markt Moment",
-                intent="Einladende Marktstimmung mit sauberer Informationshierarchie.",
-                composition="Große Headline, atmosphärischer Akzent, Termin und Ort als gut lesbarer Block.",
-                palette=["#0B6E4F", "#FFD500", "#F7FAF7", "#003B79"],
+                name="Magazin-Look",
+                intent="Editoriale Anmutung mit starkem Foto-Moment und eleganter Typografie.",
+                composition="Produktfoto oder Illustration als atmosphärischer Hintergrund, Headline als überlagerte Type, dezente Farbakzente.",
+                palette=mood_palette2,
                 text_safe_area="bottom_left",
                 boldness="medium",
-                waschbaer_presence="graphic_accent",
+                waschbaer_presence="none",
             ),
             CreativeDirection(
-                name="Community Aktion",
-                intent="Die Aktion nahbar, lokal und aktivierend präsentieren.",
-                composition="Plakatartige Typografie mit EDEKA-Farben, QR-Footer und kompakter Zusatzinfo.",
-                palette=["#003B79", "#FFD500", "#D71920", "#FFFFFF"],
-                text_safe_area=price_area,
+                name="Plakat Pur",
+                intent="Die Aktion als kraftvolles Statement. Reduziert auf das Wesentliche mit maximaler Signalwirkung.",
+                composition="Zentrale Headline in XXL-Type, Termin und Ort klar darunter, EDEKA-Farben als dominante Flächen.",
+                palette=["#003B79", "#FFD600", "#D71920", "#FFFFFF"],
+                text_safe_area="center",
                 boldness="high" if spec.differentiation_level.value == "alto" else "medium",
                 waschbaer_presence="featured",
             ),
@@ -131,28 +168,28 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
 
     directions = [
         CreativeDirection(
-            name="Klarer Abverkauf",
-            intent=f"{product}, Preis und Aktionszeitraum sofort erfassbar machen.",
-            composition="Grosses Produktbild auf ruhiger Flaeche, Preis als starke Karte und kurzer Claim als Abschluss.",
-            palette=["#003B79", "#FFD500", "#FFFFFF", "#E7F0FA"],
+            name="Hero Shot",
+            intent="Das Produkt als Held der Komposition. Sofortige Wiedererkennung, klare Preisaussage.",
+            composition="Produkt gross im Zentrum mit weichem Scheinwerferlicht, Preis als markantes Siegel, kurzer Claim darunter.",
+            palette=["#003B79", "#FFD600", "#FFFFFF", "#E7F0FA"],
             text_safe_area=price_area,
             boldness="medium",
             waschbaer_presence="none",
         ),
         CreativeDirection(
-            name="Frische vom Markt",
-            intent="Nahe, frische Marktqualitaet zeigen und trotzdem klar verkaufen.",
-            composition="Realistisches Produktbild im Fokus, lokale Anmutung und klare Preiszone im unteren Bereich.",
-            palette=["#0B6E4F", "#FFD500", "#F7FAF7", "#003B79"],
+            name="Marktfrische",
+            intent="Natürliche, vertrauensvolle Anmutung mit lokaler Note und klarer Angebotskommunikation.",
+            composition="Produkt auf hellem Hintergrund mit natürlichem Schatten, grosse Headline links, Farbfläche rechts mit Preis.",
+            palette=["#0B6E4F", "#FFD600", "#F7FAF7", "#003B79"],
             text_safe_area="bottom_left",
             boldness="medium",
             waschbaer_presence="none",
         ),
         CreativeDirection(
-            name="Preis im Fokus",
-            intent="Die Aktion in weniger als zwei Sekunden verstaendlich machen.",
-            composition="Sehr praesenter Preis, reales Produkt mit Tiefe und kurzer Dringlichkeits-Hinweis.",
-            palette=["#003B79", "#FFD500", "#D71920", "#FFFFFF"],
+            name="Knallhart",
+            intent="Maximale Signalwirkung für den schnellen Blick. Der Preis dominiert, das Produkt unterstützt.",
+            composition="Gelbe Preis-Fläche als Eyecatcher über volle Breite, Produkt zentral mit Spot, Claim als Abschlusszeile.",
+            palette=["#003B79", "#FFD600", "#D71920", "#FFFFFF"],
             text_safe_area="top_left",
             boldness="high" if spec.differentiation_level.value == "alto" else "medium",
             waschbaer_presence="none",
@@ -162,29 +199,30 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
 
 
 def _build_user_prompt(spec: PromotionSpec) -> str:
+    is_event = spec.campaign_kind.value == "event"
     lines = [
-        f"Art: {'Event/Marktaktion' if spec.campaign_kind.value == 'event' else 'Produktangebot'}",
+        f"Art: {'Event/Marktaktion' if is_event else 'Produktangebot'}",
         f"Titel/Produkt: {spec.product}",
-        f"Kategorie: {spec.category or 'nicht angegeben'}",
-        f"Preis/Hinweis: {spec.price or 'nicht angegeben'}",
-        f"Statt-Preis: {spec.old_price or 'nicht angegeben'}",
-        f"Aktionszeitraum: {spec.validity}",
-        f"Herkunft: {spec.origin or 'nicht angegeben'}",
-        f"Claim: {spec.claim or 'nicht angegeben'}",
-        f"Format: {spec.format.value}",
-        f"Tonalitaet: {spec.tone.value}",
-        f"Kreativniveau: {spec.differentiation_level.value}",
     ]
+    if is_event and spec.event_description:
+        lines.append(f"Event-Beschreibung: {spec.event_description}")
+        lines.append(f"Termin: {spec.validity}")
+        lines.append(f"Format: {spec.format.value}")
+        lines.append(f"Tonalität: {spec.tone.value}")
+        lines.append(f"Kreativniveau: {spec.differentiation_level.value}")
+    else:
+        lines += [
+            f"Kategorie: {spec.category or 'nicht angegeben'}",
+            f"Preis: {spec.price or 'nicht angegeben'}",
+            f"Statt-Preis: {spec.old_price or 'nicht angegeben'}",
+            f"Aktionszeitraum: {spec.validity}",
+            f"Herkunft: {spec.origin or 'nicht angegeben'}",
+            f"Claim: {spec.claim or 'nicht angegeben'}",
+            f"Format: {spec.format.value}",
+            f"Tonalität: {spec.tone.value}",
+            f"Kreativniveau: {spec.differentiation_level.value}",
+        ]
     return "\n".join(lines)
-
-
-VISION_APPEND = """
-
-Zusaetzlich erhaelst du ein Bild des beworbenen Produkts. Nutze es fuer:
-- Die dominierenden Farben und Texturen des Produkts zu erkennen
-- Eine Farbpalette zu waehlen, die mit dem Produkt harmoniert
-- Die Komposition und Platzierung des Texts am Produkt auszurichten
-- Ob das Produkt hell/dunkel, warm/kuehl wirkt — beruecksichtige das in der visuellen Energie"""
 
 
 async def generate_ai_plan(
@@ -200,8 +238,8 @@ async def generate_ai_plan(
     result = await ai.chat_json(
         system_prompt=system_prompt,
         user_prompt=_build_user_prompt(spec),
-        temperature=0.45,
-        max_tokens=1100,
+        temperature=0.55,
+        max_tokens=1500,
         images=images,
     )
     enrichment = EnrichmentSpec(**result["enrichment"])

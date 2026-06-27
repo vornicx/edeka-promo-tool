@@ -81,11 +81,12 @@ class CreatePromoRequest(BaseModel):
     campaign_kind: str = "product"
     product: str
     category: Optional[str] = None
-    price: str
+    price: str = ""
     old_price: Optional[str] = None
-    validity: str
+    validity: str = ""
     origin: Optional[str] = None
     claim: Optional[str] = None
+    event_description: Optional[str] = None
     product_image: Optional[str] = None
     format: str = "post"
     style: str = "edeka"

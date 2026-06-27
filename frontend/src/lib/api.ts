@@ -12,6 +12,7 @@ export interface PromotionData {
   validity: string;
   origin?: string;
   claim?: string;
+  event_description?: string;
   product_image?: string;
   format: string;
   style: string;
