@@ -104,6 +104,7 @@ class CreatePromoRequest(BaseModel):
     style: str = "edeka"
     tone: str = "fresco"
     differentiation_level: str = "medio"
+    use_ai_planning: bool = False
 
 
 class SelectDirectionRequest(BaseModel):
@@ -129,25 +130,30 @@ async def create_promo(request: CreatePromoRequest):
     # Resolve product image for vision-enhanced planning
     image_base64 = _resolve_product_image_base64(request.product_image)
 
-    try:
-        chain = _build_fallback_chain()
-    except ValueError as e:
+    if not request.use_ai_planning:
         enrichment, directions = build_local_plan(spec)
         generation_mode = "local"
-        generation_note = str(e)
+        generation_note = "Vorlagen-Modus gewählt"
     else:
         try:
-            enrichment, directions = await generate_ai_plan(chain, spec, image_base64)
-            generation_mode = "ai"
-            generation_note = f"KI-Planung erfolgreich über {chain.__class__.__name__}"
-        except FallbackChainExhausted as e:
+            chain = _build_fallback_chain()
+        except ValueError as e:
             enrichment, directions = build_local_plan(spec)
-            generation_mode = "local_fallback"
-            generation_note = f"Alle KI-Anbieter waren nicht verfügbar. Lokaler Profi-Modus wurde verwendet. Fehler: {e}"
-        except Exception as e:
-            enrichment, directions = build_local_plan(spec)
-            generation_mode = "local_fallback"
-            generation_note = f"KI-Fehler: {e}"
+            generation_mode = "local"
+            generation_note = str(e)
+        else:
+            try:
+                enrichment, directions = await generate_ai_plan(chain, spec, image_base64)
+                generation_mode = "ai"
+                generation_note = f"KI-Planung erfolgreich über {chain.__class__.__name__}"
+            except FallbackChainExhausted as e:
+                enrichment, directions = build_local_plan(spec)
+                generation_mode = "local_fallback"
+                generation_note = f"Alle KI-Anbieter waren nicht verfügbar. Lokaler Profi-Modus wurde verwendet. Fehler: {e}"
+            except Exception as e:
+                enrichment, directions = build_local_plan(spec)
+                generation_mode = "local_fallback"
+                generation_note = f"KI-Fehler: {e}"
 
     sessions[session_id] = {
         "spec": spec,

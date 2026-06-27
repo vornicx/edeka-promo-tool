@@ -13,6 +13,8 @@ def normalize_product_name(name: str) -> str:
 
 
 def validate_and_create_spec(data: dict) -> PromotionSpec:
+    # Remove frontend-only flags not part of PromotionSpec
+    data = {k: v for k, v in data.items() if k != "use_ai_planning"}
     if "price" in data:
         data["price"] = normalize_price(data["price"])
     if "old_price" in data and data["old_price"]:

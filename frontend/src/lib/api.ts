@@ -16,6 +16,7 @@ export interface PromotionData {
   style: string;
   tone: string;
   differentiation_level: string;
+  use_ai_planning: boolean;
 }
 
 export interface Motif {

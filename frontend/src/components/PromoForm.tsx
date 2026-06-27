@@ -141,6 +141,7 @@ export default function PromoForm({ onCreated }: Props) {
     style: "edeka",
     tone: "fresco",
     differentiation_level: "medio",
+    use_ai_planning: false,
   });
 
   const errors = useMemo(() => validate(form), [form]);
@@ -332,6 +333,38 @@ export default function PromoForm({ onCreated }: Props) {
               ))}
             </div>
           </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="segmented">
+            <button
+              type="button"
+              className={`segment ${!form.use_ai_planning ? "segment-active" : ""}`}
+              onClick={() => setForm((p) => ({ ...p, use_ai_planning: false }))}
+              aria-pressed={!form.use_ai_planning}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-2a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
+              </svg>
+              Vorlagen
+            </button>
+            <button
+              type="button"
+              className={`segment ${form.use_ai_planning ? "segment-active" : ""}`}
+              onClick={() => setForm((p) => ({ ...p, use_ai_planning: true }))}
+              aria-pressed={form.use_ai_planning}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 3.104v5.469a4.5 4.5 0 01-1.348 3.677C5.62 15.032 3 17.613 3 20.75c0 1.325.219 2.59.622 3.75h16.756A9.75 9.75 0 0021 20.75c0-3.137-2.62-5.718-5.402-8.5A4.5 4.5 0 0114.25 8.573V3.104" />
+              </svg>
+              KI-Design
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            {form.use_ai_planning
+              ? "Die KI analysiert dein Produkt und schlägt Farben, Komposition und Stil vor. Vorher KI-Anbieter unter Einstellungen konfigurieren."
+              : "7 Designstile zur Auswahl. Ändere Stil, Ton und Format direkt hier."}
+          </p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
