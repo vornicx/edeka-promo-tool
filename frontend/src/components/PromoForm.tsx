@@ -258,7 +258,7 @@ export default function PromoForm({ onCreated }: Props) {
       const motif = motifs.find((m) => m.value === value);
       const next: PromotionData = { ...previous, product_image: value };
       if (motif) {
-        // Al elegir de la lista, sincroniza nombre y categoría automáticamente.
+        // Beim Auswählen aus der Liste werden Name und Kategorie automatisch übernommen.
         next.campaign_kind = "product";
         next.product = motif.name;
         next.category = motif.category ? (CATEGORY_BY_LABEL.get(motif.category) ?? "") : previous.category;
@@ -357,7 +357,7 @@ export default function PromoForm({ onCreated }: Props) {
       <div className="border-b border-slate-200 bg-white p-5 sm:p-6">
         <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">
           <span className="h-3 w-1.5 rounded-full bg-edeka-yellow" />
-          Aktionsbriefing
+          Aktionsangaben
         </p>
         <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -414,10 +414,10 @@ export default function PromoForm({ onCreated }: Props) {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-2a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
                 </svg>
-                Plantillas
+                Vorlagen
               </span>
               <span className="mt-2 block text-xs leading-5 text-slate-600">
-                Para ofertas de producto. Rápido, estable y sin depender de IA.
+                Für Produktangebote. Schnell, zuverlässig und ohne KI-Abhängigkeit.
               </span>
             </button>
             <button
@@ -433,7 +433,7 @@ export default function PromoForm({ onCreated }: Props) {
                 IA
               </span>
               <span className="mt-2 block text-xs leading-5 text-slate-600">
-                Para carteles promocionales de productos, Aktionen y eventos del mercado.
+                Für KI-gestaltete Produktplakate, Marktaktionen und Veranstaltungen.
               </span>
             </button>
           </div>
@@ -596,7 +596,7 @@ export default function PromoForm({ onCreated }: Props) {
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst.
+                Die Vorauswahl funktioniert sofort. Ändern Sie nur, wenn Sie einen anderen Look oder ein anderes Format benötigen.
               </p>
             </div>
 
@@ -648,9 +648,9 @@ export default function PromoForm({ onCreated }: Props) {
           ) : (
           <div className="grid gap-5 rounded-lg border border-edeka-blue/20 bg-edeka-lightblue/50 p-4">
             <div>
-              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">KI-Briefing</p>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">KI-Angaben</p>
               <p className="mt-1 text-xs leading-5 text-slate-600">
-                Keine Vorlage auswählen. Die KI entscheidet Komposition, Farbwelt und visuelle Hierarchie aus deinem Briefing.
+                Keine Vorlage auswählen. Die KI entscheidet Komposition, Farbwelt und visuelle Hierarchie aus Ihren Angaben.
               </p>
             </div>
 
@@ -662,7 +662,7 @@ export default function PromoForm({ onCreated }: Props) {
                   className={`rounded-lg border px-3 py-3 text-left text-sm font-extrabold transition-all ${!isEvent ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
                   onClick={() => chooseCampaignKind("product")}
                 >
-                  Produktpromotion
+                  Produktangebot
                   <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">Produkt, Preis, Aktionszeitraum</span>
                 </button>
                 <button
@@ -731,7 +731,7 @@ export default function PromoForm({ onCreated }: Props) {
 
       <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <p className="text-sm font-medium text-slate-600">
-              Danach siehst du die fertige Vorschau und kannst das Bild speichern.
+              Danach sehen Sie die fertige Vorschau und können das Bild speichern.
         </p>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? (

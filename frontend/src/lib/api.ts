@@ -95,7 +95,7 @@ async function handleResponse<T>(res: Response, errorMsg: string): Promise<T> {
 }
 
 function getNetworkErrorMessage() {
-  return "Der Promo-Server konnte nicht erreicht werden. Bitte die Seite neu laden oder den Support informieren.";
+  return "Der Promo-Server konnte nicht erreicht werden. Bitte laden Sie die Seite neu oder informieren Sie den Kundendienst.";
 }
 
 export async function createPromo(data: PromotionData): Promise<CreatePromoResponse> {

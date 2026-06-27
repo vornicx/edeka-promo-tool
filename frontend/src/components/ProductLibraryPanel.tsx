@@ -219,7 +219,7 @@ export default function ProductLibraryPanel({ open, onClose }: Props) {
               </div>
             ) : products.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                Noch keine eigenen Produkte. Lade oben dein erstes Produktfoto hoch.
+                Noch keine eigenen Produkte. Laden Sie oben Ihr erstes Produktfoto hoch.
               </p>
             ) : (
               <ul className="grid gap-2">

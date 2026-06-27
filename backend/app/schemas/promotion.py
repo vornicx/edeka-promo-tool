@@ -51,8 +51,8 @@ class PromotionSpec(BaseModel):
 
 
 class EnrichmentSpec(BaseModel):
-    campaign_type: str = Field(..., description="Tipo de campaña")
-    product_family: str = Field(..., description="Familia del producto")
+    campaign_type: str = Field(..., description="Kampagnentyp")
+    product_family: str = Field(..., description="Produktfamilie")
     seasonality: str = Field(..., description="Erkannte Saisonalitaet")
     communication_style: str = Field(..., description="Kommunikationsstil")
     price_priority: str = Field(..., description="Preisprioritaet (high/medium/low)")

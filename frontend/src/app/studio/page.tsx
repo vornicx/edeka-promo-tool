@@ -170,7 +170,7 @@ export default function Home() {
               <h2 className="mt-2 text-xl font-extrabold leading-tight text-white">In 3 Schritten zum Motiv</h2>
             </div>
             <p className="p-5 text-sm leading-6 text-slate-600">
-              Fülle links nach rechts aus. Pflicht sind nur Produkt, Preis und Zeitraum.
+              Füllen Sie die Angaben der Reihe nach aus. Pflicht sind nur Produkt, Preis und Zeitraum.
             </p>
           </section>
 
@@ -229,7 +229,7 @@ export default function Home() {
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Neue Aktion</p>
               <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Was soll beworben werden?</h2>
               <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600">
-                Starte mit Produkt, Preis und Aktionszeitraum. Design und Format kannst du darunter auswählen; die Voreinstellungen passen bereits für eine schnelle Promotion.
+                Starten Sie mit Produkt, Preis und Aktionszeitraum. Design und Format können Sie darunter auswählen; die Voreinstellungen passen bereits für eine schnelle Promotion.
               </p>
             </section>
           )}
@@ -261,7 +261,7 @@ export default function Home() {
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Fertig</p>
                   <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Deine Promotion ist bereit zum Herunterladen.
+                    Ihre Promotion ist bereit zum Herunterladen.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
