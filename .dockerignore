@@ -13,3 +13,12 @@ __pycache__/
 .commandcode/
 test_outputs/
 *.spec
+package.json
+package-lock.json
+vercel.json
+next.config.js
+build.sh
+README.md
+ANLEITUNG.md
+instalar.sh
+start.sh
