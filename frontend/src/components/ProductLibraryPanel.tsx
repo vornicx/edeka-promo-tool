@@ -20,9 +20,13 @@ const CATEGORIES = [
   "Gemüse",
   "Bäckerei",
   "Milchprodukte",
+  "Käse",
+  "Bedientheke",
   "Fleisch",
   "Fisch",
   "Getränke",
+  "Tiefkühl",
+  "Nudeln & Sauce",
   "Haushalt",
   "Sonstiges",
 ];
@@ -131,11 +135,10 @@ export default function ProductLibraryPanel({ open, onClose }: Props) {
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Produkt-Bibliothek</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Eigene Produkte</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Produktfotos</p>
+            <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Eigene Produkte verwalten</h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Lade ein Produktfoto hoch. Daraus entsteht eine wiederverwendbare Vorlage – wie bei Erdbeeren,
-              Bananen & Co. Am besten ein Foto mit weißem oder transparentem Hintergrund.
+              Lade ein Produktfoto hoch und nutze es danach im Briefing. Am besten funktioniert ein helles Foto mit wenig Hintergrund.
             </p>
           </div>
           <button type="button" className="icon-btn" aria-label="Schließen" onClick={onClose}>
@@ -165,7 +168,7 @@ export default function ProductLibraryPanel({ open, onClose }: Props) {
                 <button type="button" className="btn-ghost w-auto" onClick={() => fileRef.current?.click()}>
                   Foto auswählen
                 </button>
-                <p className="text-xs leading-5 text-slate-500">PNG oder JPG. Der Hintergrund wird automatisch entfernt.</p>
+                <p className="text-xs leading-5 text-slate-500">PNG oder JPG auswählen. Danach Namen prüfen und speichern.</p>
               </div>
             </div>
 

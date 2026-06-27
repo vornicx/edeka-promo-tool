@@ -40,6 +40,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(PROVIDERS[0].baseUrl);
   const [model, setModel] = useState(PROVIDERS[0].model);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -107,10 +108,10 @@ export default function SettingsPanel({ open, onClose }: Props) {
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">KI-Einstellungen</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Anbieter und API-Key</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">KI</p>
+            <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Textvorschläge aktivieren</h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              {settings?.has_api_key ? `Aktiver Key: ${settings.masked_api_key}` : "Kein API-Key hinterlegt"}
+              {settings?.has_api_key ? `Aktiver Zugang: ${settings.masked_api_key}` : "Optional. Ohne Key funktioniert das Studio im Profi-Modus weiter."}
             </p>
           </div>
           <button type="button" className="icon-btn" aria-label="Einstellungen schließen" onClick={onClose}>
@@ -146,7 +147,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
               </div>
 
               <div>
-                <label className="label" htmlFor="api-key">API key</label>
+                <label className="label" htmlFor="api-key">API-Key</label>
                 <input
                   id="api-key"
                   className="input"
@@ -158,27 +159,39 @@ export default function SettingsPanel({ open, onClose }: Props) {
                 />
               </div>
 
-              <div>
-                <label className="label" htmlFor="base-url">Basis-URL</label>
-                <input
-                  id="base-url"
-                  className="input"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://openrouter.ai/api/v1"
-                />
-              </div>
+              <button
+                type="button"
+                className="btn-ghost justify-self-start sm:w-auto"
+                onClick={() => setShowAdvanced((value) => !value)}
+              >
+                {showAdvanced ? "Erweiterte Optionen ausblenden" : "Erweiterte Optionen"}
+              </button>
 
-              <div>
-                <label className="label" htmlFor="model">Modell</label>
-                <input
-                  id="model"
-                  className="input"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="openai/gpt-4o-mini"
-                />
-              </div>
+              {showAdvanced && (
+                <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <label className="label" htmlFor="base-url">Basis-URL</label>
+                    <input
+                      id="base-url"
+                      className="input"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      placeholder="https://openrouter.ai/api/v1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label" htmlFor="model">Modell</label>
+                    <input
+                      id="model"
+                      className="input"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="openai/gpt-4o-mini"
+                    />
+                  </div>
+                </div>
+              )}
 
               {settings?.settings_path && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">

@@ -19,6 +19,16 @@ BUILTIN_PRODUCTS: list[dict] = [
     {"key": "lettuce", "name": "Salat", "category": "Gemüse"},
     {"key": "peppers", "name": "Paprika", "category": "Gemüse"},
     {"key": "mixed_vegetables", "name": "Gemüse gemischt", "category": "Gemüse"},
+    {"key": "pointed_peppers", "name": "Bio Spitzpaprika rot", "category": "Gemüse"},
+    {"key": "cheese_slices", "name": "Milram Käsescheiben", "category": "Käse"},
+    {"key": "soft_cheese", "name": "Cambozola / Rougette", "category": "Bedientheke"},
+    {"key": "ice_cream_tub", "name": "Mövenpick Eis", "category": "Tiefkühl"},
+    {"key": "icecream_bars", "name": "Magnum Multipack Eis", "category": "Tiefkühl"},
+    {"key": "pizza", "name": "Wagner Steinofen Pizza", "category": "Tiefkühl"},
+    {"key": "juice_bottle", "name": "Saft oder Nektar", "category": "Getränke"},
+    {"key": "milk_drink", "name": "Müllermilch", "category": "Milchprodukte"},
+    {"key": "pasta", "name": "Barilla Pasta", "category": "Nudeln & Sauce"},
+    {"key": "pesto_sauce", "name": "Barilla Pesto / Pastasauce", "category": "Nudeln & Sauce"},
 ]
 
 

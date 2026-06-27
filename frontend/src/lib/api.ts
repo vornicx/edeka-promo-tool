@@ -82,7 +82,7 @@ async function handleResponse<T>(res: Response, errorMsg: string): Promise<T> {
 }
 
 function getNetworkErrorMessage() {
-  return "Die lokale App konnte nicht erreicht werden. Bitte EDEKA Promo Tool schließen und erneut öffnen; der interne Server ist nicht aktiv.";
+  return "Der Promo-Server konnte nicht erreicht werden. Bitte die Seite neu laden oder den Support informieren.";
 }
 
 export async function createPromo(data: PromotionData): Promise<CreatePromoResponse> {

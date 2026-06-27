@@ -28,9 +28,13 @@ const CATEGORIES = [
   { value: "gemuese", label: "Gemüse" },
   { value: "baeckerei", label: "Bäckerei" },
   { value: "milchprodukte", label: "Milchprodukte" },
+  { value: "kaese", label: "Käse" },
+  { value: "bedientheke", label: "Bedientheke" },
   { value: "fleisch", label: "Fleisch" },
   { value: "fisch", label: "Fisch" },
   { value: "getraenke", label: "Getränke" },
+  { value: "tiefkuehl", label: "Tiefkühl" },
+  { value: "nudeln-sauce", label: "Nudeln & Sauce" },
   { value: "haushalt", label: "Haushalt" },
 ];
 
@@ -62,6 +66,51 @@ const LEVELS = [
   { value: "bajo", label: "Dezent" },
   { value: "medio", label: "Ausgewogen" },
   { value: "alto", label: "Auffällig" },
+];
+
+const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
+  {
+    label: "Erdbeeren",
+    data: {
+      product: "Erdbeeren aus der Region",
+      category: "obst",
+      price: "2,99 €",
+      old_price: "3,99 €",
+      validity: "Nur diese Woche",
+      origin: "Deutschland",
+      claim: "Süß und frisch",
+      tone: "fresco",
+      style: "edeka",
+    },
+  },
+  {
+    label: "Mövenpick Eis",
+    data: {
+      product: "Mövenpick Eis",
+      category: "tiefkuehl",
+      price: "1,79 €",
+      old_price: "3,99 €",
+      validity: "Nur diese Woche",
+      claim: "Cremig sparen",
+      product_image: "builtin:ice_cream_tub",
+      tone: "premium",
+      style: "luxe",
+    },
+  },
+  {
+    label: "Barilla Pasta",
+    data: {
+      product: "Barilla Pasta",
+      category: "nudeln-sauce",
+      price: "0,99 €",
+      old_price: "1,99 €",
+      validity: "Mo-Sa",
+      claim: "Schnell auf dem Tisch",
+      product_image: "builtin:pasta",
+      tone: "local",
+      style: "editorial",
+    },
+  },
 ];
 
 const CATEGORY_BY_LABEL = new Map(CATEGORIES.map((c) => [c.label, c.value]));
@@ -158,6 +207,17 @@ export default function PromoForm({ onCreated }: Props) {
     });
   };
 
+  const applyQuickStart = (data: Partial<PromotionData>) => {
+    setForm((previous) => ({
+      ...previous,
+      product_image: "",
+      format: "post",
+      differentiation_level: "medio",
+      ...data,
+    }));
+    setTouched(new Set());
+  };
+
   const renderExampleCards = (
     options: { value: string; label: string; meta?: string }[],
     current: string,
@@ -241,9 +301,9 @@ export default function PromoForm({ onCreated }: Props) {
         </p>
         <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold text-slate-950">Angebot definieren</h2>
+            <h2 className="text-2xl font-extrabold text-slate-950">Angebot eintragen</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Trage die wichtigsten Aktionsdaten ein. Je klarer das Briefing, desto besser die kreativen Vorschläge.
+              Nur drei Angaben sind nötig: Produkt, Preis und Zeitraum. Alles andere ist optional.
             </p>
           </div>
           <span className="rounded-lg bg-edeka-lightblue px-3 py-2 text-xs font-bold text-edeka-blue">
@@ -253,9 +313,30 @@ export default function PromoForm({ onCreated }: Props) {
       </div>
 
       <div className="grid gap-6 p-5 sm:p-6">
+        <section className="rounded-lg border border-edeka-blue/15 bg-edeka-lightblue/60 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Schnellstart</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">Beispiel übernehmen und anpassen.</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {QUICK_STARTS.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className="rounded-lg bg-white px-3 py-2 text-sm font-extrabold text-edeka-blue shadow-sm transition-colors hover:bg-edeka-yellow focus:outline-none focus:ring-4 focus:ring-edeka-blue/15"
+                  onClick={() => applyQuickStart(item.data)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="label" htmlFor="product">Produkt</label>
+            <label className="label" htmlFor="product">Produkt *</label>
             <input
               id="product"
               className={inputClass("product")}
@@ -303,7 +384,7 @@ export default function PromoForm({ onCreated }: Props) {
               </select>
             </div>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Integriertes Motiv oder eigenes Foto wählen – oder automatisch nach Produktname. Eigene Fotos über „Produkte“ hochladen.
+              Kann leer bleiben. Dann wählt das Studio ein passendes Motiv anhand des Produktnamens.
             </p>
           </div>
 
@@ -323,7 +404,7 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label" htmlFor="price">Preis</label>
+            <label className="label" htmlFor="price">Preis *</label>
             <input
               id="price"
               className={inputClass("price")}
@@ -336,7 +417,7 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label" htmlFor="old-price">Statt</label>
+            <label className="label" htmlFor="old-price">Alter Preis</label>
             <input
               id="old-price"
               className="input"
@@ -347,11 +428,11 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label" htmlFor="validity">Aktionszeitraum</label>
+            <label className="label" htmlFor="validity">Aktionszeitraum *</label>
             <input
               id="validity"
               className={inputClass("validity")}
-              placeholder="Nur heute"
+              placeholder="Nur heute, Mo-Sa oder bis 30.06."
               value={form.validity}
               onChange={(e) => update("validity", e.target.value)}
               onBlur={() => markTouched("validity")}
@@ -364,7 +445,7 @@ export default function PromoForm({ onCreated }: Props) {
             <input
               id="origin"
               className="input"
-              placeholder="Deutschland"
+              placeholder="z. B. Deutschland"
               value={form.origin}
               onChange={(e) => update("origin", e.target.value)}
             />
@@ -374,7 +455,7 @@ export default function PromoForm({ onCreated }: Props) {
         <section className="grid gap-4 border-t border-slate-200 pt-6">
           <div>
             <div className="flex items-center justify-between gap-3">
-              <label className="label mb-0" htmlFor="claim">Claim</label>
+              <label className="label mb-0" htmlFor="claim">Kurzer Werbesatz</label>
               <span className="text-xs font-semibold text-slate-400">{form.claim?.length || 0}/80</span>
             </div>
             <input
@@ -389,9 +470,12 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-            <p className="text-xs leading-5 text-slate-500">
-              Wähle visuell – jede Option zeigt ein Beispiel mit deinen Eingaben, damit du sicher entscheidest.
-            </p>
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst.
+              </p>
+            </div>
 
             <div>
               <label className="label">Designstil</label>
@@ -443,7 +527,7 @@ export default function PromoForm({ onCreated }: Props) {
 
       <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <p className="text-sm font-medium text-slate-600">
-          Die Promotion wird direkt erstellt und kann sofort exportiert werden.
+          Danach siehst du die fertige Vorschau und kannst das Bild speichern.
         </p>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? (
@@ -452,7 +536,7 @@ export default function PromoForm({ onCreated }: Props) {
               Wird erstellt
             </span>
           ) : (
-            "Promotion erstellen & exportieren"
+            "Promotion erstellen"
           )}
         </button>
       </div>

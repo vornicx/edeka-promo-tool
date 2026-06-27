@@ -1,6 +1,17 @@
 # EDEKA Mühlenbein Promo Tool
 
-Herramienta de creación de promociones con IA para EDEKA Mühlenbein.
+Herramienta web de creación de promociones con IA para EDEKA Mühlenbein.
+
+## Despliegue web con login
+
+El despliegue público sirve la landing en `/` y protege el estudio web en `/studio` con contraseña. La landing habla de la herramienta y lleva a `/login?next=/studio`; no debe presentarse como descarga desktop.
+
+Variables en Vercel:
+
+- `PROMO_LOGIN_PASSWORD`: contraseña de acceso para el cliente.
+- `PROMO_AUTH_SECRET`: secreto largo para firmar la cookie de sesión. Si no se define, se usa la contraseña como secreto de firma.
+
+La sesión dura 12 horas. Para desarrollo local puedes poner esas variables en `frontend/.env.local`.
 
 ## Uso del cliente
 

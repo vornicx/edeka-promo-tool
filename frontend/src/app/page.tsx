@@ -1,257 +1,186 @@
-"use client";
+import Link from "next/link";
 
-import { useRef, useState } from "react";
-import Confetti from "@/components/Confetti";
-import ExportPanel from "@/components/ExportPanel";
-import PreviewPanel from "@/components/PreviewPanel";
-import PromoForm from "@/components/PromoForm";
-import ProductLibraryPanel from "@/components/ProductLibraryPanel";
-import SettingsPanel from "@/components/SettingsPanel";
-import ToastContainer, { showToast } from "@/components/Toast";
-import { CreativeDirection, composePromo } from "@/lib/api";
-
-const STEPS = [
+const examples = [
   {
-    label: "Briefing",
-    description: "Produkt, Preis und Stil",
-    icon: "M8 7h8M8 11h8M8 15h5M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z",
+    title: "Instagram Post",
+    size: "1:1",
+    product: "Erdbeeren",
+    price: "2,99",
+    style: "EDEKA Style",
+    image: "/landing-examples/erdbeeren-post.png",
+    imageClassName: "aspect-square",
   },
   {
-    label: "Gestaltung",
-    description: "Promotion wird erstellt",
-    icon: "M4 7h16M4 12h10M4 17h16M18 10l3 3-3 3",
+    title: "Story",
+    size: "9:16",
+    product: "Frische Pasta",
+    price: "1,79",
+    style: "Editorial",
+    image: "/landing-examples/pasta-story.png",
+    imageClassName: "aspect-[9/16]",
   },
   {
-    label: "Export",
-    description: "Formate herunterladen",
-    icon: "M12 3v11m0 0l-4-4m4 4l4-4M5 19h14",
+    title: "Plakat",
+    size: "A4/A5",
+    product: "Rispentomaten",
+    price: "1,99",
+    style: "Color Block",
+    image: "/landing-examples/tomaten-plakat.png",
+    imageClassName: "aspect-[1/1.414]",
   },
 ];
 
-function Icon({ d, className = "h-4 w-4" }: { d: string; className?: string }) {
+const features = [
+  "Aktionsmotive für Post, Story und Plakat erstellen",
+  "Produkt, Preis, Zeitraum und Stil direkt im Browser eingeben",
+  "Eigene Produktfotos und gespeicherte Motive nutzen",
+  "KI-Texte optional verwenden oder lokal im Profi-Modus arbeiten",
+];
+
+const steps = [
+  { number: "1", title: "Einloggen", text: "Mit Zugangscode anmelden und direkt im Studio starten." },
+  { number: "2", title: "Angebot eintragen", text: "Produkt, Preis, Zeitraum und Format auswählen." },
+  { number: "3", title: "Motiv speichern", text: "Promotion prüfen und als fertige PNG-Datei exportieren." },
+];
+
+function ArrowIcon() {
   return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d={d} />
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12h14m-6-6l6 6-6 6" />
     </svg>
   );
 }
 
-export default function Home() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [directions, setDirections] = useState<CreativeDirection[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [composed, setComposed] = useState(false);
-  const [composeVersion, setComposeVersion] = useState(0);
-  const [composing, setComposing] = useState(false);
-  const [exportFormat, setExportFormat] = useState("post");
-  const [productName, setProductName] = useState("");
-  const [error, setError] = useState("");
-  const [generationMode, setGenerationMode] = useState("");
-  const [generationNote, setGenerationNote] = useState("");
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [productsOpen, setProductsOpen] = useState(false);
-  const workspaceRef = useRef<HTMLDivElement>(null);
-
-  const step = !sessionId ? 1 : !composed ? 2 : 3;
-
-  // Direct flow: after the briefing we compose immediately and go to export —
-  // no separate "choose direction/colours" page.
-  const handleCreated = async (sid: string, dirs: CreativeDirection[], mode: string, note: string, format: string, product: string) => {
-    setSessionId(sid);
-    setDirections(dirs);
-    setSelectedIndex(0);
-    setComposed(false);
-    setGenerationMode(mode);
-    setGenerationNote(note);
-    setExportFormat(format);
-    setProductName(product);
-    setError("");
-    setComposing(true);
-    setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    try {
-      await composePromo(sid, 0);
-      setComposed(true);
-      setComposeVersion((v) => v + 1);
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 2500);
-      showToast("success", "Promotion ist bereit");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Promotion konnte nicht gestaltet werden";
-      setError(msg);
-      showToast("error", msg);
-    } finally {
-      setComposing(false);
-    }
-  };
-
-  const handleReset = () => {
-    setSessionId(null);
-    setDirections([]);
-    setSelectedIndex(null);
-    setComposed(false);
-    setComposing(false);
-    setError("");
-    setGenerationMode("");
-    setGenerationNote("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
+function CheckIcon() {
   return (
-    <div className="min-h-screen bg-app">
-      <Confetti active={showConfetti} />
-      <ToastContainer />
-      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <ProductLibraryPanel open={productsOpen} onClose={() => setProductsOpen(false)} />
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
 
-      <header className="header-brand text-white shadow-brand">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/waschbaer_logo.png" alt="EDEKA Waschbär" className="h-10 w-10 object-contain" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-extrabold leading-tight text-white sm:text-lg">EDEKA Mühlenbein</h1>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-yellow">Promo Studio</p>
-            </div>
-          </div>
+export default function LandingPage() {
+  return (
+    <main className="min-h-screen bg-app">
+      <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 lg:px-8">
+        <Link href="/" className="flex min-w-0 items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white shadow-card">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/waschbaer_logo.png" alt="EDEKA Waschbär" className="h-10 w-10 object-contain" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-base font-extrabold leading-tight text-slate-950 sm:text-lg">EDEKA Mühlenbein</span>
+            <span className="block text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Promo Studio</span>
+          </span>
+        </Link>
 
-          <div className="flex items-center gap-2">
-            {sessionId && (
-              <button type="button" className="btn-header hidden md:inline-flex" onClick={handleReset}>
-                Neue Aktion
-              </button>
-            )}
-            <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setProductsOpen(true)}>
-              Produkte
-            </button>
-            <button type="button" className="icon-btn-header md:hidden" aria-label="Produkte verwalten" onClick={() => setProductsOpen(true)}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7l8-4 8 4-8 4-8-4zm0 0v10l8 4 8-4V7M12 11v10" />
-              </svg>
-            </button>
-            <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setSettingsOpen(true)}>
-              KI-Einstellungen
-            </button>
-            <button type="button" className="icon-btn-header md:hidden" aria-label="KI-Einstellungen öffnen" onClick={() => setSettingsOpen(true)}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.3 4.3l.6-1.3h2.2l.6 1.3 1.4.6 1.3-.5 1.6 1.6-.5 1.3.6 1.4 1.3.6v2.2l-1.3.6-.6 1.4.5 1.3-1.6 1.6-1.3-.5-1.4.6-.6 1.3h-2.2l-.6-1.3-1.4-.6-1.3.5L6 14.8l.5-1.3-.6-1.4-1.3-.6V9.3l1.3-.6.6-1.4L6 6l1.6-1.6 1.3.5 1.4-.6zM12 9a3 3 0 100 6 3 3 0 000-6z" />
-              </svg>
-            </button>
-            <div className="hidden items-center gap-2 rounded-pill bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15 lg:flex">
-              <span className="h-2 w-2 rounded-full bg-edeka-yellow" />
-              <span className="text-xs font-semibold text-white/90">
-                {sessionId ? `Schritt ${step}/${STEPS.length}` : "Bereit"}
-              </span>
-            </div>
-          </div>
-        </div>
+        <Link href="/login?next=/studio" className="btn-primary w-auto px-4">
+          <span>Anmelden</span>
+          <span className="hidden sm:inline">/ Registrieren</span>
+        </Link>
       </header>
 
-      <main ref={workspaceRef} className="mx-auto grid max-w-7xl gap-6 px-5 py-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-8">
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <section className="panel overflow-hidden">
-            <div className="header-brand p-5 text-white">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-yellow">Workflow</p>
-              <h2 className="mt-2 text-xl font-extrabold leading-tight text-white">Vom Angebot zur fertigen Promotion</h2>
+      <section className="mx-auto grid max-w-7xl gap-8 px-5 pb-10 pt-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(460px,1.08fr)] lg:px-8 lg:pb-16 lg:pt-10">
+        <div className="flex flex-col justify-center">
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-edeka-blue">Webbasiertes Promotion-Tool</p>
+          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
+            Aktionswerbung direkt im Browser erstellen.
+          </h1>
+          <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg">
+            Das Promo Studio macht aus Produkt, Preis und Aktionszeitraum ein fertiges EDEKA-Motiv für Social Media oder Plakat. Alles läuft in drei einfachen Schritten.
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link href="/login?next=/studio" className="btn-primary sm:w-auto">
+              <span>Anmelden / Registrieren</span>
+              <ArrowIcon />
+            </Link>
+            <a href="#beispiele" className="btn-ghost sm:w-auto">
+              Beispiele ansehen
+            </a>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
+          <div className="panel flex flex-col justify-between overflow-hidden p-5">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Workflow</p>
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight text-slate-950">Von Angebot zu fertiger Promotion</h2>
             </div>
-            <p className="p-5 text-sm leading-6 text-slate-600">
-              Briefing ausfüllen, Stil wählen und direkt im passenden Format exportieren.
-            </p>
-          </section>
-
-          <nav className="panel p-2.5" aria-label="Erstellungsfortschritt">
-            {STEPS.map((item, index) => {
-              const position = index + 1;
-              const active = step === position;
-              const done = step > position;
-              return (
-                <div
-                  key={item.label}
-                  className={`flex items-center gap-3 rounded-xl p-2.5 transition-colors ${
-                    active ? "bg-edeka-lightblue" : ""
-                  }`}
-                >
-                  <span
-                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold transition-colors ${
-                      active
-                        ? "bg-edeka-blue text-white shadow-brand"
-                        : done
-                          ? "bg-edeka-yellow text-edeka-blue"
-                          : "bg-slate-100 text-slate-400"
-                    }`}
-                  >
-                    {done ? (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      position
-                    )}
+            <ul className="mt-6 space-y-3">
+              {features.map((feature) => (
+                <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                  <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-edeka-yellow text-edeka-blue">
+                    <CheckIcon />
                   </span>
-                  <span>
-                    <span className={`block text-sm font-bold ${active ? "text-edeka-blue" : "text-slate-900"}`}>{item.label}</span>
-                    <span className="block text-xs font-medium leading-5 text-slate-500">{item.description}</span>
-                  </span>
-                </div>
-              );
-            })}
-          </nav>
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-          {generationMode && (
-            <section className="panel p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Modus</p>
-              <p className="mt-2 text-sm font-bold text-slate-900">
-                {generationMode === "ai" ? "KI-optimiert" : "Lokaler Profi-Modus"}
-              </p>
-              {generationNote && <p className="mt-2 text-xs leading-5 text-slate-500">{generationNote}</p>}
-            </section>
-          )}
-        </aside>
-
-        <div className="space-y-5">
-          {step === 1 && (
-            <section className="animate-slide-up">
-              <PromoForm onCreated={handleCreated} />
-            </section>
-          )}
-
-          {sessionId && !composed && composing && (
-            <section className="panel flex items-center gap-3 p-6 animate-slide-up">
-              <span className="spinner" />
-              <p className="text-sm font-semibold text-slate-700">Promotion wird gestaltet …</p>
-            </section>
-          )}
-
-          {error && !composed && (
-            <div className="animate-shake rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-              {error}
-            </div>
-          )}
-
-          {composed && (
-            <section className="animate-slide-up space-y-5">
-              <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion} />
-
-              <div className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Fertig</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-700">
-                    Deine Promotion ist bereit zum Herunterladen.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
-                    Neue Aktion
-                  </button>
-                  <ExportPanel sessionId={sessionId} format={exportFormat} productName={productName} />
+          <div className="grid gap-3">
+            {examples.slice(0, 2).map((example) => (
+              <div key={example.title} className="relative overflow-hidden rounded-lg bg-slate-950 p-3 shadow-elevated">
+                <div className="absolute right-5 top-5 z-10 rounded-pill bg-white/95 px-3 py-1 text-xs font-extrabold text-edeka-blue shadow-sm">{example.size}</div>
+                <div className={`mx-auto max-h-[360px] overflow-hidden rounded-md ${example.imageClassName}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={example.image} alt={`${example.title} Beispiel aus dem Promo Studio`} className="h-full w-full object-contain" />
                 </div>
               </div>
-            </section>
-          )}
+            ))}
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="bg-white py-12">
+        <div className="mx-auto max-w-7xl px-5 lg:px-8">
+          <div className="grid gap-4 md:grid-cols-3">
+            {steps.map((step) => (
+              <article key={step.number} className="rounded-lg border border-slate-200 bg-white p-5 shadow-card">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-edeka-yellow text-sm font-extrabold text-edeka-blue">
+                  {step.number}
+                </span>
+                <h2 className="mt-4 text-xl font-extrabold text-slate-950">{step.title}</h2>
+                <p className="mt-2 text-sm font-medium leading-6 text-slate-600">{step.text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="beispiele" className="bg-slate-50 py-12">
+        <div className="mx-auto max-w-7xl px-5 lg:px-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-edeka-blue">Beispiele</p>
+              <h2 className="mt-2 text-3xl font-extrabold text-slate-950">Formate für jede Aktion</h2>
+            </div>
+            <p className="max-w-xl text-sm font-medium leading-6 text-slate-600">
+              Die Beispiele zeigen die Art von Motiven, die das Studio aus Briefingdaten und Stilwahl erzeugt.
+            </p>
+          </div>
+
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            {examples.map((example) => (
+              <article key={example.title} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+                <div className="relative grid min-h-[340px] place-items-center bg-slate-100 p-4">
+                  <span className="absolute left-4 top-4 z-10 rounded-pill bg-white/95 px-3 py-1 text-xs font-extrabold text-edeka-blue shadow-sm">{example.size}</span>
+                  <div className={`max-h-[460px] overflow-hidden rounded-md bg-white shadow-sm ${example.imageClassName}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={example.image} alt={`${example.title} Beispiel aus dem Promo Studio`} className="h-full w-full object-contain" />
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="text-sm font-extrabold text-slate-950">{example.title}</h3>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    Echtes Beispiel aus dem Promo Studio: {example.product}, {example.style}, {example.size}.
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
