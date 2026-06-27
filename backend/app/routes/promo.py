@@ -23,6 +23,7 @@ from app.adapters import (
     OpenAICompatibleAdapter,
     GeminiAdapter,
     OllamaAdapter,
+    AnthropicAdapter,
     FallbackChainAdapter,
     FallbackChainExhausted,
 )
@@ -76,6 +77,8 @@ def _build_fallback_chain() -> FallbackChainAdapter:
         try:
             if cfg.type == "gemini":
                 adapters.append(GeminiAdapter(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url))
+            elif cfg.type == "anthropic":
+                adapters.append(AnthropicAdapter(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url))
             elif cfg.type == "ollama":
                 adapters.append(OllamaAdapter(model=cfg.model, base_url=cfg.base_url))
             else:

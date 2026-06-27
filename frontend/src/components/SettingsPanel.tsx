@@ -21,6 +21,8 @@ const PROVIDER_NAMES: Record<string, string> = {
   gemini: "Google Gemini",
   github: "GitHub Models",
   nvidia: "NVIDIA NIM",
+  openai: "OpenAI (ChatGPT)",
+  anthropic: "Anthropic (Claude)",
   ollama: "Ollama",
   custom: "Benutzerdefiniert",
 };

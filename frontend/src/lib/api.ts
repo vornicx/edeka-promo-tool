@@ -85,6 +85,8 @@ export const PROVIDER_PRESETS: Record<string, { base_url: string; model: string 
   gemini: { base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-flash" },
   github: { base_url: "https://models.inference.ai.azure.com", model: "gpt-4o-mini" },
   nvidia: { base_url: "https://integrate.api.nvidia.com/v1", model: "nvidia/nemotron-3-nano-omni-30b-a3b" },
+  openai: { base_url: "https://api.openai.com/v1", model: "gpt-4o" },
+  anthropic: { base_url: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
   ollama: { base_url: "http://localhost:11434", model: "gemma4:2b" },
   custom: { base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
 };
