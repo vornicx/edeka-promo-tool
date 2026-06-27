@@ -1,7 +1,8 @@
 import base64
 import base64
+import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -9,31 +10,25 @@ from pydantic import BaseModel
 import uuid
 
 from app.schemas.promotion import (
-    PromotionSpec,
-    EnrichmentSpec,
-    CreativeDirection,
-    FormatType,
     EXPORT_FORMATS,
+    FormatType,
+    PromotionSpec,
 )
 from app.services.intake import validate_and_create_spec
 from app.services.planner import build_local_plan, generate_ai_plan
 from app.services.composer import compose_promotion
 from app.services.exporter import export_promotion
-from app.adapters import (
-    OpenAICompatibleAdapter,
-    GeminiAdapter,
-    OllamaAdapter,
-    AnthropicAdapter,
-    FallbackChainAdapter,
-    FallbackChainExhausted,
-)
-from app.user_settings import load_user_settings
+from app.adapters import OpenAICompatibleAdapter
+from app.user_settings import get_effective_ai_settings
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/promo", tags=["promo"])
 
 MAX_SESSIONS = 50
 sessions: dict[str, dict] = {}
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
 def _cleanup_old_sessions():
@@ -68,30 +63,20 @@ def _resolve_product_image_base64(product_image: str | None) -> str | None:
     return f"data:{mime};base64,{b64}"
 
 
-def _build_fallback_chain() -> FallbackChainAdapter:
-    user_settings = load_user_settings()
-    enabled = user_settings.get_enabled_providers()
-
-    adapters = []
-    for cfg in enabled:
-        try:
-            if cfg.type == "gemini":
-                adapters.append(GeminiAdapter(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url))
-            elif cfg.type == "anthropic":
-                adapters.append(AnthropicAdapter(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url))
-            elif cfg.type == "ollama":
-                adapters.append(OllamaAdapter(model=cfg.model, base_url=cfg.base_url))
-            else:
-                # openrouter, github, nvidia, custom → all OpenAI-compatible
-                adapters.append(OpenAICompatibleAdapter(api_key=cfg.api_key, base_url=cfg.base_url, model=cfg.model))
-        except ValueError as e:
-            import logging
-            logging.getLogger(__name__).warning("Anbieter %s (%s) uebersprungen: %s", cfg.type, cfg.model, e)
-
-    if not adapters:
-        raise ValueError("Keine KI-Anbieter konfiguriert")
-
-    return FallbackChainAdapter(adapters)
+def _build_ai_adapter() -> OpenAICompatibleAdapter | None:
+    """Create an OpenRouter adapter from user settings. Returns None if no API key."""
+    from app.user_settings import get_effective_ai_settings
+    ai = get_effective_ai_settings()
+    if not ai.api_key or not ai.enabled:
+        return None
+    try:
+        return OpenAICompatibleAdapter(
+            api_key=ai.api_key,
+            base_url=OPENROUTER_BASE,
+            model=ai.selected_model,
+        )
+    except ValueError:
+        return None
 
 
 class CreatePromoRequest(BaseModel):
@@ -138,25 +123,21 @@ async def create_promo(request: CreatePromoRequest):
         generation_mode = "local"
         generation_note = "Vorlagen-Modus gewählt"
     else:
-        try:
-            chain = _build_fallback_chain()
-        except ValueError as e:
+        adapter = _build_ai_adapter()
+        if adapter is None:
             enrichment, directions = build_local_plan(spec)
             generation_mode = "local"
-            generation_note = str(e)
+            generation_note = "Kein OpenRouter API-Key konfiguriert. Lokaler Profi-Modus verwendet."
         else:
             try:
-                enrichment, directions = await generate_ai_plan(chain, spec, image_base64)
+                enrichment, directions = await generate_ai_plan(adapter, spec, image_base64)
                 generation_mode = "ai"
-                generation_note = f"KI-Planung erfolgreich über {chain.__class__.__name__}"
-            except FallbackChainExhausted as e:
-                enrichment, directions = build_local_plan(spec)
-                generation_mode = "local_fallback"
-                generation_note = f"Alle KI-Anbieter waren nicht verfügbar. Lokaler Profi-Modus wurde verwendet. Fehler: {e}"
+                generation_note = f"KI-Planung erfolgreich mit {adapter.model}"
             except Exception as e:
+                logger.warning("KI-Planung fehlgeschlagen: %s", e)
                 enrichment, directions = build_local_plan(spec)
                 generation_mode = "local_fallback"
-                generation_note = f"KI-Fehler: {e}"
+                generation_note = f"KI-Anbieter nicht verfügbar. Lokaler Profi-Modus verwendet. Fehler: {e}"
 
     sessions[session_id] = {
         "spec": spec,

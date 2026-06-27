@@ -36,8 +36,8 @@ async def health_check():
     ai_settings = get_effective_ai_settings()
     return {
         "status": "ok",
-        "model": ai_settings.model,
-        "provider": ai_settings.provider,
+        "model": ai_settings.selected_model,
+        "provider": "openrouter",
         "has_api_key": bool(ai_settings.api_key),
     }
 

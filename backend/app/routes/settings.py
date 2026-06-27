@@ -1,18 +1,16 @@
 from typing import Optional
-import uuid
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.user_settings import (
     AISettings,
-    ProviderConfig,
     get_effective_ai_settings,
     get_settings_path,
-    load_user_settings,
     mask_api_key,
     save_user_settings,
 )
+from app.model_catalog import get_model_catalog, get_model_by_id
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -21,93 +19,82 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # Models
 # ---------------------------------------------------------------------------
 
-class ProviderPublic(BaseModel):
-    id: str
-    type: str
-    base_url: str
-    model: str
-    enabled: bool
-    has_api_key: bool
-    masked_api_key: str
-
-
-class ProviderPayload(BaseModel):
-    id: str
-    type: str = "openrouter"
-    api_key: Optional[str] = None
-    base_url: str = ""
-    model: str = ""
-    enabled: bool = True
-
-
 class SettingsResponse(BaseModel):
-    providers: list[ProviderPublic]
-    settings_path: str
+    api_key: str = ""
+    selected_model: str = "openrouter/free"
+    enabled: bool = True
+    has_api_key: bool = False
+    masked_api_key: str = ""
+    settings_path: str = ""
 
 
 class SaveSettingsRequest(BaseModel):
-    providers: list[ProviderPayload]
+    api_key: Optional[str] = None
+    selected_model: str = "openrouter/free"
+    enabled: bool = True
+
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    provider: str
+    vision: bool
+    free: bool
+    cost_est_design: str
+    quality: int
+    context: str
+    description: str
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-def _to_public(p: ProviderConfig) -> ProviderPublic:
-    return ProviderPublic(
-        id=p.id,
-        type=p.type,
-        base_url=p.base_url,
-        model=p.model,
-        enabled=p.enabled,
-        has_api_key=bool(p.api_key),
-        masked_api_key=mask_api_key(p.api_key),
-    )
+@router.get("/models")
+async def list_models() -> list[ModelInfo]:
+    return [ModelInfo(**m) for m in get_model_catalog()]
 
 
 @router.get("")
 async def get_settings() -> SettingsResponse:
     effective = get_effective_ai_settings()
     return SettingsResponse(
-        providers=[_to_public(p) for p in effective.providers],
+        api_key=effective.api_key,
+        selected_model=effective.selected_model,
+        enabled=effective.enabled,
+        has_api_key=bool(effective.api_key),
+        masked_api_key=mask_api_key(effective.api_key),
         settings_path=str(get_settings_path()),
     )
 
 
 @router.put("")
 async def update_settings(request: SaveSettingsRequest) -> SettingsResponse:
-    updated: list[ProviderConfig] = []
+    previous = get_effective_ai_settings()
 
-    for i, payload in enumerate(request.providers):
-        provider_type = payload.type.strip() or "openrouter"
-        base_url = payload.base_url.strip().rstrip("/")
-        model = payload.model.strip()
+    api_key = request.api_key
+    if api_key is None:
+        api_key = previous.api_key
+    elif isinstance(api_key, str):
+        api_key = api_key.strip()
 
-        if not base_url:
-            raise HTTPException(status_code=400, detail=f"Basis-URL für Anbieter {i+1} ist erforderlich")
-        if not model:
-            raise HTTPException(status_code=400, detail=f"Modell für Anbieter {i+1} ist erforderlich")
+    selected_model = request.selected_model.strip()
+    if not selected_model:
+        raise HTTPException(status_code=400, detail="Modell auswählen")
 
-        # Preserve existing API key if not sent (partial update)
-        previous = load_user_settings()
-        existing = {p.id: p for p in previous.providers}.get(payload.id)
-        api_key = payload.api_key
-        if api_key is None and existing:
-            api_key = existing.api_key
-        elif isinstance(api_key, str):
-            api_key = api_key.strip()
+    # Validate model exists in catalog
+    if not get_model_by_id(selected_model):
+        # Allow any model ID, just warn
+        pass
 
-        updated.append(ProviderConfig(
-            id=payload.id or uuid.uuid4().hex[:12],
-            type=provider_type,
-            api_key=api_key or "",
-            base_url=base_url,
-            model=model,
-            enabled=payload.enabled,
-        ))
+    next_settings = AISettings(api_key=api_key, selected_model=selected_model, enabled=request.enabled)
+    save_user_settings(next_settings)
 
-    save_user_settings(AISettings(providers=updated))
     return SettingsResponse(
-        providers=[_to_public(p) for p in updated],
+        api_key=next_settings.api_key,
+        selected_model=next_settings.selected_model,
+        enabled=next_settings.enabled,
+        has_api_key=bool(next_settings.api_key),
+        masked_api_key=mask_api_key(next_settings.api_key),
         settings_path=str(get_settings_path()),
     )

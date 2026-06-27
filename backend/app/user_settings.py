@@ -2,8 +2,7 @@ import json
 import logging
 import os
 import sys
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,33 +12,13 @@ logger = logging.getLogger(__name__)
 
 APP_NAME = "EDEKA Promo Tool"
 
+FREE_FALLBACK_MODELS = [
+    "openrouter/free",                        # auto-selects best free model
+    "google/gemma-4-31b-it:free",            # best free vision
+    "nvidia/nemotron-3-super-120b-a12b:free", # best free text
+]
 
-# ---------------------------------------------------------------------------
-# Provider config
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ProviderConfig:
-    id: str
-    type: str                          # "openrouter" | "gemini" | "github" | "nvidia" | "ollama" | "custom"
-    api_key: str = ""
-    base_url: str = ""
-    model: str = ""
-    enabled: bool = True
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ProviderConfig":
-        return cls(
-            id=data.get("id", uuid.uuid4().hex[:12]),
-            type=_clean_text(data.get("type"), "openrouter"),
-            api_key=_clean_text(data.get("api_key")),
-            base_url=_clean_text(data.get("base_url")),
-            model=_clean_text(data.get("model")),
-            enabled=data.get("enabled", True),
-        )
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
 # ---------------------------------------------------------------------------
@@ -48,10 +27,9 @@ class ProviderConfig:
 
 @dataclass
 class AISettings:
-    providers: list[ProviderConfig] = field(default_factory=list)
-
-    def get_enabled_providers(self) -> list[ProviderConfig]:
-        return [p for p in self.providers if p.enabled]
+    api_key: str = ""
+    selected_model: str = "openrouter/free"  # default: free auto-router
+    enabled: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +60,7 @@ def get_settings_path() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Persistence + migration
+# Persistence + migration (handles old multi-provider format)
 # ---------------------------------------------------------------------------
 
 def load_user_settings() -> AISettings:
@@ -96,80 +74,55 @@ def load_user_settings() -> AISettings:
         logger.warning("settings.json konnte nicht gelesen werden: %s", e)
         return AISettings()
 
-    # Detect old single-provider format → auto-migrate
-    if "provider" in data and "providers" not in data:
-        logger.info("Altes settings.json-Format erkannt, migriere zu neuem Format")
-        provider = ProviderConfig(
-            id="auto-migrated-1",
-            type=_clean_text(data.get("provider"), "openrouter"),
-            api_key=_clean_text(data.get("api_key")),
-            base_url=_clean_text(data.get("base_url"), "https://openrouter.ai/api/v1"),
-            model=_clean_text(data.get("model"), "openai/gpt-4o-mini"),
-            enabled=True,
-        )
-        return AISettings(providers=[provider])
+    # Old multi-provider format → migrate to simple format
+    if "providers" in data and isinstance(data["providers"], list):
+        providers = data["providers"]
+        # Find first enabled provider and extract key + model
+        for p in providers:
+            if isinstance(p, dict) and p.get("enabled", True) and p.get("api_key"):
+                logger.info("Altes Mehr-Anbieter-Format migriert")
+                return AISettings(
+                    api_key=_clean_text(p.get("api_key")),
+                    selected_model=_clean_text(p.get("model"), "openrouter/free"),
+                )
+        # No enabled provider with key → keep empty
+        return AISettings()
 
-    providers = [
-        ProviderConfig.from_dict(p)
-        for p in data.get("providers", [])
-        if isinstance(p, dict) and p.get("type")
-    ]
-    return AISettings(providers=providers)
+    # Old single-provider format
+    if "provider" in data:
+        logger.info("Altes Einzel-Anbieter-Format migriert")
+        return AISettings(
+            api_key=_clean_text(data.get("api_key")),
+            selected_model=_clean_text(data.get("model"), "openrouter/free"),
+        )
+
+    # New simple format
+    return AISettings(
+        api_key=_clean_text(data.get("api_key")),
+        selected_model=_clean_text(data.get("selected_model"), "openrouter/free"),
+        enabled=data.get("enabled", True),
+    )
 
 
 def save_user_settings(next_settings: AISettings) -> AISettings:
     path = get_settings_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"providers": [p.to_dict() for p in next_settings.providers]}
+    payload = {
+        "api_key": next_settings.api_key,
+        "selected_model": next_settings.selected_model,
+        "enabled": next_settings.enabled,
+    }
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return next_settings
 
 
-# ---------------------------------------------------------------------------
-# Effective settings (env-based defaults merged with user config)
-# ---------------------------------------------------------------------------
-
-_EFFECTIVE_PROVIDER_DEFAULTS: dict[str, dict] = {
-    "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o-mini"},
-    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o"},
-    "anthropic": {"base_url": "https://api.anthropic.com", "model": "claude-sonnet-4-20250514"},
-    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.5-flash"},
-    "github": {"base_url": "https://models.inference.ai.azure.com", "model": "gpt-4o-mini"},
-    "nvidia": {"base_url": "https://integrate.api.nvidia.com/v1", "model": "nvidia/nemotron-3-nano-omni-30b-a3b"},
-    "ollama": {"base_url": "http://localhost:11434", "model": "gemma4:2b"},
-    "custom": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
-}
-
-
 def get_effective_ai_settings() -> AISettings:
-    """Merge user settings with environment defaults, returning the resolved list."""
+    """Merge user settings with env fallback."""
     user = load_user_settings()
-    if user.providers:
-        for p in user.providers:
-            defaults = _EFFECTIVE_PROVIDER_DEFAULTS.get(p.type, {})
-            if not p.base_url:
-                p.base_url = defaults.get("base_url", "")
-            if not p.model:
-                p.model = defaults.get("model", "")
-        return user
+    api_key = user.api_key or settings.openrouter_api_key
+    model = user.selected_model or "openrouter/free"
+    return AISettings(api_key=api_key, selected_model=model, enabled=user.enabled)
 
-    # No saved providers: seed with a default OpenRouter entry using env credentials (legacy)
-    env_api_key = settings.openrouter_api_key or ""
-    return AISettings(providers=[
-        ProviderConfig(
-            id="default",
-            type="openrouter",
-            api_key=env_api_key,
-            base_url=settings.openrouter_base_url,
-            model=settings.openrouter_model,
-            enabled=True,
-        )
-    ])
-
-
-# ---------------------------------------------------------------------------
-# API key masking
-# ---------------------------------------------------------------------------
 
 def mask_api_key(api_key: str) -> str:
     if not api_key:
