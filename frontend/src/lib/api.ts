@@ -51,21 +51,42 @@ export interface ComposeResponse {
   direction: string;
 }
 
-export interface AISettings {
-  provider: string;
+export interface ProviderPublic {
+  id: string;
+  type: string;
   base_url: string;
   model: string;
+  enabled: boolean;
   has_api_key: boolean;
   masked_api_key: string;
+}
+
+export interface AISettings {
+  providers: ProviderPublic[];
   settings_path: string;
 }
 
-export interface SaveAISettingsPayload {
-  provider: string;
+export interface ProviderPayload {
+  id: string;
+  type: string;
   api_key?: string;
   base_url: string;
   model: string;
+  enabled: boolean;
 }
+
+export interface SaveAISettingsPayload {
+  providers: ProviderPayload[];
+}
+
+export const PROVIDER_PRESETS: Record<string, { base_url: string; model: string }> = {
+  openrouter: { base_url: "https://openrouter.ai/api/v1", model: "google/gemma-4-31b-it:free" },
+  gemini: { base_url: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-flash" },
+  github: { base_url: "https://models.inference.ai.azure.com", model: "gpt-4o-mini" },
+  nvidia: { base_url: "https://integrate.api.nvidia.com/v1", model: "nvidia/nemotron-3-nano-omni-30b-a3b" },
+  ollama: { base_url: "http://localhost:11434", model: "gemma4:2b" },
+  custom: { base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+};
 
 async function handleResponse<T>(res: Response, errorMsg: string): Promise<T> {
   if (!res.ok) {

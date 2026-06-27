@@ -143,14 +143,31 @@ def _build_user_prompt(spec: PromotionSpec) -> str:
     return "\n".join(lines)
 
 
+VISION_APPEND = """
+
+Zusaetzlich erhaelst du ein Bild des beworbenen Produkts. Nutze es fuer:
+- Die dominierenden Farben und Texturen des Produkts zu erkennen
+- Eine Farbpalette zu waehlen, die mit dem Produkt harmoniert
+- Die Komposition und Platzierung des Texts am Produkt auszurichten
+- Ob das Produkt hell/dunkel, warm/kuehl wirkt — beruecksichtige das in der visuellen Energie"""
+
+
 async def generate_ai_plan(
-    ai: AIAdapter, spec: PromotionSpec
+    ai: AIAdapter, spec: PromotionSpec, image_base64: str | None = None
 ) -> tuple[EnrichmentSpec, list[CreativeDirection]]:
+    system_prompt = SYSTEM_PROMPT
+    images: list[str] | None = None
+
+    if image_base64 and ai.supports_vision:
+        system_prompt += VISION_APPEND
+        images = [image_base64]
+
     result = await ai.chat_json(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         user_prompt=_build_user_prompt(spec),
         temperature=0.45,
         max_tokens=1100,
+        images=images,
     )
     enrichment = EnrichmentSpec(**result["enrichment"])
     directions = [CreativeDirection(**item) for item in result["directions"][:3]]

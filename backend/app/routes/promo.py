@@ -1,8 +1,11 @@
+import base64
+import base64
+from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional
-from pathlib import Path
 import uuid
 
 from app.schemas.promotion import (
@@ -16,7 +19,14 @@ from app.services.intake import validate_and_create_spec
 from app.services.planner import build_local_plan, generate_ai_plan
 from app.services.composer import compose_promotion
 from app.services.exporter import export_promotion
-from app.adapters.openrouter_adapter import OpenRouterAdapter
+from app.adapters import (
+    OpenAICompatibleAdapter,
+    GeminiAdapter,
+    OllamaAdapter,
+    FallbackChainAdapter,
+    FallbackChainExhausted,
+)
+from app.user_settings import load_user_settings
 from app.config import settings
 
 router = APIRouter(prefix="/api/promo", tags=["promo"])
@@ -32,8 +42,53 @@ def _cleanup_old_sessions():
             del sessions[key]
 
 
-def _get_ai_adapter() -> OpenRouterAdapter:
-    return OpenRouterAdapter()
+def _resolve_product_image_base64(product_image: str | None) -> str | None:
+    """Resolve a product_image key (builtin:X or custom:Y) to a base64 data-URI."""
+    if not product_image or not product_image.strip():
+        return None
+
+    path: Path | None = None
+    choice = product_image.strip()
+
+    if choice.startswith("builtin:"):
+        from app.builtin_products import builtin_file
+        path = builtin_file(choice.split(":", 1)[1])
+    elif choice.startswith("custom:"):
+        from app.product_library import get_product_file
+        path = get_product_file(choice.split(":", 1)[1])
+
+    if not path or not path.exists():
+        return None
+
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    # Determine mime type from extension
+    ext = path.suffix.lower()
+    mime = "image/png" if ext == ".png" else "image/jpeg"
+    return f"data:{mime};base64,{b64}"
+
+
+def _build_fallback_chain() -> FallbackChainAdapter:
+    user_settings = load_user_settings()
+    enabled = user_settings.get_enabled_providers()
+
+    adapters = []
+    for cfg in enabled:
+        try:
+            if cfg.type == "gemini":
+                adapters.append(GeminiAdapter(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url))
+            elif cfg.type == "ollama":
+                adapters.append(OllamaAdapter(model=cfg.model, base_url=cfg.base_url))
+            else:
+                # openrouter, github, nvidia, custom → all OpenAI-compatible
+                adapters.append(OpenAICompatibleAdapter(api_key=cfg.api_key, base_url=cfg.base_url, model=cfg.model))
+        except ValueError as e:
+            import logging
+            logging.getLogger(__name__).warning("Anbieter %s (%s) uebersprungen: %s", cfg.type, cfg.model, e)
+
+    if not adapters:
+        raise ValueError("Keine KI-Anbieter konfiguriert")
+
+    return FallbackChainAdapter(adapters)
 
 
 class CreatePromoRequest(BaseModel):
@@ -69,24 +124,30 @@ async def create_promo(request: CreatePromoRequest):
         raise HTTPException(status_code=400, detail=f"Eingabedaten konnten nicht verarbeitet werden: {e}")
 
     session_id = str(uuid.uuid4())[:8]
-
     _cleanup_old_sessions()
 
+    # Resolve product image for vision-enhanced planning
+    image_base64 = _resolve_product_image_base64(request.product_image)
+
     try:
-        ai_adapter = _get_ai_adapter()
-    except Exception as e:
+        chain = _build_fallback_chain()
+    except ValueError as e:
         enrichment, directions = build_local_plan(spec)
         generation_mode = "local"
         generation_note = str(e)
     else:
         try:
-            enrichment, directions = await generate_ai_plan(ai_adapter, spec)
+            enrichment, directions = await generate_ai_plan(chain, spec, image_base64)
             generation_mode = "ai"
-            generation_note = "Plan mit einem einzigen KI-Aufruf erstellt, um Kosten niedrig zu halten"
+            generation_note = f"KI-Planung erfolgreich über {chain.__class__.__name__}"
+        except FallbackChainExhausted as e:
+            enrichment, directions = build_local_plan(spec)
+            generation_mode = "local_fallback"
+            generation_note = f"Alle KI-Anbieter waren nicht verfügbar. Lokaler Profi-Modus wurde verwendet. Fehler: {e}"
         except Exception as e:
             enrichment, directions = build_local_plan(spec)
             generation_mode = "local_fallback"
-            generation_note = f"KI-Anbieter nicht verfuegbar. Lokaler Profi-Modus wurde verwendet: {e}"
+            generation_note = f"KI-Fehler: {e}"
 
     sessions[session_id] = {
         "spec": spec,

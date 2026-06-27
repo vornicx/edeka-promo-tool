@@ -1,10 +1,12 @@
 from typing import Optional
+import uuid
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.user_settings import (
     AISettings,
+    ProviderConfig,
     get_effective_ai_settings,
     get_settings_path,
     load_user_settings,
@@ -15,59 +17,97 @@ from app.user_settings import (
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
-class SettingsResponse(BaseModel):
-    provider: str
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+class ProviderPublic(BaseModel):
+    id: str
+    type: str
     base_url: str
     model: str
+    enabled: bool
     has_api_key: bool
     masked_api_key: str
+
+
+class ProviderPayload(BaseModel):
+    id: str
+    type: str = "openrouter"
+    api_key: Optional[str] = None
+    base_url: str = ""
+    model: str = ""
+    enabled: bool = True
+
+
+class SettingsResponse(BaseModel):
+    providers: list[ProviderPublic]
     settings_path: str
 
 
 class SaveSettingsRequest(BaseModel):
-    provider: str = "openrouter"
-    api_key: Optional[str] = None
-    base_url: str = "https://openrouter.ai/api/v1"
-    model: str = "openai/gpt-4o-mini"
+    providers: list[ProviderPayload]
 
 
-def _public_settings() -> SettingsResponse:
-    current = get_effective_ai_settings()
-    return SettingsResponse(
-        provider=current.provider,
-        base_url=current.base_url,
-        model=current.model,
-        has_api_key=bool(current.api_key),
-        masked_api_key=mask_api_key(current.api_key),
-        settings_path=str(get_settings_path()),
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+def _to_public(p: ProviderConfig) -> ProviderPublic:
+    return ProviderPublic(
+        id=p.id,
+        type=p.type,
+        base_url=p.base_url,
+        model=p.model,
+        enabled=p.enabled,
+        has_api_key=bool(p.api_key),
+        masked_api_key=mask_api_key(p.api_key),
     )
 
 
 @router.get("")
-async def get_settings():
-    return _public_settings()
+async def get_settings() -> SettingsResponse:
+    effective = get_effective_ai_settings()
+    return SettingsResponse(
+        providers=[_to_public(p) for p in effective.providers],
+        settings_path=str(get_settings_path()),
+    )
 
 
 @router.put("")
-async def update_settings(request: SaveSettingsRequest):
-    provider = request.provider.strip() or "openrouter"
-    base_url = request.base_url.strip().rstrip("/")
-    model = request.model.strip()
+async def update_settings(request: SaveSettingsRequest) -> SettingsResponse:
+    updated: list[ProviderConfig] = []
 
-    if not base_url:
-        raise HTTPException(status_code=400, detail="Die Basis-URL ist erforderlich")
-    if not model:
-        raise HTTPException(status_code=400, detail="Das Modell ist erforderlich")
+    for i, payload in enumerate(request.providers):
+        provider_type = payload.type.strip() or "openrouter"
+        base_url = payload.base_url.strip().rstrip("/")
+        model = payload.model.strip()
 
-    previous = load_user_settings()
-    next_api_key = previous.api_key if request.api_key is None else request.api_key.strip()
+        if not base_url:
+            raise HTTPException(status_code=400, detail=f"Basis-URL für Anbieter {i+1} ist erforderlich")
+        if not model:
+            raise HTTPException(status_code=400, detail=f"Modell für Anbieter {i+1} ist erforderlich")
 
-    save_user_settings(
-        AISettings(
-            provider=provider,
-            api_key=next_api_key,
+        # Preserve existing API key if not sent (partial update)
+        previous = load_user_settings()
+        existing = {p.id: p for p in previous.providers}.get(payload.id)
+        api_key = payload.api_key
+        if api_key is None and existing:
+            api_key = existing.api_key
+        elif isinstance(api_key, str):
+            api_key = api_key.strip()
+
+        updated.append(ProviderConfig(
+            id=payload.id or uuid.uuid4().hex[:12],
+            type=provider_type,
+            api_key=api_key or "",
             base_url=base_url,
             model=model,
-        )
+            enabled=payload.enabled,
+        ))
+
+    save_user_settings(AISettings(providers=updated))
+    return SettingsResponse(
+        providers=[_to_public(p) for p in updated],
+        settings_path=str(get_settings_path()),
     )
-    return _public_settings()
