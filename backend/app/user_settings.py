@@ -23,6 +23,10 @@ class AISettings:
 
 
 def get_user_config_dir() -> Path:
+    if bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER")):
+        p = Path("/tmp/data") / "edeka-promo-tool"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
     if sys.platform.startswith("win"):
         root = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
         return Path(root) / APP_NAME

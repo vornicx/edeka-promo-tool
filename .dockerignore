@@ -1,0 +1,15 @@
+node_modules/
+.next/
+frontend/
+landing/
+build/
+dist/
+.vscode/
+.venv/
+.venv-build-linux/
+__pycache__/
+*.pyc
+.git/
+.commandcode/
+test_outputs/
+*.spec

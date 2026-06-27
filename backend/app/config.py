@@ -3,8 +3,8 @@ from pydantic_settings import BaseSettings
 from pathlib import Path
 
 
-def _is_vercel() -> bool:
-    return os.environ.get("VERCEL") == "1"
+def _is_cloud() -> bool:
+    return bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("VERCEL") == "1" or os.environ.get("RENDER"))
 
 
 _APP_DIR = Path(__file__).resolve().parent
@@ -12,6 +12,8 @@ _APP_DIR = Path(__file__).resolve().parent
 
 def _user_data_dir() -> Path:
     app_name = "EDEKA Promo Tool"
+    if _is_cloud():
+        return Path("/tmp/data") / "edeka-promo-tool"
     if sys.platform.startswith("win"):
         root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         return Path(root or Path.home() / "AppData" / "Local") / app_name
@@ -39,7 +41,7 @@ class Settings(BaseSettings):
 
     @property
     def output_dir(self) -> Path:
-        if _is_vercel():
+        if _is_cloud():
             p = Path("/tmp/output")
         else:
             # Always use the per-user data directory (also in dev) so uploaded
@@ -54,7 +56,7 @@ class Settings(BaseSettings):
 
     @property
     def backgrounds_dir(self) -> Path:
-        if _is_vercel():
+        if _is_cloud():
             p = Path("/tmp/backgrounds")
         else:
             p = self.assets_dir / "backgrounds"
