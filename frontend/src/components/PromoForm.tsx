@@ -130,7 +130,7 @@ const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
       claim: "Probieren, sparen, gemeinsam feiern",
       product_image: "",
       tone: "local",
-      style: "colorblock",
+      style: "ai",
       use_ai_planning: true,
     },
   },
@@ -183,6 +183,7 @@ export default function PromoForm({ onCreated }: Props) {
       ...previous,
       campaign_kind: "product",
       use_ai_planning: false,
+      style: previous.style === "ai" ? "edeka" : previous.style,
     }));
   };
 
@@ -190,6 +191,8 @@ export default function PromoForm({ onCreated }: Props) {
     setForm((previous) => ({
       ...previous,
       use_ai_planning: true,
+      style: "ai",
+      tone: previous.tone || "local",
     }));
   };
 
@@ -200,6 +203,7 @@ export default function PromoForm({ onCreated }: Props) {
       category: kind === "event" ? "event" : previous.category === "event" ? "" : previous.category,
       old_price: kind === "event" ? "" : previous.old_price,
       product_image: kind === "event" ? "" : previous.product_image,
+      style: previous.use_ai_planning ? "ai" : previous.style,
     }));
   };
 
@@ -587,13 +591,12 @@ export default function PromoForm({ onCreated }: Props) {
             />
           </div>
 
+          {!isAiMode ? (
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                {isAiMode
-                  ? "Die KI nutzt diese Auswahl als Richtung und plant Farben, Komposition und Hierarchie passend dazu."
-                  : "Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst."}
+                Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst.
               </p>
             </div>
 
@@ -642,6 +645,87 @@ export default function PromoForm({ onCreated }: Props) {
               )}
             </div>
           </div>
+          ) : (
+          <div className="grid gap-5 rounded-lg border border-edeka-blue/20 bg-edeka-lightblue/50 p-4">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">KI-Briefing</p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                Keine Vorlage auswählen. Die KI entscheidet Komposition, Farbwelt und visuelle Hierarchie aus deinem Briefing.
+              </p>
+            </div>
+
+            <div>
+              <label className="label">Art des KI-Plakats</label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={`rounded-lg border px-3 py-3 text-left text-sm font-extrabold transition-all ${!isEvent ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                  onClick={() => chooseCampaignKind("product")}
+                >
+                  Produktpromotion
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">Produkt, Preis, Aktionszeitraum</span>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-lg border px-3 py-3 text-left text-sm font-extrabold transition-all ${isEvent ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                  onClick={() => chooseCampaignKind("event")}
+                >
+                  Event / Marktaktion
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">Titel, Termin, Ort, Highlight</span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Richtung</label>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {TONES.map((tone) => (
+                  <button
+                    key={tone.value}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-sm font-extrabold transition-all ${form.tone === tone.value ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                    onClick={() => update("tone", tone.value)}
+                  >
+                    {tone.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Ausdruck</label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-sm font-extrabold transition-all ${form.differentiation_level === level.value ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                    onClick={() => update("differentiation_level", level.value)}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Format</label>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {FORMATS.map((format) => (
+                  <button
+                    key={format.value}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-left text-sm font-extrabold transition-all ${form.format === format.value ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                    onClick={() => update("format", format.value)}
+                  >
+                    {format.label}
+                    <span className="block text-xs font-semibold text-slate-500">{format.meta}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          )}
         </section>
       </div>
 

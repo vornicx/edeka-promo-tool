@@ -1804,6 +1804,39 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     # (footer handled globally by the brand banner)
 
 
+def _auto_ai_style(spec: PromotionSpec, direction: CreativeDirection) -> str:
+    """Pick a renderer for AI mode from the AI direction, without exposing templates in the UI."""
+    text = _normalize(
+        " ".join([
+            spec.product,
+            spec.category or "",
+            spec.claim or "",
+            spec.tone.value,
+            direction.name,
+            direction.intent,
+            direction.composition,
+            direction.boldness,
+        ])
+    )
+    if _is_event(spec):
+        if any(word in text for word in ["premium", "elegant", "abend", "wein", "luxe"]):
+            return "luxe"
+        if any(word in text for word in ["community", "markt", "event", "aktion", "grafisch", "plakat"]):
+            return "colorblock"
+        return "editorial"
+    if any(word in text for word in ["premium", "elegant", "hochwert", "luxe"]):
+        return "luxe"
+    if any(word in text for word in ["natuerlich", "frisch", "markt", "regional", "lifestyle"]):
+        return "lifestyle"
+    if any(word in text for word in ["magazin", "editorial", "klar", "clean"]):
+        return "editorial"
+    if any(word in text for word in ["retro", "vintage"]):
+        return "retro"
+    if any(word in text for word in ["grafisch", "block", "bauhaus", "plakat"]):
+        return "colorblock"
+    return "editorial"
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -1823,6 +1856,8 @@ def compose_promotion(
     canvas = Image.new("RGBA", (cw, ch), (255, 255, 255, 255))
 
     style = (getattr(spec, "style", None) or "edeka").lower()
+    if style == "ai":
+        style = _auto_ai_style(spec, direction)
     if style == "luxe":
         _layout_luxe(canvas, spec, format_type)
     elif style == "editorial":
