@@ -1,6 +1,18 @@
 {
   "framework": "nextjs",
-  "installCommand": "npm install",
+  "installCommand": "npm install && python -m pip install -r requirements.txt",
   "buildCommand": "bash build.sh",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{test_outputs/**,dist/**,build/**,landing/**,frontend/node_modules/**,frontend/.next/**,__pycache__/**,**/*_source.png}"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/promo/:path*", "destination": "/api/index.py" },
+    { "source": "/api/settings/:path*", "destination": "/api/index.py" },
+    { "source": "/api/products/:path*", "destination": "/api/index.py" },
+    { "source": "/api/examples", "destination": "/api/index.py" }
+  ]
 }

@@ -606,6 +606,21 @@ def _split_price(value: str) -> tuple[str, str, str]:
     return clean or "0", "", cur
 
 
+def _is_event(spec: PromotionSpec) -> bool:
+    return getattr(spec, "campaign_kind", None) and spec.campaign_kind.value == "event"
+
+
+def _offer_value(spec: PromotionSpec) -> str:
+    value = (spec.price or "").strip()
+    if value:
+        return value
+    return "EVENT" if _is_event(spec) else "0 €"
+
+
+def _offer_label(spec: PromotionSpec) -> str:
+    return "EVENT" if _is_event(spec) else "ANGEBOT"
+
+
 def _draw_price_value(
     draw: ImageDraw.ImageDraw,
     cx: int,
@@ -687,7 +702,7 @@ def _draw_price_star(
     inner = int(radius * 0.66)
     # "statt" struck-through old price at the upper area.
     top_cursor = cy - int(inner * 0.78)
-    if spec.old_price:
+    if spec.old_price and not _is_event(spec):
         old_text = f"statt {spec.old_price}"
         of = _fit_font_width(draw, old_text, FONT_PATH_BOLD, int(inner * 1.5), int(radius * 0.16), int(radius * 0.09))
         ob = draw.textbbox((0, 0), old_text, font=of)
@@ -701,7 +716,7 @@ def _draw_price_star(
         price_cy = cy
         price_h = int(radius * 0.78)
 
-    _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, spec.price, primary)
+    _draw_price_value(draw, cx, price_cy, int(inner * 1.7), price_h, _offer_value(spec), primary)
 
 
 def _avg_region(canvas: Image.Image, x: int, y: int, s: int) -> tuple[int, int, int]:
@@ -866,13 +881,14 @@ def _draw_price_card(canvas: Image.Image, spec: PromotionSpec, zone: Zone, fill:
     draw.rounded_rectangle((ix, pill_y, ix + pill_w, pill_y + pill_h), radius=pill_h // 2, fill=pill)
     draw.text((ix + (pill_w - vw) // 2 - vb[0], pill_y + (pill_h - (vb[3] - vb[1])) // 2 - vb[1]), vt, fill=pill_text, font=vf)
 
-    # "ANGEBOT" label (left) + struck old price (right), top band.
+    # "ANGEBOT/EVENT" label (left) + struck old price (right), top band.
     lh = int(h * 0.15)
-    lf = _fit_font_height(draw, "ANGEBOT", FONT_PATH_EXTRABOLD, lh, int(lh * 1.1), int(lh * 0.6))
-    lb = draw.textbbox((0, 0), "ANGEBOT", font=lf)
-    draw.text((ix - lb[0], iy - lb[1]), "ANGEBOT", fill=text, font=lf)
+    label = _offer_label(spec)
+    lf = _fit_font_height(draw, label, FONT_PATH_EXTRABOLD, lh, int(lh * 1.1), int(lh * 0.6))
+    lb = draw.textbbox((0, 0), label, font=lf)
+    draw.text((ix - lb[0], iy - lb[1]), label, fill=text, font=lf)
     label_bottom = iy + (lb[3] - lb[1])
-    if spec.old_price:
+    if spec.old_price and not _is_event(spec):
         ot = f"statt {spec.old_price}"
         of = _fit_font_height(draw, ot, FONT_PATH_BOLD, int(lh * 0.74), int(lh), int(lh * 0.45))
         ob = draw.textbbox((0, 0), ot, font=of)
@@ -886,11 +902,12 @@ def _draw_price_card(canvas: Image.Image, spec: PromotionSpec, zone: Zone, fill:
     pt = label_bottom + int(h * 0.05)
     pb = pill_y - int(h * 0.05)
     band = max(int(h * 0.2), pb - pt)
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, iw, int(band * 1.05), int(band * 0.45))
-    pf = _fit_font_height(draw, spec.price, FONT_PATH_EXTRABOLD, band, pf.size, int(band * 0.4))
-    bbox = draw.textbbox((0, 0), spec.price, font=pf)
+    value = _offer_value(spec)
+    pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, iw, int(band * 1.05), int(band * 0.45))
+    pf = _fit_font_height(draw, value, FONT_PATH_EXTRABOLD, band, pf.size, int(band * 0.4))
+    bbox = draw.textbbox((0, 0), value, font=pf)
     pw = bbox[2] - bbox[0]
-    draw.text((ix + (iw - pw) // 2 - bbox[0], pt + (band - (bbox[3] - bbox[1])) // 2 - bbox[1]), spec.price, fill=text, font=pf)
+    draw.text((ix + (iw - pw) // 2 - bbox[0], pt + (band - (bbox[3] - bbox[1])) // 2 - bbox[1]), value, fill=text, font=pf)
 
 
 def _draw_discount_burst(canvas: Image.Image, percent: int, cx: int, cy: int, radius: int):
@@ -1009,8 +1026,16 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     draw.text((text_x - sbb[0], ty2 - sbb[1]), sub, fill=sub_color, font=sub_font)
 
 
-def _draw_angebot_badge(canvas: Image.Image, cx: int, cy: int, height: int, accent: tuple[int, int, int], primary: tuple[int, int, int]):
-    _draw_tag(canvas, "ANGEBOT", cx, cy, height, accent, primary, angle=-7.0)
+def _draw_angebot_badge(
+    canvas: Image.Image,
+    cx: int,
+    cy: int,
+    height: int,
+    accent: tuple[int, int, int],
+    primary: tuple[int, int, int],
+    label: str = "ANGEBOT",
+):
+    _draw_tag(canvas, label, cx, cy, height, accent, primary, angle=-7.0)
 
 
 def _draw_footer_text(canvas: Image.Image, accent: tuple[int, int, int], margin: int):
@@ -1055,6 +1080,8 @@ def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
 
 def _context_tags(spec: PromotionSpec) -> list[tuple[str, tuple[int, int, int], tuple[int, int, int]]]:
     """Derive realistic flyer badges (BIO / AUS DER REGION / NEU) from the spec."""
+    if _is_event(spec):
+        return []
     hay = _normalize(f"{spec.product} {spec.category or ''} {spec.claim or ''} {spec.origin or ''}")
     white = (255, 255, 255)
     tags: list[tuple[str, tuple[int, int, int], tuple[int, int, int]]] = []
@@ -1191,7 +1218,8 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
                        sub_color=muted, halo=True)
     # "ANGEBOT" kicker, top-right.
     kh = int(h * 0.02)
-    _draw_kicker(draw, w - margin - _kicker_width(draw, "ANGEBOT", kh), int(h * 0.07), "ANGEBOT", kh, accent)
+    label = _offer_label(spec)
+    _draw_kicker(draw, w - margin - _kicker_width(draw, label, kh), int(h * 0.07), label, kh, accent)
 
     # Headline block, left: thin accent rule + product name + claim.
     draw.rectangle((margin, head_y, margin + int(w * 0.085), head_y + max(3, int(h * 0.006))), fill=accent)
@@ -1369,22 +1397,23 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     ny += int(h * (0.014 if tall else 0.02))
 
     # Price block: statt + big price + validity/discount.
-    old_h = int(h * (0.035 if tall else 0.042)) if spec.old_price else 0
+    old_h = int(h * (0.035 if tall else 0.042)) if spec.old_price and not _is_event(spec) else 0
     price_h = int(h * (0.080 if tall else 0.105))
     meta_h = int(h * (0.030 if tall else 0.036))
     price_block_h = old_h + price_h + meta_h
     if ny + price_block_h > content_bottom:
         ny = max(head_y + int(h * (0.17 if tall else 0.19)), content_bottom - price_block_h)
-    if spec.old_price:
+    if spec.old_price and not _is_event(spec):
         of = _load_font(FONT_PATH_REGULAR, int(h * (0.022 if tall else 0.026)))
         ot = f"statt {spec.old_price}"
         ob = draw.textbbox((0, 0), ot, font=of)
         draw.text((col_x - ob[0], ny - ob[1]), ot, fill=muted, font=of)
         draw.line((col_x, ny + (ob[3] - ob[1]) * 0.55, col_x + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
         ny += int(h * (0.035 if tall else 0.042))
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, col_w, int(h * (0.068 if tall else 0.085) * pm), int(h * (0.042 if tall else 0.05)))
-    pb = draw.textbbox((0, 0), spec.price, font=pf)
-    draw.text((col_x - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
+    value = _offer_value(spec)
+    pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, col_w, int(h * (0.068 if tall else 0.085) * pm), int(h * (0.042 if tall else 0.05)))
+    pb = draw.textbbox((0, 0), value, font=pf)
+    draw.text((col_x - pb[0], ny - pb[1]), value, fill=accent, font=pf)
     ny += int((pb[3] - pb[1]) + h * (0.012 if tall else 0.02))
 
     meta = spec.validity.upper()
@@ -1504,7 +1533,7 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw.line((margin, top, w - margin, top), fill=deep, width=max(2, h // 360))
     mh = int(h * (0.05 if tall else 0.062))
     _draw_brand_top(canvas, margin, top + int(h * 0.012), mh, deep)
-    kk = "ANGEBOT"
+    kk = _offer_label(spec)
     _draw_kicker(draw, w - margin - _kicker_width(draw, kk, int(h * 0.018)), top + int(h * 0.022), kk, int(h * 0.018), accent)
 
     if tall:
@@ -1531,16 +1560,17 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     ny += int(h * 0.02)
 
     # Price: big number + struck old price, magazine style.
-    if spec.old_price:
+    if spec.old_price and not _is_event(spec):
         of = _load_font(FONT_PATH_REGULAR, int(h * 0.028))
         ot = f"statt {spec.old_price}"
         ob = draw.textbbox((0, 0), ot, font=of)
         draw.text((hx - ob[0], ny - ob[1]), ot, fill=muted, font=of)
         draw.line((hx, ny + (ob[3] - ob[1]) * 0.55, hx + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
         ny += int(h * 0.045)
-    pf = _fit_font_width(draw, spec.price, FONT_PATH_EXTRABOLD, hw, int(h * 0.10 * pm), int(h * 0.055))
-    pb = draw.textbbox((0, 0), spec.price, font=pf)
-    draw.text((hx - pb[0], ny - pb[1]), spec.price, fill=accent, font=pf)
+    value = _offer_value(spec)
+    pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, hw, int(h * 0.10 * pm), int(h * 0.055))
+    pb = draw.textbbox((0, 0), value, font=pf)
+    draw.text((hx - pb[0], ny - pb[1]), value, fill=accent, font=pf)
     # validity, small, under the price (footer is the global brand banner)
     vf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.02))
     vb = draw.textbbox((0, 0), spec.validity.upper(), font=vf)
@@ -1700,7 +1730,7 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
-    _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary)
+    _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary, _offer_label(spec))
 
     # Product hero on the left, lifted by a warm spotlight.
     _draw_spotlight(canvas, int(w * 0.28), int(h * 0.42), int(w * 0.32), _lighten(accent, 0.5), cfg.spotlight_alpha)
@@ -1730,7 +1760,7 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.072), accent)
-    _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary)
+    _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.5), int(h * 0.31), int(w * 0.52), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.12), w - margin * 2, int(h * 0.27)), white)
@@ -1758,7 +1788,7 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), cfg.halo_alpha)
 
     _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.060), accent)
-    _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary)
+    _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.5), int(h * 0.32), int(w * 0.46), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(margin, int(h * 0.10), w - margin * 2, int(h * 0.31)), white)

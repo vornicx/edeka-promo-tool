@@ -4,6 +4,7 @@ const SETTINGS_API_BASE = `${API_ROOT}/api/settings`;
 const PRODUCTS_API_BASE = `${API_ROOT}/api/products`;
 
 export interface PromotionData {
+  campaign_kind: "product" | "event";
   product: string;
   category?: string;
   price: string;
@@ -59,6 +60,18 @@ export interface AISettings {
   has_api_key: boolean;
   masked_api_key: string;
   settings_path: string;
+}
+
+export interface AIModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  vision: boolean;
+  free: boolean;
+  cost_est_design: string;
+  quality: number;
+  context: string;
+  description: string;
 }
 
 export interface SaveAISettingsPayload {
@@ -159,6 +172,11 @@ export async function getAISettings(): Promise<AISettings> {
   return handleResponse<AISettings>(res, "KI-Einstellungen konnten nicht geladen werden");
 }
 
+export async function getAIModels(): Promise<AIModelInfo[]> {
+  const res = await fetch(`${SETTINGS_API_BASE}/models`);
+  return handleResponse<AIModelInfo[]>(res, "KI-Modelle konnten nicht geladen werden");
+}
+
 export async function saveAISettings(data: SaveAISettingsPayload): Promise<AISettings> {
   const res = await fetch(SETTINGS_API_BASE, {
     method: "PUT",
@@ -201,6 +219,7 @@ export function getMotifImageUrl(motif: Motif): string {
 }
 
 export interface ExampleParams {
+  campaign_kind?: "product" | "event";
   style: string;
   tone: string;
   level: string;

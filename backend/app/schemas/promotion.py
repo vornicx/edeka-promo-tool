@@ -23,10 +23,16 @@ class DifferentiationLevel(str, Enum):
     ALTO = "alto"
 
 
+class CampaignKind(str, Enum):
+    PRODUCT = "product"
+    EVENT = "event"
+
+
 class PromotionSpec(BaseModel):
-    product: str = Field(..., min_length=1, description="Produktname")
+    campaign_kind: CampaignKind = Field(default=CampaignKind.PRODUCT, description="Art der Promotion")
+    product: str = Field(..., min_length=1, description="Produktname oder Eventtitel")
     category: Optional[str] = Field(None, description="Produktkategorie")
-    price: str = Field(..., min_length=1, description="Aktueller Preis")
+    price: str = Field(default="", description="Aktueller Preis oder Event-Hinweis")
     old_price: Optional[str] = Field(None, description="Vorheriger Preis (durchgestrichen)")
     validity: str = Field(..., min_length=1, description="Gültigkeit des Angebots")
     origin: Optional[str] = Field(None, description="Herkunft des Produkts")

@@ -52,6 +52,7 @@ def _render(spec: PromotionSpec, fmt: FormatType) -> bytes:
 
 @router.get("")
 async def example(
+    campaign_kind: str = "product",
     style: str = "edeka",
     tone: str = "fresco",
     level: str = "medio",
@@ -69,6 +70,7 @@ async def example(
     tone = tone.lower() if tone.lower() in _TONES else "fresco"
     level = level.lower() if level.lower() in _LEVELS else "medio"
     fmt = FormatType(format) if format in _FORMATS else FormatType.POST
+    campaign_kind = "event" if campaign_kind == "event" else "product"
 
     # Fall back to a representative sample when the briefing is still empty.
     if not product.strip():
@@ -82,10 +84,11 @@ async def example(
         origin = origin or "aus der Region"
 
     spec = PromotionSpec(
+        campaign_kind=campaign_kind,
         product=product.strip(),
         category=category.strip() or None,
-        price=normalize_price(price) if price.strip() else "—",
-        old_price=normalize_price(old_price) if old_price.strip() else None,
+        price=(price.strip() if campaign_kind == "event" else normalize_price(price)) if price.strip() else ("EVENT" if campaign_kind == "event" else "—"),
+        old_price=None if campaign_kind == "event" else (normalize_price(old_price) if old_price.strip() else None),
         validity=validity.strip() or "nur heute",
         origin=origin.strip() or None,
         claim=claim.strip() or None,
@@ -97,7 +100,7 @@ async def example(
     )
 
     key = "|".join([
-        style, tone, level, fmt.value, spec.product, spec.price, spec.old_price or "",
+        campaign_kind, style, tone, level, fmt.value, spec.product, spec.price, spec.old_price or "",
         spec.validity, spec.claim or "", spec.origin or "", spec.category or "",
         spec.product_image or "",
     ])

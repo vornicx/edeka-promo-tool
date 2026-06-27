@@ -5,19 +5,20 @@ from app.schemas.promotion import CreativeDirection, EnrichmentSpec, PromotionSp
 
 
 SYSTEM_PROMPT = """Du bist Senior Retail-Stratege fuer EDEKA Muehlenbein in Kassel.
-Erzeuge einen kompakten Plan fuer eine Lebensmittel-Promotion: semantische Einordnung und 3 visuelle Richtungen.
+Erzeuge einen kompakten Plan fuer eine Lebensmittel- oder Markt-Promotion: semantische Einordnung und 3 visuelle Richtungen.
 
 Prioritaeten:
 - Kommerziell klar, hochwertig und direkt umsetzbar.
 - Niedrige Kosten: kurzes JSON, keine Erklaerungen.
 - Professionelles Design, lesbar fuer Markt und Social Media.
-- Preis, Produkt und Aktionszeitraum sind die Haupt-Hierarchie.
+- Bei Produktangeboten sind Preis, Produkt und Aktionszeitraum die Haupt-Hierarchie.
+- Bei Events sind Titel, Termin/Ort und kurze Aktivierung die Haupt-Hierarchie.
 
 Antworte NUR mit gueltigem JSON:
 {
   "enrichment": {
-    "campaign_type": "fresh_product_offer | daily_special | seasonal_campaign | brand_story",
-    "product_family": "fruta | verdura | panaderia | lacteos | carnes | pescados | bebidas | limpieza | hogar | otros",
+    "campaign_type": "fresh_product_offer | daily_special | seasonal_campaign | brand_story | event",
+    "product_family": "fruta | verdura | panaderia | lacteos | carnes | pescados | bebidas | limpieza | hogar | event | otros",
     "seasonality": "spring_summer | autumn_winter | all_year | holiday_specific",
     "communication_style": "close_and_fresh | elegant_restrained | bold_direct | warm_community",
     "price_priority": "high | medium | low",
@@ -82,19 +83,52 @@ def _style(spec: PromotionSpec) -> str:
 def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[CreativeDirection]]:
     family = _product_family(spec)
     energy = _energy(spec)
+    is_event = spec.campaign_kind.value == "event"
     enrichment = EnrichmentSpec(
-        campaign_type="fresh_product_offer" if family in {"fruta", "verdura"} else "daily_special",
-        product_family=family,
+        campaign_type="event" if is_event else ("fresh_product_offer" if family in {"fruta", "verdura"} else "daily_special"),
+        product_family="event" if is_event else family,
         seasonality="all_year",
         communication_style=_style(spec),
-        price_priority="high",
+        price_priority="medium" if is_event else "high",
         visual_energy=energy,
         brand_mode="muehlenbein_local",
-        waschbaer_presence="none",
+        waschbaer_presence="subtle" if is_event else "none",
     )
 
     product = spec.product
     price_area = "top_right" if spec.format.value == "story" else "bottom_right"
+    if is_event:
+        directions = [
+            CreativeDirection(
+                name="Event Klar",
+                intent=f"{product} als lokale EDEKA-Aktion sofort verständlich machen.",
+                composition="Starker Titel, klarer Terminbereich, freundliche lokale Markenfläche und kurzer Hinweis.",
+                palette=["#003B79", "#FFD500", "#FFFFFF", "#E7F0FA"],
+                text_safe_area="center",
+                boldness="medium",
+                waschbaer_presence="subtle",
+            ),
+            CreativeDirection(
+                name="Markt Moment",
+                intent="Einladende Marktstimmung mit sauberer Informationshierarchie.",
+                composition="Große Headline, atmosphärischer Akzent, Termin und Ort als gut lesbarer Block.",
+                palette=["#0B6E4F", "#FFD500", "#F7FAF7", "#003B79"],
+                text_safe_area="bottom_left",
+                boldness="medium",
+                waschbaer_presence="graphic_accent",
+            ),
+            CreativeDirection(
+                name="Community Aktion",
+                intent="Die Aktion nahbar, lokal und aktivierend präsentieren.",
+                composition="Plakatartige Typografie mit EDEKA-Farben, QR-Footer und kompakter Zusatzinfo.",
+                palette=["#003B79", "#FFD500", "#D71920", "#FFFFFF"],
+                text_safe_area=price_area,
+                boldness="high" if spec.differentiation_level.value == "alto" else "medium",
+                waschbaer_presence="featured",
+            ),
+        ]
+        return enrichment, directions
+
     directions = [
         CreativeDirection(
             name="Klarer Abverkauf",
@@ -129,9 +163,10 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
 
 def _build_user_prompt(spec: PromotionSpec) -> str:
     lines = [
-        f"Produkt: {spec.product}",
+        f"Art: {'Event/Marktaktion' if spec.campaign_kind.value == 'event' else 'Produktangebot'}",
+        f"Titel/Produkt: {spec.product}",
         f"Kategorie: {spec.category or 'nicht angegeben'}",
-        f"Preis: {spec.price}",
+        f"Preis/Hinweis: {spec.price or 'nicht angegeben'}",
         f"Statt-Preis: {spec.old_price or 'nicht angegeben'}",
         f"Aktionszeitraum: {spec.validity}",
         f"Herkunft: {spec.origin or 'nicht angegeben'}",

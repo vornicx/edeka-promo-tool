@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import {
+  AIModelInfo,
   getAISettings,
+  getAIModels,
   saveAISettings,
 } from "@/lib/api";
 import { showToast } from "@/components/Toast";
@@ -10,18 +12,6 @@ import { showToast } from "@/components/Toast";
 interface Props {
   open: boolean;
   onClose: () => void;
-}
-
-interface ModelInfo {
-  id: string;
-  name: string;
-  provider: string;
-  vision: boolean;
-  free: boolean;
-  cost_est_design: string;
-  quality: number;
-  context: string;
-  description: string;
 }
 
 interface SettingsData {
@@ -41,24 +31,14 @@ function CloseIcon() {
   );
 }
 
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg className={`h-3.5 w-3.5 ${filled ? "text-edeka-yellow" : "text-slate-300"}`} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-    </svg>
-  );
-}
-
 export default function SettingsPanel({ open, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<SettingsData | null>(null);
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [models, setModels] = useState<AIModelInfo[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("openrouter/free");
   const [filter, setFilter] = useState<"all" | "free" | "vision">("all");
-
-  const API_ROOT = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/promo\/?$/, "") || "";
 
   useEffect(() => {
     if (!open) return;
@@ -67,8 +47,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
     setLoading(true);
 
     Promise.all([
-      fetch(`${API_ROOT}/api/settings`).then((r) => r.json()),
-      fetch(`${API_ROOT}/api/settings/models`).then((r) => r.json()),
+      getAISettings(),
+      getAIModels(),
     ])
       .then(([settingsData, modelsData]) => {
         if (cancelled) return;
@@ -87,7 +67,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, API_ROOT]);
+  }, [open]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

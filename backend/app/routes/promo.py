@@ -1,8 +1,7 @@
 import base64
-import base64
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -19,7 +18,6 @@ from app.services.planner import build_local_plan, generate_ai_plan
 from app.services.composer import compose_promotion
 from app.services.exporter import export_promotion
 from app.adapters import OpenAICompatibleAdapter
-from app.user_settings import get_effective_ai_settings
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -80,6 +78,7 @@ def _build_ai_adapter() -> OpenAICompatibleAdapter | None:
 
 
 class CreatePromoRequest(BaseModel):
+    campaign_kind: str = "product"
     product: str
     category: Optional[str] = None
     price: str

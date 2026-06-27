@@ -24,6 +24,9 @@ interface Props {
 }
 
 const CATEGORIES = [
+  { value: "event", label: "Event / Marktaktion" },
+  { value: "verkostung", label: "Verkostung" },
+  { value: "service", label: "Service" },
   { value: "obst", label: "Obst" },
   { value: "gemuese", label: "Gemüse" },
   { value: "baeckerei", label: "Bäckerei" },
@@ -73,6 +76,7 @@ const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
     label: "Erdbeeren",
     data: {
       product: "Erdbeeren aus der Region",
+      campaign_kind: "product",
       category: "obst",
       price: "2,99 €",
       old_price: "3,99 €",
@@ -87,6 +91,7 @@ const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
     label: "Mövenpick Eis",
     data: {
       product: "Mövenpick Eis",
+      campaign_kind: "product",
       category: "tiefkuehl",
       price: "1,79 €",
       old_price: "3,99 €",
@@ -101,6 +106,7 @@ const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
     label: "Barilla Pasta",
     data: {
       product: "Barilla Pasta",
+      campaign_kind: "product",
       category: "nudeln-sauce",
       price: "0,99 €",
       old_price: "1,99 €",
@@ -111,15 +117,33 @@ const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
       style: "editorial",
     },
   },
+  {
+    label: "Sommerfest",
+    data: {
+      campaign_kind: "event",
+      product: "Sommerfest im Markt",
+      category: "event",
+      price: "Eintritt frei",
+      old_price: "",
+      validity: "Samstag, 11-16 Uhr",
+      origin: "EDEKA Mühlenbein",
+      claim: "Probieren, sparen, gemeinsam feiern",
+      product_image: "",
+      tone: "local",
+      style: "colorblock",
+      use_ai_planning: true,
+    },
+  },
 ];
 
 const CATEGORY_BY_LABEL = new Map(CATEGORIES.map((c) => [c.label, c.value]));
 
 function validate(f: PromotionData) {
   const e: Record<string, string> = {};
-  if (!f.product.trim()) e.product = "Produkt eintragen";
-  if (!f.price.trim()) e.price = "Preis eintragen";
-  else if (!/^[\d,.\s€$]+$/.test(f.price)) e.price = "Bitte ein gültiges Preisformat verwenden";
+  const isEvent = f.campaign_kind === "event";
+  if (!f.product.trim()) e.product = isEvent ? "Titel eintragen" : "Produkt eintragen";
+  if (!isEvent && !f.price.trim()) e.price = "Preis eintragen";
+  else if (!isEvent && !/^[\d,.\s€$]+$/.test(f.price)) e.price = "Bitte ein gültiges Preisformat verwenden";
   if (!f.validity.trim()) e.validity = "Aktionszeitraum eintragen";
   return e;
 }
@@ -129,6 +153,7 @@ export default function PromoForm({ onCreated }: Props) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [motifs, setMotifs] = useState<Motif[]>([]);
   const [form, setForm] = useState<PromotionData>({
+    campaign_kind: "product",
     product: "",
     category: "",
     price: "",
@@ -146,10 +171,37 @@ export default function PromoForm({ onCreated }: Props) {
 
   const errors = useMemo(() => validate(form), [form]);
   const valid = Object.keys(errors).length === 0;
+  const isEvent = form.campaign_kind === "event";
+  const isAiMode = form.use_ai_planning;
 
   const update = useCallback((field: keyof PromotionData, value: string) => {
     setForm((previous) => ({ ...previous, [field]: value }));
   }, []);
+
+  const chooseTemplateMode = () => {
+    setForm((previous) => ({
+      ...previous,
+      campaign_kind: "product",
+      use_ai_planning: false,
+    }));
+  };
+
+  const chooseAiMode = () => {
+    setForm((previous) => ({
+      ...previous,
+      use_ai_planning: true,
+    }));
+  };
+
+  const chooseCampaignKind = (kind: "product" | "event") => {
+    setForm((previous) => ({
+      ...previous,
+      campaign_kind: kind,
+      category: kind === "event" ? "event" : previous.category === "event" ? "" : previous.category,
+      old_price: kind === "event" ? "" : previous.old_price,
+      product_image: kind === "event" ? "" : previous.product_image,
+    }));
+  };
 
   const loadMotifs = useCallback(() => {
     listMotifs()
@@ -166,6 +218,7 @@ export default function PromoForm({ onCreated }: Props) {
   // Debounced snapshot of the briefing so example thumbnails mirror the real
   // promotion without re-fetching on every keystroke.
   const [exampleCtx, setExampleCtx] = useState({
+    campaign_kind: "product" as "product" | "event",
     product: "",
     price: "",
     old_price: "",
@@ -178,6 +231,7 @@ export default function PromoForm({ onCreated }: Props) {
   useEffect(() => {
     const t = setTimeout(() => {
       setExampleCtx({
+        campaign_kind: form.campaign_kind,
         product: form.product,
         price: form.price,
         old_price: form.old_price || "",
@@ -189,7 +243,7 @@ export default function PromoForm({ onCreated }: Props) {
       });
     }, 220);
     return () => clearTimeout(t);
-  }, [form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image]);
+  }, [form.campaign_kind, form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image]);
 
   const builtinMotifs = motifs.filter((m) => m.source === "builtin");
   const customMotifs = motifs.filter((m) => m.source === "custom");
@@ -201,6 +255,7 @@ export default function PromoForm({ onCreated }: Props) {
       const next: PromotionData = { ...previous, product_image: value };
       if (motif) {
         // Al elegir de la lista, sincroniza nombre y categoría automáticamente.
+        next.campaign_kind = "product";
         next.product = motif.name;
         next.category = motif.category ? (CATEGORY_BY_LABEL.get(motif.category) ?? "") : previous.category;
       }
@@ -302,13 +357,17 @@ export default function PromoForm({ onCreated }: Props) {
         </p>
         <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold text-slate-950">Angebot eintragen</h2>
+            <h2 className="text-2xl font-extrabold text-slate-950">
+              {isEvent ? "Event eintragen" : "Angebot eintragen"}
+            </h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Nur drei Angaben sind nötig: Produkt, Preis und Zeitraum. Alles andere ist optional.
+              {isEvent
+                ? "Für Events reichen Titel, Termin und ein kurzer Hinweis. Die KI plant daraus ein klares Markt-Plakat."
+                : "Nur drei Angaben sind nötig: Produkt, Preis und Zeitraum. Alles andere ist optional."}
             </p>
           </div>
           <span className="rounded-lg bg-edeka-lightblue px-3 py-2 text-xs font-bold text-edeka-blue">
-            {Object.keys(errors).length === 0 ? "Briefing vollständig" : "3 Pflichtfelder"}
+            {Object.keys(errors).length === 0 ? "Briefing vollständig" : isEvent ? "2 Pflichtfelder" : "3 Pflichtfelder"}
           </span>
         </div>
       </div>
@@ -320,7 +379,7 @@ export default function PromoForm({ onCreated }: Props) {
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Schnellstart</p>
               <p className="mt-1 text-sm font-semibold text-slate-700">Beispiel übernehmen und anpassen.</p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-4">
               {QUICK_STARTS.map((item) => (
                 <button
                   key={item.label}
@@ -335,45 +394,67 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="segmented">
+        <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Erstellungsart</p>
+            <p className="mt-1 text-sm font-semibold text-slate-700">Wähle zuerst, wie das Motiv entstehen soll.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             <button
               type="button"
-              className={`segment ${!form.use_ai_planning ? "segment-active" : ""}`}
-              onClick={() => setForm((p) => ({ ...p, use_ai_planning: false }))}
-              aria-pressed={!form.use_ai_planning}
+              className={`rounded-lg border p-4 text-left transition-all ${!isAiMode ? "border-edeka-blue bg-edeka-lightblue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white hover:border-edeka-blue/35"}`}
+              onClick={chooseTemplateMode}
+              aria-pressed={!isAiMode}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-2a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
-              </svg>
-              Vorlagen
+              <span className="flex items-center gap-2 text-sm font-extrabold text-edeka-blue">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-2a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
+                </svg>
+                Plantillas
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-slate-600">
+                Para ofertas de producto. Rápido, estable y sin depender de IA.
+              </span>
             </button>
             <button
               type="button"
-              className={`segment ${form.use_ai_planning ? "segment-active" : ""}`}
-              onClick={() => setForm((p) => ({ ...p, use_ai_planning: true }))}
-              aria-pressed={form.use_ai_planning}
+              className={`rounded-lg border p-4 text-left transition-all ${isAiMode ? "border-edeka-blue bg-edeka-lightblue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white hover:border-edeka-blue/35"}`}
+              onClick={chooseAiMode}
+              aria-pressed={isAiMode}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 3.104v5.469a4.5 4.5 0 01-1.348 3.677C5.62 15.032 3 17.613 3 20.75c0 1.325.219 2.59.622 3.75h16.756A9.75 9.75 0 0021 20.75c0-3.137-2.62-5.718-5.402-8.5A4.5 4.5 0 0114.25 8.573V3.104" />
-              </svg>
-              KI-Design
+              <span className="flex items-center gap-2 text-sm font-extrabold text-edeka-blue">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 3.104v5.469a4.5 4.5 0 01-1.348 3.677C5.62 15.032 3 17.613 3 20.75c0 1.325.219 2.59.622 3.75h16.756A9.75 9.75 0 0021 20.75c0-3.137-2.62-5.718-5.402-8.5A4.5 4.5 0 0114.25 8.573V3.104" />
+                </svg>
+                IA
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-slate-600">
+                Para carteles promocionales de productos, Aktionen y eventos del mercado.
+              </span>
             </button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            {form.use_ai_planning
-              ? "Die KI analysiert dein Produkt und schlägt Farben, Komposition und Stil vor. Vorher KI-Anbieter unter Einstellungen konfigurieren."
-              : "7 Designstile zur Auswahl. Ändere Stil, Ton und Format direkt hier."}
-          </p>
+          {isAiMode && (
+            <div className="grid gap-2">
+              <label className="label mb-0">Was soll die KI gestalten?</label>
+              <div className="segmented">
+                <button type="button" className={`segment ${!isEvent ? "segment-active" : ""}`} onClick={() => chooseCampaignKind("product")}>
+                  Produktangebot
+                </button>
+                <button type="button" className={`segment ${isEvent ? "segment-active" : ""}`} onClick={() => chooseCampaignKind("event")}>
+                  Event / Aktion
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="label" htmlFor="product">Produkt *</label>
+            <label className="label" htmlFor="product">{isEvent ? "Titel *" : "Produkt *"}</label>
             <input
               id="product"
               className={inputClass("product")}
-              placeholder="z. B. Erdbeeren aus der Region"
+              placeholder={isEvent ? "z. B. Sommerfest im Markt" : "z. B. Erdbeeren aus der Region"}
               value={form.product}
               onChange={(e) => update("product", e.target.value)}
               onBlur={() => markTouched("product")}
@@ -381,6 +462,7 @@ export default function PromoForm({ onCreated }: Props) {
             {touched.has("product") && errors.product && <p className="field-error">{errors.product}</p>}
           </div>
 
+          {!isEvent && (
           <div className="md:col-span-2">
             <label className="label" htmlFor="motif">Produktbild / Motiv</label>
             <div className="flex items-center gap-3">
@@ -420,9 +502,10 @@ export default function PromoForm({ onCreated }: Props) {
               Kann leer bleiben. Dann wählt das Studio ein passendes Motiv anhand des Produktnamens.
             </p>
           </div>
+          )}
 
           <div>
-            <label className="label" htmlFor="category">Kategorie</label>
+            <label className="label" htmlFor="category">{isEvent ? "Art der Aktion" : "Kategorie"}</label>
             <select
               id="category"
               className="input"
@@ -437,11 +520,11 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label" htmlFor="price">Preis *</label>
+            <label className="label" htmlFor="price">{isEvent ? "Hinweis / Highlight" : "Preis *"}</label>
             <input
               id="price"
               className={inputClass("price")}
-              placeholder="2,99 €"
+              placeholder={isEvent ? "z. B. Eintritt frei, Verkostung, 11-16 Uhr" : "2,99 €"}
               value={form.price}
               onChange={(e) => update("price", e.target.value)}
               onBlur={() => markTouched("price")}
@@ -449,6 +532,7 @@ export default function PromoForm({ onCreated }: Props) {
             {touched.has("price") && errors.price && <p className="field-error">{errors.price}</p>}
           </div>
 
+          {!isEvent && (
           <div>
             <label className="label" htmlFor="old-price">Alter Preis</label>
             <input
@@ -459,13 +543,14 @@ export default function PromoForm({ onCreated }: Props) {
               onChange={(e) => update("old_price", e.target.value)}
             />
           </div>
+          )}
 
           <div>
-            <label className="label" htmlFor="validity">Aktionszeitraum *</label>
+            <label className="label" htmlFor="validity">{isEvent ? "Termin / Zeitraum *" : "Aktionszeitraum *"}</label>
             <input
               id="validity"
               className={inputClass("validity")}
-              placeholder="Nur heute, Mo-Sa oder bis 30.06."
+              placeholder={isEvent ? "z. B. Samstag, 11-16 Uhr" : "Nur heute, Mo-Sa oder bis 30.06."}
               value={form.validity}
               onChange={(e) => update("validity", e.target.value)}
               onBlur={() => markTouched("validity")}
@@ -474,11 +559,11 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
 
           <div>
-            <label className="label" htmlFor="origin">Herkunft</label>
+            <label className="label" htmlFor="origin">{isEvent ? "Ort / Bereich" : "Herkunft"}</label>
             <input
               id="origin"
               className="input"
-              placeholder="z. B. Deutschland"
+              placeholder={isEvent ? "z. B. Getränkemarkt, Bedientheke" : "z. B. Deutschland"}
               value={form.origin}
               onChange={(e) => update("origin", e.target.value)}
             />
@@ -506,7 +591,9 @@ export default function PromoForm({ onCreated }: Props) {
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst.
+                {isAiMode
+                  ? "Die KI nutzt diese Auswahl als Richtung und plant Farben, Komposition und Hierarchie passend dazu."
+                  : "Die Vorauswahl funktioniert sofort. Ändere nur, wenn du einen anderen Look oder ein anderes Format brauchst."}
               </p>
             </div>
 
@@ -560,7 +647,7 @@ export default function PromoForm({ onCreated }: Props) {
 
       <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <p className="text-sm font-medium text-slate-600">
-          Danach siehst du die fertige Vorschau und kannst das Bild speichern.
+              Danach siehst du die fertige Vorschau und kannst das Bild speichern.
         </p>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? (
@@ -569,7 +656,7 @@ export default function PromoForm({ onCreated }: Props) {
               Wird erstellt
             </span>
           ) : (
-            "Promotion erstellen"
+            isEvent ? "Event-Plakat erstellen" : isAiMode ? "KI-Promotion erstellen" : "Promotion erstellen"
           )}
         </button>
       </div>
