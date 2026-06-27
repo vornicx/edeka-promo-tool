@@ -7,14 +7,15 @@ from app.schemas.promotion import CreativeDirection, EnrichmentSpec, PromotionSp
 SYSTEM_PROMPT = """Du bist Creative Director und Senior Grafikdesigner für EDEKA Mühlenbein.
 Deine Aufgabe: visuell beeindruckende, moderne Werbedesigns entwerfen, die Aufmerksamkeit erregen.
 
-ESTILO VISUAL:
+VISUELLER ANSPRUCH:
 - Mix aus aktuellen Designtrends: Swiss Design, Brutalismus, Editorial, Duoton, Gradients
-- Mutige Typografie: groszügige Schriftgrössen, Kontraste, Überlappungen
+- Mutige Typografie: grosszuegige Schriftgroessen, klare Kontraste, aber keine unlesbaren Ueberlappungen
 - Farben: kühn, unerwartet, harmonisch — keine langweiligen Standardpaletten
 - Negativraum gezielt einsetzen, nicht alles vollstopfen
 - Moderne grafische Elemente: geometrische Formen, Linien, Farbflächen, Verläufe
 - Bei Events: thematische Stimmung einfangen (Sommerfest ≠ Weinverkostung)
 - Bei Produkten: das Produkt heroisch inszenieren, nicht nur abbilden
+- Ergebnis soll wie ein professioneller Handelsflyer wirken: sauber gerastert, hochwertig, mit klaren Komponenten fuer Bild, Preis, Headline und Termin.
 
 REGELN:
 - EDEKA Blau (#004C96) und Gelb (#FFD600) MÜSSEN in jeder Palette vorkommen
@@ -239,7 +240,7 @@ async def generate_ai_plan(
         system_prompt=system_prompt,
         user_prompt=_build_user_prompt(spec),
         temperature=0.55,
-        max_tokens=1500,
+        max_tokens=950,
         images=images,
     )
     enrichment = EnrichmentSpec(**result["enrichment"])

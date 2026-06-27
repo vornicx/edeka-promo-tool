@@ -19,6 +19,7 @@ FREE_FALLBACK_MODELS = [
 ]
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "google/gemini-2.5-flash-lite"
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 @dataclass
 class AISettings:
     api_key: str = ""
-    selected_model: str = "openrouter/free"  # default: free auto-router
+    selected_model: str = DEFAULT_MODEL
     enabled: bool = True
 
 
@@ -83,7 +84,7 @@ def load_user_settings() -> AISettings:
                 logger.info("Altes Mehr-Anbieter-Format migriert")
                 return AISettings(
                     api_key=_clean_text(p.get("api_key")),
-                    selected_model=_clean_text(p.get("model"), "openrouter/free"),
+                    selected_model=_clean_text(p.get("model"), DEFAULT_MODEL),
                 )
         # No enabled provider with key → keep empty
         return AISettings()
@@ -93,13 +94,13 @@ def load_user_settings() -> AISettings:
         logger.info("Altes Einzel-Anbieter-Format migriert")
         return AISettings(
             api_key=_clean_text(data.get("api_key")),
-            selected_model=_clean_text(data.get("model"), "openrouter/free"),
+            selected_model=_clean_text(data.get("model"), DEFAULT_MODEL),
         )
 
     # New simple format
     return AISettings(
         api_key=_clean_text(data.get("api_key")),
-        selected_model=_clean_text(data.get("selected_model"), "openrouter/free"),
+        selected_model=_clean_text(data.get("selected_model"), DEFAULT_MODEL),
         enabled=data.get("enabled", True),
     )
 
@@ -120,7 +121,7 @@ def get_effective_ai_settings() -> AISettings:
     """Merge user settings with env fallback."""
     user = load_user_settings()
     api_key = user.api_key or settings.openrouter_api_key
-    model = user.selected_model or "openrouter/free"
+    model = user.selected_model or DEFAULT_MODEL
     return AISettings(api_key=api_key, selected_model=model, enabled=user.enabled)
 
 

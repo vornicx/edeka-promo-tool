@@ -37,7 +37,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [models, setModels] = useState<AIModelInfo[]>([]);
   const [apiKey, setApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("openrouter/free");
+  const [selectedModel, setSelectedModel] = useState("google/gemini-2.5-flash-lite");
   const [filter, setFilter] = useState<"all" | "free" | "vision">("all");
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
         if (cancelled) return;
         setSettings(settingsData);
         setModels(modelsData);
-        setSelectedModel(settingsData.selected_model || "openrouter/free");
+        setSelectedModel(settingsData.selected_model || "google/gemini-2.5-flash-lite");
         setApiKey("");
       })
       .catch((err: unknown) => {
@@ -120,16 +120,16 @@ export default function SettingsPanel({ open, onClose }: Props) {
         </div>
 
         <div className="border-b border-slate-200 bg-edeka-lightblue/60 p-3 text-xs leading-5 text-edeka-blue">
-          <strong>Kostenlose Modelle:</strong>{" "}
+          <strong>Empfehlung:</strong> Gemini 2.5 Flash Lite kostet nur Bruchteile eines Cents pro Entwurf und liefert stabilere Designrichtungen als Gratis-Modelle.{" "}
           <a
-            href="https://freellm.net/models/?modality=vision&free=1"
+            href="https://openrouter.ai/google/gemini-2.5-flash-lite"
             target="_blank"
             rel="noopener noreferrer"
             className="underline underline-offset-2 hover:text-edeka-darkblue"
           >
-            freellm.net
+            Preise ansehen
           </a>{" "}
-          listet alle gratis KI-Modelle. API-Key auf{" "}
+          · API-Key auf{" "}
           <a
             href="https://openrouter.ai/keys"
             target="_blank"
@@ -138,7 +138,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
           >
             openrouter.ai/keys
           </a>{" "}
-          erstellen (kostenlos, keine Kreditkarte).
+          erstellen.
         </div>
 
         <div className="grid flex-1 content-start gap-4 overflow-y-auto p-5">

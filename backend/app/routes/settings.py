@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.user_settings import (
     AISettings,
+    DEFAULT_MODEL,
     get_effective_ai_settings,
     get_settings_path,
     mask_api_key,
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 class SettingsResponse(BaseModel):
     api_key: str = ""
-    selected_model: str = "openrouter/free"
+    selected_model: str = DEFAULT_MODEL
     enabled: bool = True
     has_api_key: bool = False
     masked_api_key: str = ""
@@ -30,7 +31,7 @@ class SettingsResponse(BaseModel):
 
 class SaveSettingsRequest(BaseModel):
     api_key: Optional[str] = None
-    selected_model: str = "openrouter/free"
+    selected_model: str = DEFAULT_MODEL
     enabled: bool = True
 
 
