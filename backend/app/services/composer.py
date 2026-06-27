@@ -1963,6 +1963,91 @@ def _draw_ai_placeholder_product(
               fill=_lighten(primary, 0.10), outline=ink, width=max(3, pack_w // 80))
 
 
+def _draw_photo_cutout(
+    canvas: Image.Image,
+    image: Image.Image,
+    cx: int,
+    cy: int,
+    max_size: tuple[int, int],
+    angle: float = 0.0,
+    shadow_alpha: int = 90,
+):
+    img = image.copy()
+    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+    if angle:
+        img = img.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+    x = cx - img.width // 2
+    y = cy - img.height // 2
+    sw = int(img.width * 0.78)
+    sh = max(10, int(img.height * 0.13))
+    sx = x + (img.width - sw) // 2
+    sy = y + int(img.height * 0.82)
+    _draw_soft_shadow(canvas, sx, sy, sw, sh, blur=max(10, img.width // 18), intensity=shadow_alpha)
+    canvas.alpha_composite(img, (x, y))
+
+
+def _draw_ai_photo_frame(
+    canvas: Image.Image,
+    zone: Zone,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    theme: tuple[int, int, int],
+    paper: tuple[int, int, int],
+    hero_images: list[tuple[Image.Image, float, float, float, float]],
+):
+    radius = max(18, min(zone.w, zone.h) // 15)
+    _draw_soft_shadow(
+        canvas,
+        zone.x + int(zone.w * 0.05),
+        zone.y + int(zone.h * 0.82),
+        int(zone.w * 0.90),
+        int(zone.h * 0.16),
+        blur=max(18, zone.w // 22),
+        intensity=110,
+    )
+
+    frame = Image.new("RGBA", (zone.w, zone.h), (0, 0, 0, 0))
+    fd = ImageDraw.Draw(frame)
+    fd.rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, fill=(*_mix(paper, theme, 0.12), 255))
+    fd.rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, outline=(*accent, 230), width=max(2, zone.w // 260))
+
+    # A blurred, enlarged copy of the real product photo carries the scene.
+    for img, px, py, scale, angle in hero_images[:2]:
+        bg = img.copy()
+        bg.thumbnail((int(zone.w * scale * 1.45), int(zone.h * scale * 1.45)), Image.Resampling.LANCZOS)
+        if angle:
+            bg = bg.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+        alpha = bg.getchannel("A").point(lambda a: min(165, int(a * 0.36)))
+        bg.putalpha(alpha)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=max(10, zone.w // 24)))
+        frame.alpha_composite(bg, (int(zone.w * px) - bg.width // 2, int(zone.h * py) - bg.height // 2))
+
+    wash = Image.new("RGBA", (zone.w, zone.h), (0, 0, 0, 0))
+    wd = ImageDraw.Draw(wash)
+    wd.rectangle((0, 0, zone.w, zone.h), fill=(*_lighten(paper, 0.02), 58))
+    wd.polygon(
+        [(0, int(zone.h * 0.70)), (zone.w, int(zone.h * 0.53)), (zone.w, zone.h), (0, zone.h)],
+        fill=(*_mix(_darken(primary, 0.08), theme, 0.22), 48),
+    )
+    frame.alpha_composite(wash)
+
+    mask = Image.new("L", (zone.w, zone.h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, fill=255)
+    frame.putalpha(mask)
+    canvas.alpha_composite(frame, (zone.x, zone.y))
+
+    for img, px, py, scale, angle in hero_images:
+        _draw_photo_cutout(
+            canvas,
+            img,
+            zone.x + int(zone.w * px),
+            zone.y + int(zone.h * py),
+            (int(zone.w * scale), int(zone.h * scale)),
+            angle=angle,
+            shadow_alpha=105,
+        )
+
+
 def _draw_ai_product_scene(
     canvas: Image.Image,
     spec: PromotionSpec,
@@ -1972,85 +2057,20 @@ def _draw_ai_product_scene(
     theme: tuple[int, int, int],
     paper: tuple[int, int, int],
 ):
-    d = ImageDraw.Draw(canvas)
-    radius = max(18, min(zone.w, zone.h) // 15)
-
-    # Framed "studio set" instead of a flat illustration.
-    _draw_soft_shadow(canvas, zone.x + int(zone.w * 0.06), zone.y + int(zone.h * 0.82), int(zone.w * 0.88), int(zone.h * 0.18),
-                      blur=max(18, zone.w // 22), intensity=105)
-    _rounded_gradient_rect(
-        canvas,
-        (zone.x, zone.y, zone.right, zone.bottom),
-        radius,
-        _lighten(paper, 0.03),
-        _mix(_darken(primary, 0.02), theme, 0.18),
-        outline=_with_alpha(accent, 255)[:3],
-        outline_width=max(2, zone.w // 260),
-    )
-
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
-    # Paper sweep + reflective pedestal.
-    sweep = [
-        (zone.x + int(zone.w * 0.10), zone.y + int(zone.h * 0.15)),
-        (zone.right - int(zone.w * 0.12), zone.y + int(zone.h * 0.08)),
-        (zone.right - int(zone.w * 0.05), zone.y + int(zone.h * 0.70)),
-        (zone.x + int(zone.w * 0.18), zone.y + int(zone.h * 0.86)),
-    ]
-    ld.polygon(sweep, fill=(*_lighten(theme, 0.62), 92))
-    for i, mul in enumerate((1.08, 0.82, 0.56)):
-        r_w = int(zone.w * 0.74 * mul)
-        r_h = int(zone.h * 0.44 * mul)
-        ld.ellipse((zone.cx - r_w // 2, zone.y + int(zone.h * 0.30) - r_h // 2,
-                    zone.cx + r_w // 2, zone.y + int(zone.h * 0.30) + r_h // 2),
-                   outline=(*_lighten(primary, 0.72), 92 - i * 18),
-                   width=max(4, zone.w // (68 + i * 18)))
-    shelf_y = zone.y + int(zone.h * 0.765)
-    ld.rounded_rectangle(
-        (zone.x + int(zone.w * 0.15), shelf_y, zone.right - int(zone.w * 0.15), shelf_y + max(10, zone.h // 20)),
-        radius=max(8, zone.h // 54),
-        fill=(*_lighten(paper, 0.04), 175),
-    )
-    ld.rounded_rectangle(
-        (zone.x + int(zone.w * 0.21), shelf_y + max(8, zone.h // 28), zone.right - int(zone.w * 0.21), shelf_y + max(11, zone.h // 22)),
-        radius=max(5, zone.h // 90),
-        fill=(*_darken(primary, 0.12), 70),
-    )
-    for i, scale in enumerate((0.09, 0.065, 0.045)):
-        cx = zone.x + int(zone.w * (0.15 + i * 0.70 / 2))
-        cy = zone.y + int(zone.h * (0.20 + i * 0.13))
-        rr = int(zone.w * scale)
-        ld.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=(*accent, 90 - i * 18))
-    canvas.alpha_composite(layer)
-    _draw_spotlight(canvas, zone.cx, zone.y + int(zone.h * 0.36), int(zone.w * 0.50), (255, 255, 255), 140, 2.1)
-    _draw_spotlight(canvas, zone.x + int(zone.w * 0.25), zone.y + int(zone.h * 0.26), int(zone.w * 0.24), accent, 80, 2.0)
-
     product = _load_product_image(spec, (int(zone.w * 0.78), int(zone.h * 0.74)))
     if product:
-        _draw_product(canvas, product, zone.cx, zone.y + int(zone.h * 0.49), angle=-2.0)
-        reflection = product.copy()
-        alpha = reflection.getchannel("A")
-        reflection = ImageOps.flip(reflection)
-        fade = Image.new("L", reflection.size, 0)
-        fp = fade.load()
-        for yy in range(reflection.height):
-            val = int(70 * (1 - yy / max(1, reflection.height - 1)) ** 1.7)
-            for xx in range(reflection.width):
-                fp[xx, yy] = val
-        alpha = Image.composite(fade, Image.new("L", reflection.size, 0), alpha)
-        reflection.putalpha(alpha)
-        max_ref_h = int(zone.h * 0.16)
-        if reflection.height > max_ref_h:
-            reflection = reflection.crop((0, 0, reflection.width, max_ref_h))
-        rx = zone.cx - reflection.width // 2
-        ry = shelf_y + int(zone.h * 0.035)
-        canvas.alpha_composite(reflection.filter(ImageFilter.GaussianBlur(radius=max(1, zone.w // 260))), (rx, ry))
+        _draw_ai_photo_frame(
+            canvas,
+            zone,
+            primary,
+            accent,
+            theme,
+            paper,
+            [(product, 0.50, 0.55, 0.94, -1.5)],
+        )
     else:
+        _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), max(18, zone.w // 16), _lighten(paper, 0.02), _mix(primary, theme, 0.2))
         _draw_ai_placeholder_product(canvas, spec, zone, primary, accent, theme, (22, 24, 28))
-
-    d = ImageDraw.Draw(canvas)
-    label_h = max(34, int(zone.h * 0.060))
-    _draw_tag(canvas, "FRISCH INSZENIERT", zone.x + int(zone.w * 0.26), zone.y + int(zone.h * 0.105), label_h, accent, primary, angle=-3)
 
 
 def _draw_ai_event_scene(
@@ -2066,11 +2086,8 @@ def _draw_ai_event_scene(
     radius = max(18, min(zone.w, zone.h) // 16)
     _draw_soft_shadow(canvas, zone.x + int(zone.w * 0.08), zone.y + int(zone.h * 0.80), int(zone.w * 0.84), int(zone.h * 0.16),
                       blur=max(18, zone.w // 24), intensity=95)
-    _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), radius, _lighten(paper, 0.08), _lighten(theme, 0.34))
+    _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), radius, _lighten(paper, 0.04), _mix(_darken(primary, 0.05), theme, 0.30))
 
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
-    # Editorial event collage: photo tiles, market canopy and tasting table.
     hay = _normalize(f"{spec.product} {spec.category or ''} {spec.claim or ''} {spec.event_description or ''}")
     if any(word in hay for word in ["wein", "abend", "verkostung", "feinkost"]):
         motif_keys = ["grapes", "soft_cheese", "juice_bottle"]
@@ -2086,80 +2103,15 @@ def _draw_ai_event_scene(
         else:
             motif_images.append(None)
 
-    tile_specs = [
-        (0.07, 0.10, 0.34, 0.36, theme, -4),
-        (0.38, 0.07, 0.27, 0.28, accent, 3),
-        (0.64, 0.15, 0.28, 0.34, primary, -2),
-    ]
-    for idx, (tx, ty, tw, th, color, angle) in enumerate(tile_specs):
-        bx = zone.x + int(zone.w * tx)
-        by = zone.y + int(zone.h * ty)
-        bw = int(zone.w * tw)
-        bh = int(zone.h * th)
-        card = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
-        cd = ImageDraw.Draw(card)
-        cd.rounded_rectangle((0, 0, bw, bh), radius=max(10, bw // 13), fill=(*_lighten(color, 0.42), 235))
-        photo_box = (int(bw * 0.08), int(bh * 0.08), int(bw * 0.92), int(bh * 0.72))
-        cd.rounded_rectangle(photo_box, radius=max(8, bw // 18), fill=(*_darken(color, 0.10), 210))
-        motif = motif_images[idx] if idx < len(motif_images) else None
+    hero_images: list[tuple[Image.Image, float, float, float, float]] = []
+    placements = [(0.16, 0.55, 0.78, -6.0), (0.86, 0.48, 0.62, 5.0), (0.50, 0.78, 0.42, -1.0)]
+    for idx, motif in enumerate(motif_images[:3]):
         if motif is not None:
-            img = motif.copy()
-            img.thumbnail((int(bw * 0.72), int(bh * 0.55)), Image.Resampling.LANCZOS)
-            shadow = Image.new("RGBA", card.size, (0, 0, 0, 0))
-            sd = ImageDraw.Draw(shadow)
-            ix = bw // 2 - img.width // 2
-            iy = int(bh * 0.38) - img.height // 2
-            sd.ellipse((ix + img.width // 8, iy + int(img.height * 0.82), ix + int(img.width * 0.88), iy + int(img.height * 1.02)),
-                       fill=(0, 0, 0, 90))
-            card.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=max(4, bw // 26))))
-            card.alpha_composite(img, (ix, iy))
-        else:
-            for j in range(5):
-                cx = int(bw * (0.18 + j * 0.16))
-                cy = int(bh * (0.35 + 0.16 * math.sin(j)))
-                cd.ellipse((cx - bw // 18, cy - bw // 18, cx + bw // 18, cy + bw // 18), fill=(*[accent, paper, theme, primary][j % 4], 230))
-        cd.rounded_rectangle((int(bw * 0.13), int(bh * 0.79), int(bw * 0.62), int(bh * 0.86)), radius=max(4, bw // 60), fill=(*primary, 170))
-        card = card.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
-        layer.alpha_composite(card, (bx, by))
-
-    table_y = zone.y + int(zone.h * 0.76)
-    ld.rounded_rectangle((zone.x + int(zone.w * 0.08), table_y, zone.right - int(zone.w * 0.08), table_y + int(zone.h * 0.08)),
-                         radius=max(8, zone.h // 45), fill=(*_darken(primary, 0.05), 220))
-    ld.rounded_rectangle((zone.x + int(zone.w * 0.14), table_y + int(zone.h * 0.065), zone.right - int(zone.w * 0.14), table_y + int(zone.h * 0.12)),
-                         radius=max(6, zone.h // 60), fill=(*_darken(primary, 0.28), 120))
-    for i in range(8):
-        cx = zone.x + int(zone.w * (0.17 + i * 0.095))
-        cy = table_y - int(zone.h * (0.015 + (i % 2) * 0.022))
-        color = [accent, theme, paper, (232, 56, 68)][i % 4]
-        ld.ellipse((cx - int(zone.w * 0.025), cy - int(zone.w * 0.025), cx + int(zone.w * 0.025), cy + int(zone.w * 0.025)),
-                   fill=(*color, 240))
-        ld.rounded_rectangle((cx - int(zone.w * 0.018), cy + int(zone.w * 0.012), cx + int(zone.w * 0.018), cy + int(zone.w * 0.070)),
-                             radius=max(4, zone.w // 150), fill=(*_darken(color, 0.10), 230))
-    canvas.alpha_composite(layer)
-
-    canopy_h = int(zone.h * 0.17)
-    stripe_w = max(1, zone.w // 9)
-    for i in range(10):
-        color = primary if i % 2 else accent
-        d.rectangle((zone.x + i * stripe_w, zone.y, zone.x + (i + 1) * stripe_w, zone.y + canopy_h), fill=color)
-    d.polygon(
-        [(zone.x, zone.y + canopy_h), (zone.right, zone.y + canopy_h), (zone.right - int(zone.w * 0.045), zone.y + int(canopy_h * 1.24)), (zone.x + int(zone.w * 0.045), zone.y + int(canopy_h * 1.24))],
-        fill=_darken(primary, 0.12),
-    )
-
-    board = Zone(zone.x + int(zone.w * 0.19), zone.y + int(zone.h * 0.36), int(zone.w * 0.62), int(zone.h * 0.27))
-    _draw_soft_shadow(canvas, board.x + int(board.w * 0.06), board.y + int(board.h * 0.72), int(board.w * 0.88), int(board.h * 0.20),
-                      blur=max(10, board.w // 28), intensity=75)
-    _rounded_gradient_rect(canvas, (board.x, board.y, board.right, board.bottom), max(12, board.h // 7), primary, _darken(primary, 0.20),
-                           outline=accent, outline_width=max(3, zone.w // 190))
-    title = "MARKTAKTION"
-    tf = _fit_font_width(d, title, FONT_PATH_EXTRABOLD, int(board.w * 0.76), int(board.h * 0.28), int(board.h * 0.16))
-    tb = d.textbbox((0, 0), title, font=tf)
-    d.text((board.cx - (tb[2] - tb[0]) // 2 - tb[0], board.y + int(board.h * 0.23) - tb[1]), title, fill=accent, font=tf)
-    sub = (spec.price or "Vor Ort").upper()
-    sf = _fit_font_width(d, sub, FONT_PATH_BOLD, int(board.w * 0.76), int(board.h * 0.20), int(board.h * 0.10))
-    sb = d.textbbox((0, 0), sub, font=sf)
-    d.text((board.cx - (sb[2] - sb[0]) // 2 - sb[0], board.y + int(board.h * 0.58) - sb[1]), sub, fill=paper, font=sf)
+            hero_images.append((motif, *placements[idx]))
+    if hero_images:
+        _draw_ai_photo_frame(canvas, zone, primary, accent, theme, paper, hero_images)
+    else:
+        _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), radius, _lighten(paper, 0.04), _mix(_darken(primary, 0.05), theme, 0.30))
 
 
 def _draw_ai_value_block(
