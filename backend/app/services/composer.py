@@ -2304,6 +2304,62 @@ def _draw_event_component_band(
     d.text((lx - lb[0], ly - lb[1]), label, fill=(255, 255, 255), font=lf)
 
 
+def _draw_event_ticket(
+    canvas: Image.Image,
+    zone: Zone,
+    label: str,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    theme: tuple[int, int, int],
+    align: str,
+):
+    d = ImageDraw.Draw(canvas)
+    slant = max(10, zone.w // 13)
+    body = [(zone.x + slant, zone.y), (zone.right, zone.y), (zone.right - slant, zone.bottom), (zone.x, zone.bottom)]
+    shadow = [(x + max(4, zone.w // 70), y + max(5, zone.h // 12)) for x, y in body]
+    _aa_polygon(canvas, shadow, fill=(0, 12, 30, 100))
+    _aa_polygon(canvas, body, fill=(*_mix(_darken(primary, 0.20), theme, 0.18), 232))
+    d.line((zone.x + slant, zone.y, zone.right, zone.y), fill=accent, width=max(4, zone.h // 13))
+    pad = int(zone.w * 0.10)
+    label = label.upper()
+    lf = _fit_font_width(d, label, FONT_PATH_EXTRABOLD, zone.w - pad * 2 - slant, int(zone.h * 0.40), int(zone.h * 0.20))
+    lb = d.textbbox((0, 0), label, font=lf)
+    if align == "right":
+        lx = zone.right - pad - slant - (lb[2] - lb[0])
+    else:
+        lx = zone.x + pad + slant // 2
+    ly = zone.y + (zone.h - (lb[3] - lb[1])) // 2
+    d.text((lx + 1 - lb[0], ly + 2 - lb[1]), label, fill=(0, 12, 30, 145), font=lf)
+    d.text((lx - lb[0], ly - lb[1]), label, fill=(255, 255, 255), font=lf)
+
+
+def _draw_event_stage_headline(
+    canvas: Image.Image,
+    zone: Zone,
+    label: str,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    theme: tuple[int, int, int],
+):
+    d = ImageDraw.Draw(canvas)
+    slant = max(18, zone.w // 18)
+    shadow = [(zone.x + slant + 8, zone.y + 14), (zone.right + 8, zone.y + 14), (zone.right - slant + 8, zone.bottom + 14), (zone.x + 8, zone.bottom + 14)]
+    body = [(zone.x + slant, zone.y), (zone.right, zone.y), (zone.right - slant, zone.bottom), (zone.x, zone.bottom)]
+    _aa_polygon(canvas, shadow, fill=(0, 10, 28, 118))
+    _aa_polygon(canvas, body, fill=(*_mix(_darken(primary, 0.12), theme, 0.16), 236))
+    d.line((zone.x + slant, zone.y, zone.right, zone.y), fill=accent, width=max(6, zone.h // 16))
+    d.line((zone.x, zone.bottom, zone.right - slant, zone.bottom), fill=(*_lighten(theme, 0.22), 165), width=max(3, zone.h // 38))
+
+    inner_x = zone.x + int(zone.w * 0.07)
+    inner_w = int(zone.w * 0.86)
+    label = label.upper()
+    font, lines = _fit_wrapped(d, label, FONT_PATH_EXTRABOLD, inner_w, int(zone.h * 0.58), int(zone.h * 0.34), int(zone.h * 0.16), max_lines=2, line_spacing=0.92)
+    line_h = _text_size(d, "Ág", font)[1]
+    total_h = int(line_h * 0.92 * len(lines))
+    y = zone.y + (zone.h - total_h) // 2 + int(zone.h * 0.04)
+    _draw_wrapped_shadow(d, lines, inner_x, inner_w, y, font, (255, 255, 255), align="left", line_spacing=0.92, shadow=(0, 12, 30, 170), shadow_offset=(0, max(2, zone.h // 42)))
+
+
 def _draw_ai_event_components(
     canvas: Image.Image,
     spec: PromotionSpec,
@@ -2324,52 +2380,75 @@ def _draw_ai_event_components(
     # signage and program surfaces, but no product-photo assets.
     d.polygon(
         [(visual.x, visual.y + int(visual.h * 0.18)), (visual.right, visual.y), (visual.right, visual.bottom), (visual.x, visual.bottom - int(visual.h * 0.10))],
-        fill=(*_mix(_darken(primary, 0.18), theme, 0.20), 110),
+        fill=(*_mix(_darken(primary, 0.16), theme, 0.22), 138),
     )
+    horizon = visual.y + int(visual.h * 0.52)
+    floor = [(visual.x - int(visual.w * 0.04), horizon), (visual.right + int(visual.w * 0.04), horizon), (visual.right - int(visual.w * 0.03), visual.bottom), (visual.x + int(visual.w * 0.03), visual.bottom)]
+    d.polygon(floor, fill=(*_darken(primary, 0.18), 120))
+    for i in range(6):
+        x = visual.x + int(visual.w * (0.04 + i * 0.18))
+        d.line((x, visual.y - int(visual.h * 0.10), x + int(visual.w * 0.15), visual.bottom), fill=(*_lighten(paper, 0.05), 34), width=max(8, w // 105))
     for i in range(5):
-        x = visual.x + int(visual.w * (0.08 + i * 0.20))
-        d.line((x, visual.y - int(visual.h * 0.08), x + int(visual.w * 0.12), visual.bottom), fill=(*_lighten(paper, 0.04), 28), width=max(8, w // 115))
+        y = visual.y + int(visual.h * (0.17 + i * 0.15))
+        d.line((visual.x + int(visual.w * 0.02), y, visual.right - int(visual.w * 0.02), y - int(visual.h * 0.055)), fill=(*accent, 38), width=max(5, h // 340))
     for i in range(4):
-        y = visual.y + int(visual.h * (0.18 + i * 0.17))
-        d.line((visual.x + int(visual.w * 0.04), y, visual.right - int(visual.w * 0.04), y - int(visual.h * 0.05)), fill=(*accent, 34), width=max(5, h // 360))
-    layer = layer.filter(ImageFilter.GaussianBlur(radius=max(8, w // 120)))
+        x = visual.x + int(visual.w * (0.18 + i * 0.20))
+        d.line((x, horizon, visual.cx, visual.bottom), fill=(*_lighten(theme, 0.18), 30), width=max(3, w // 360))
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=max(6, w // 140)))
     canvas.alpha_composite(layer)
+    _draw_spotlight(canvas, visual.cx, visual.y + int(visual.h * 0.40), int(visual.w * 0.34), _lighten(accent, 0.18), 70, 2.0)
+    _draw_spotlight(canvas, visual.x + int(visual.w * 0.78), visual.y + int(visual.h * 0.58), int(visual.w * 0.22), theme, 54, 2.2)
+
+    # Dynamic campaign ribbons behind the actual event components. These add
+    # motion and retail energy without becoming product imagery or icons.
+    _aa_polygon(
+        canvas,
+        [
+            (visual.x + int(visual.w * 0.02), visual.y + int(visual.h * 0.68)),
+            (visual.x + int(visual.w * 0.36), visual.y + int(visual.h * 0.54)),
+            (visual.right - int(visual.w * 0.02), visual.y + int(visual.h * 0.64)),
+            (visual.right - int(visual.w * 0.24), visual.y + int(visual.h * 0.77)),
+        ],
+        fill=(*accent, 98),
+    )
+    _aa_polygon(
+        canvas,
+        [
+            (visual.x + int(visual.w * 0.06), visual.y + int(visual.h * 0.82)),
+            (visual.x + int(visual.w * 0.48), visual.y + int(visual.h * 0.70)),
+            (visual.right - int(visual.w * 0.04), visual.y + int(visual.h * 0.80)),
+            (visual.right - int(visual.w * 0.38), visual.y + int(visual.h * 0.94)),
+        ],
+        fill=(*theme, 76),
+    )
+    ImageDraw.Draw(canvas).line(
+        (visual.x + int(visual.w * 0.07), visual.y + int(visual.h * 0.63), visual.right - int(visual.w * 0.08), visual.y + int(visual.h * 0.72)),
+        fill=(*_lighten(accent, 0.12), 130),
+        width=max(3, h // 360),
+    )
 
     atmosphere = next((c for c in components if c.get("type") == "atmosphere"), components[0])
     headline = str(atmosphere.get("label") or "MARKTAKTION").upper()
-    hd = ImageDraw.Draw(canvas)
-    wf = _fit_font_width(hd, headline, FONT_PATH_EXTRABOLD, int(visual.w * 0.72), int(visual.h * 0.20), int(visual.h * 0.09))
-    wb = hd.textbbox((0, 0), headline, font=wf)
-    wx = visual.x + int(visual.w * 0.05)
-    wy = visual.y + int(visual.h * 0.08)
-    hd.text((wx + 2 - wb[0], wy + 3 - wb[1]), headline, fill=(0, 14, 34, 150), font=wf)
-    hd.text((wx - wb[0], wy - wb[1]), headline, fill=accent, font=wf)
+    if tall:
+        stage = Zone(visual.x + int(visual.w * 0.05), visual.y + int(visual.h * 0.17), int(visual.w * 0.78), int(visual.h * 0.28))
+    else:
+        stage = Zone(visual.x + int(visual.w * 0.06), visual.y + int(visual.h * 0.15), int(visual.w * 0.64), int(visual.h * 0.30))
+    _draw_event_stage_headline(canvas, stage, headline, primary, accent, theme)
 
     band_components = [c for c in components if c is not atmosphere][:3]
     if not band_components:
         band_components = components[:3]
-    band_h = int(visual.h * (0.16 if tall else 0.17))
-    for idx, component in enumerate(band_components[:3]):
-        if tall:
-            bx = visual.x + int(visual.w * 0.08)
-            by = visual.y + int(visual.h * (0.46 + idx * 0.18))
-            bw = int(visual.w * (0.76 if idx == 0 else 0.66))
-        else:
-            positions = [(0.08, 0.50, 0.34), (0.31, 0.70, 0.38), (0.58, 0.50, 0.34)]
-            px, py, pw = positions[idx]
-            bx = visual.x + int(visual.w * px)
-            by = visual.y + int(visual.h * py)
-            bw = int(visual.w * pw)
-        _draw_event_component_band(
-            canvas,
-            Zone(bx, by, bw, band_h),
-            str(component.get("label") or ""),
-            str(component.get("description") or ""),
-            primary,
-            accent,
-            theme,
-            idx,
-        )
+    date = next((c for c in band_components if c.get("type") == "date"), band_components[0])
+    location = next((c for c in band_components if c.get("type") == "location"), band_components[-1])
+    program = next((c for c in band_components if c.get("type") == "program"), band_components[0])
+    if tall:
+        _draw_event_ticket(canvas, Zone(visual.x + int(visual.w * 0.08), visual.y + int(visual.h * 0.50), int(visual.w * 0.70), int(visual.h * 0.14)), str(date.get("label") or ""), primary, accent, theme, "left")
+        _draw_event_ticket(canvas, Zone(visual.x + int(visual.w * 0.18), visual.y + int(visual.h * 0.68), int(visual.w * 0.64), int(visual.h * 0.14)), str(program.get("label") or ""), primary, _lighten(theme, 0.28), theme, "left")
+        _draw_event_ticket(canvas, Zone(visual.x + int(visual.w * 0.10), visual.y + int(visual.h * 0.84), int(visual.w * 0.72), int(visual.h * 0.12)), str(location.get("label") or ""), primary, accent, theme, "left")
+    else:
+        _draw_event_ticket(canvas, Zone(visual.x + int(visual.w * 0.06), visual.y + int(visual.h * 0.56), int(visual.w * 0.36), int(visual.h * 0.16)), str(date.get("label") or ""), primary, accent, theme, "left")
+        _draw_event_ticket(canvas, Zone(visual.x + int(visual.w * 0.46), visual.y + int(visual.h * 0.56), int(visual.w * 0.38), int(visual.h * 0.16)), str(location.get("label") or ""), primary, _lighten(theme, 0.20), theme, "left")
+        _draw_event_component_band(canvas, Zone(visual.x + int(visual.w * 0.28), visual.y + int(visual.h * 0.76), int(visual.w * 0.40), int(visual.h * 0.17)), str(program.get("label") or ""), str(program.get("description") or ""), primary, accent, theme, 1)
 
 
 def _draw_editorial_backdrop(
