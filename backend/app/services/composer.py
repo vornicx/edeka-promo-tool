@@ -413,7 +413,7 @@ def _display_title(spec: PromotionSpec) -> str:
     raw = _copy_clean(spec.product)
     kind = _event_copy_kind(spec) if _is_event(spec) else ""
     if kind == "football" and any(word in _normalize(raw) for word in ["wm", "world cup", "weltmeisterschaft"]):
-        return "WM-Abend im Markt"
+        return "WM-Party"
     if kind == "football":
         return "Fußballabend im Markt"
     if kind == "chocolate":
@@ -474,6 +474,58 @@ def _short_event_info(value: str | None) -> str:
     if len(text) > 28:
         text = text[:26].rsplit(" ", 1)[0].rstrip(".,;:") or text[:26].rstrip(".,;:")
     return text
+
+
+def _event_date_parts(value: str | None) -> tuple[str, str]:
+    text = _short_event_info(value)
+    if "," in text:
+        day, time = text.split(",", 1)
+        return day.strip(), time.strip()
+    match = re.match(r"^(MO|DI|MI|DO|FR|SA|SO)\b\s*(.*)$", text)
+    if match:
+        return match.group(1).strip(), match.group(2).strip()
+    return "TERMIN", text or "VOR ORT"
+
+
+def _event_detail_cards(spec: PromotionSpec, day: str, time_value: str) -> list[tuple[str, str]]:
+    kind = _event_copy_kind(spec)
+    time_label = day if day and day != "TERMIN" else "TERMIN"
+    time_text = time_value or "VOR ORT"
+    if kind == "football":
+        return [
+            (time_label, time_text),
+            ("PUBLIC", "VIEWING"),
+            ("SNACKS &", "GETRÄNKE"),
+            ("EINTRITT", "FREI"),
+        ]
+    if kind == "chocolate":
+        return [
+            (time_label, time_text),
+            ("PROBIEREN", "GENIESSEN"),
+            ("FEINE", "SCHOKOLADEN"),
+            ("DIREKT", "IM MARKT"),
+        ]
+    if kind == "tasting":
+        return [
+            (time_label, time_text),
+            ("PROBIEREN", "ENTDECKEN"),
+            ("DIREKT", "IM MARKT"),
+            ("BERATUNG", "VOR ORT"),
+        ]
+    if kind == "summer":
+        return [
+            (time_label, time_text),
+            ("AKTIONEN", "IM MARKT"),
+            ("GENIESSEN", "VOR ORT"),
+            ("FÜR ALLE", "VORBEIKOMMEN"),
+        ]
+    event_note = _short_event_info(spec.price)
+    return [
+        (time_label, time_text),
+        ("AKTION", "IM MARKT"),
+        ("INFO", event_note or "VOR ORT"),
+        ("EDEKA", "MÜHLENBEIN"),
+    ]
 
 
 def _resolve_builtin_asset(spec: PromotionSpec) -> Path | None:
@@ -2722,7 +2774,7 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
         text = Zone(margin, int(h * (0.55 if is_event else 0.51)), w - margin * 2, safe_bottom - int(h * (0.55 if is_event else 0.51)))
         wash_side = "full"
     else:
-        text = Zone(int(w * (0.57 if not is_event else 0.09)), int(h * (0.24 if not is_event else 0.62)), int(w * (0.35 if not is_event else 0.82)), safe_bottom - int(h * (0.24 if not is_event else 0.62)))
+        text = Zone(int(w * (0.57 if not is_event else 0.09)), int(h * (0.24 if not is_event else 0.57)), int(w * (0.35 if not is_event else 0.82)), safe_bottom - int(h * (0.24 if not is_event else 0.57)))
         wash_side = "right" if not is_event else "full"
 
     _draw_editorial_reading_wash(canvas, text, primary, wash_side)
@@ -2731,64 +2783,121 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
     x = text.x + int(text.w * 0.045)
     y = text.y + int(text.h * 0.07)
     inner_w = int(text.w * 0.91)
-    kicker = _event_kicker(spec) if is_event else "PRODUKTANGEBOT"
-    kf = _fit_font_width(draw, kicker, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.085), int(text.h * 0.045))
-    kb = draw.textbbox((0, 0), kicker, font=kf)
-    draw.text((x + 1 - kb[0], y + 2 - kb[1]), kicker, fill=(0, 21, 45, 150), font=kf)
-    draw.text((x - kb[0], y - kb[1]), kicker, fill=accent, font=kf)
-    y += int(text.h * 0.14)
-
-    title = _display_title(spec).upper()
-    tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.34), int(text.h * (0.18 if high else 0.155)), int(text.h * 0.075), max_lines=2, line_spacing=0.98)
-    y = _draw_wrapped_shadow(draw, tl, x, inner_w, y, tf, (255, 255, 255), align="left", line_spacing=0.98, shadow_offset=(0, max(2, h // 260)))
-
     offer_h = int(text.h * (0.31 if not is_event else 0.29))
     offer_y = text.bottom - offer_h - int(text.h * 0.055)
-    desc = _event_description_copy(spec) if is_event else _copy_clean(spec.claim or spec.origin or spec.category or "")
-    if desc:
-        desc_y = y + int(text.h * 0.025)
-        available = offer_y - desc_y - int(text.h * 0.035)
-        if available >= int(text.h * 0.055):
-            max_lines = 1 if available < int(text.h * 0.12) else 2
-            df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, inner_w, available, int(text.h * 0.055), int(text.h * 0.032), max_lines=max_lines, line_spacing=1.13)
-            _draw_wrapped_shadow(draw, dl, x, inner_w, desc_y, df, (232, 241, 248), align="left", line_spacing=1.13, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
+    desc_y = y
 
     if is_event and event_background:
-        entries = [
-            ("Termin", _short_event_info(spec.validity)),
-            ("Hinweis", _short_event_info(spec.price)),
-            ("Ort", _short_event_info(spec.origin)),
-        ]
-        entries = [(label, value) for label, value in entries if value]
-        if entries:
-            panel_y = desc_y + max(int(text.h * 0.10), int(h * 0.038))
-            panel_y = min(panel_y, offer_y + int(offer_h * 0.08))
-            panel_h = max(int(offer_h * 0.60), int(h * 0.060))
-            radius = max(14, panel_h // 9)
-            shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-            sd = ImageDraw.Draw(shadow)
-            sd.rounded_rectangle((x, panel_y + max(4, h // 360), x + inner_w, panel_y + panel_h + max(4, h // 360)), radius=radius, fill=(0, 12, 30, 118))
-            canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=max(4, h // 360))))
-            draw.rounded_rectangle((x, panel_y, x + inner_w, panel_y + panel_h), radius=radius, fill=(*_darken(primary, 0.30), 214))
-            draw.rounded_rectangle((x, panel_y, x + inner_w, panel_y + max(5, panel_h // 22)), radius=radius, fill=(255, 214, 0, 228))
+        gap = max(10, int(inner_w * 0.014))
+        header_h = min(int(text.h * 0.34), max(int(h * 0.125), int(text.h * 0.30)))
+        date_h = min(int(text.h * 0.14), max(int(h * 0.038), int(text.h * 0.12)))
+        cards_h = min(int(text.h * 0.16), max(int(h * 0.045), int(text.h * 0.14)))
+        block_h = header_h + gap + date_h + gap + cards_h
+        day, time_value = _event_date_parts(spec.validity)
+        radius = max(18, header_h // 7)
 
-            col_w = inner_w // len(entries)
-            label_font = _load_font(FONT_PATH_SEMIBOLD, max(13, int(panel_h * 0.16)))
-            for i, (label, value) in enumerate(entries[:3]):
-                cx = x + i * col_w
-                if i:
-                    line_x = cx
-                    draw.line((line_x, panel_y + int(panel_h * 0.24), line_x, panel_y + int(panel_h * 0.80)), fill=(255, 255, 255, 54), width=max(2, w // 900))
-                pad_x = int(col_w * 0.08)
-                label_box = draw.textbbox((0, 0), label, font=label_font)
-                label_y = panel_y + int(panel_h * 0.26) - label_box[1]
-                draw.text((cx + pad_x - label_box[0], label_y), label, fill=(196, 216, 232), font=label_font)
+        identity = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        idd = ImageDraw.Draw(identity)
+        idd.rounded_rectangle((x, y + max(4, h // 360), x + inner_w, y + header_h + max(4, h // 360)), radius=radius, fill=(0, 12, 30, 150))
+        canvas.alpha_composite(identity.filter(ImageFilter.GaussianBlur(radius=max(2, h // 520))))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle((x, y, x + inner_w, y + header_h), radius=radius, fill=(*_darken(primary, 0.24), 224))
+        draw.rectangle((x, y, x + inner_w, y + max(6, header_h // 24)), fill=(255, 214, 0, 238))
 
-                value_font = _fit_font_width(draw, value, FONT_PATH_BOLD, int(col_w * 0.82), int(panel_h * 0.30), int(panel_h * 0.18))
-                value_box = draw.textbbox((0, 0), value, font=value_font)
-                value_y = panel_y + int(panel_h * 0.56) - value_box[1]
-                draw.text((cx + pad_x - value_box[0], value_y), value, fill=(255, 255, 255), font=value_font)
+        kicker = _event_kicker(spec)
+        kf = _fit_font_width(draw, kicker, FONT_PATH_SEMIBOLD, int(inner_w * 0.42), int(header_h * 0.13), int(header_h * 0.075))
+        kb = draw.textbbox((0, 0), kicker, font=kf)
+        kicker_w = kb[2] - kb[0] + int(header_h * 0.34)
+        kicker_h = int(header_h * 0.18)
+        kicker_x = x + (inner_w - kicker_w) // 2
+        kicker_y = y + int(header_h * 0.12)
+        draw.rounded_rectangle((kicker_x, kicker_y, kicker_x + kicker_w, kicker_y + kicker_h), radius=kicker_h // 2, fill=(255, 214, 0, 226))
+        draw.text((kicker_x + (kicker_w - (kb[2] - kb[0])) // 2 - kb[0], kicker_y + (kicker_h - (kb[3] - kb[1])) // 2 - kb[1]), kicker, fill=primary, font=kf)
+
+        title = _display_title(spec).upper()
+        place = _short_event_info(spec.origin)
+        place_text = "BEI EDEKA MÜHLENBEIN" if place in {"KASSEL", "IM MARKT"} else f"BEI EDEKA MÜHLENBEIN · {place}"
+        ribbon_h = int(header_h * 0.21)
+        ribbon_y = y + header_h - ribbon_h - int(header_h * 0.08)
+        title_y = y + int(header_h * 0.28)
+        title_area_h = max(int(header_h * 0.30), ribbon_y - title_y - int(header_h * 0.045))
+        tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, int(inner_w * 0.90), title_area_h, int(header_h * 0.40), int(header_h * 0.15), max_lines=2, line_spacing=0.88)
+        _draw_wrapped_shadow(draw, tl, x + int(inner_w * 0.06), int(inner_w * 0.88), title_y, tf, (255, 255, 255), align="center", line_spacing=0.90, shadow_offset=(0, max(2, h // 300)))
+
+        ribbon_x = x + int(inner_w * 0.18)
+        ribbon_w = int(inner_w * 0.64)
+        slant = int(ribbon_h * 0.40)
+        ribbon = [(ribbon_x, ribbon_y), (ribbon_x + ribbon_w, ribbon_y), (ribbon_x + ribbon_w - slant, ribbon_y + ribbon_h), (ribbon_x + slant, ribbon_y + ribbon_h)]
+        _aa_polygon(canvas, ribbon, fill=(255, 214, 0, 236))
+        rf = _fit_font_width(draw, place_text, FONT_PATH_EXTRABOLD, int(ribbon_w * 0.88), int(ribbon_h * 0.60), int(ribbon_h * 0.34))
+        rb = draw.textbbox((0, 0), place_text, font=rf)
+        draw.text((ribbon_x + (ribbon_w - (rb[2] - rb[0])) // 2 - rb[0], ribbon_y + (ribbon_h - (rb[3] - rb[1])) // 2 - rb[1]), place_text, fill=primary, font=rf)
+
+        date_y = y + header_h + gap
+        draw.rounded_rectangle((x, date_y, x + inner_w, date_y + date_h), radius=max(12, date_h // 5), fill=(255, 214, 0, 242))
+        day_w = int(inner_w * 0.20)
+        draw.rounded_rectangle((x, date_y, x + day_w, date_y + date_h), radius=max(12, date_h // 5), fill=(*_darken(primary, 0.16), 236))
+        draw.rectangle((x + day_w - max(12, date_h // 5), date_y, x + day_w, date_y + date_h), fill=(*_darken(primary, 0.16), 236))
+        day_text = day if day and day != "TERMIN" else "TERMIN"
+        time_text = time_value or "VOR ORT"
+        day_font = _fit_font_width(draw, day_text, FONT_PATH_EXTRABOLD, int(day_w * 0.72), int(date_h * 0.58), int(date_h * 0.34))
+        day_box = draw.textbbox((0, 0), day_text, font=day_font)
+        draw.text((x + (day_w - (day_box[2] - day_box[0])) // 2 - day_box[0], date_y + (date_h - (day_box[3] - day_box[1])) // 2 - day_box[1]), day_text, fill=(255, 255, 255), font=day_font)
+        time_font = _fit_font_width(draw, time_text, FONT_PATH_EXTRABOLD, int(inner_w * 0.70), int(date_h * 0.62), int(date_h * 0.34))
+        time_box = draw.textbbox((0, 0), time_text, font=time_font)
+        time_x = x + day_w + (inner_w - day_w - (time_box[2] - time_box[0])) // 2
+        draw.text((time_x - time_box[0], date_y + (date_h - (time_box[3] - time_box[1])) // 2 - time_box[1]), time_text, fill=primary, font=time_font)
+
+        cards = _event_detail_cards(spec, day, time_value)[1:]
+        card_y = date_y + date_h + gap
+        card_gap = max(10, int(inner_w * 0.012))
+        card_count = max(1, len(cards))
+        card_w = (inner_w - card_gap * (card_count - 1)) // card_count
+        for i, (label, value) in enumerate(cards):
+            cx = x + i * (card_w + card_gap)
+            fill = (255, 255, 255, 238) if i != 1 else (255, 214, 0, 240)
+            ink = primary
+            draw.rounded_rectangle((cx, card_y, cx + card_w, card_y + cards_h), radius=max(12, cards_h // 10), fill=fill)
+            draw.rectangle((cx, card_y, cx + card_w, card_y + max(5, cards_h // 18)), fill=primary if i != 1 else _darken(primary, 0.05))
+            lf = _fit_font_width(draw, label, FONT_PATH_EXTRABOLD, int(card_w * 0.84), int(cards_h * 0.18), int(cards_h * 0.10))
+            lb = draw.textbbox((0, 0), label, font=lf)
+            label_y = card_y + int(cards_h * 0.20) - lb[1]
+            draw.text((cx + (card_w - (lb[2] - lb[0])) // 2 - lb[0], label_y), label, fill=_darken(primary, 0.04), font=lf)
+            vf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, int(card_w * 0.86), int(cards_h * 0.31), int(cards_h * 0.16))
+            vb = draw.textbbox((0, 0), value, font=vf)
+            value_y = card_y + int(cards_h * 0.58) - vb[1]
+            draw.text((cx + (card_w - (vb[2] - vb[0])) // 2 - vb[0], value_y), value, fill=ink, font=vf)
+
+        desc_y = y + block_h + int(text.h * 0.035)
     else:
+        kicker = "MARKTAKTION" if is_event else "PRODUKTANGEBOT"
+        kf = _fit_font_width(draw, kicker, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.085), int(text.h * 0.045))
+        kb = draw.textbbox((0, 0), kicker, font=kf)
+        draw.text((x + 1 - kb[0], y + 2 - kb[1]), kicker, fill=(0, 21, 45, 150), font=kf)
+        draw.text((x - kb[0], y - kb[1]), kicker, fill=accent, font=kf)
+        y += int(text.h * 0.14)
+
+        title = _display_title(spec).upper() if is_event else spec.product.upper()
+        tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.34), int(text.h * (0.18 if high else 0.155)), int(text.h * 0.075), max_lines=2, line_spacing=0.98)
+        y = _draw_wrapped_shadow(draw, tl, x, inner_w, y, tf, (255, 255, 255), align="left", line_spacing=0.98, shadow_offset=(0, max(2, h // 260)))
+        desc_y = y + int(text.h * 0.025)
+
+    desc = _event_description_copy(spec) if is_event else _copy_clean(spec.claim or spec.origin or spec.category or "")
+    if desc:
+        if is_event and event_background:
+            desc_box_h = max(int(text.h * 0.085), int(h * 0.038))
+            desc_y = min(desc_y, safe_bottom - desc_box_h - int(h * 0.018))
+            df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, int(inner_w * 0.92), desc_box_h, int(desc_box_h * 0.36), int(desc_box_h * 0.20), max_lines=2, line_spacing=1.10)
+            draw.rounded_rectangle((x, desc_y, x + inner_w, desc_y + desc_box_h), radius=max(10, desc_box_h // 6), fill=(*_darken(primary, 0.34), 186))
+            _draw_wrapped_shadow(draw, dl, x + int(inner_w * 0.04), int(inner_w * 0.92), desc_y + int(desc_box_h * 0.18), df, (245, 249, 252), align="center", line_spacing=1.10, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
+        else:
+            available = offer_y - desc_y - int(text.h * 0.035)
+            if available >= int(text.h * 0.055):
+                max_lines = 1 if available < int(text.h * 0.12) else 2
+                df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, inner_w, available, int(text.h * 0.055), int(text.h * 0.032), max_lines=max_lines, line_spacing=1.13)
+                _draw_wrapped_shadow(draw, dl, x, inner_w, desc_y, df, (232, 241, 248), align="left", line_spacing=1.13, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
+
+    if not (is_event and event_background):
         _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
 
 
