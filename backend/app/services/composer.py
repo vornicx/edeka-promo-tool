@@ -413,11 +413,11 @@ def _display_title(spec: PromotionSpec) -> str:
     raw = _copy_clean(spec.product)
     kind = _event_copy_kind(spec) if _is_event(spec) else ""
     if kind == "football" and any(word in _normalize(raw) for word in ["wm", "world cup", "weltmeisterschaft"]):
-        return "WM-Party"
+        return "WM-Abend im Markt"
     if kind == "football":
-        return "Fußballabend"
+        return "Fußballabend im Markt"
     if kind == "chocolate":
-        return "Schoko-Party"
+        return "Schokoladen-Verkostung"
     if kind == "tasting" and "verkostung" not in _normalize(raw):
         return f"{raw} Verkostung".strip()
     return raw
@@ -426,22 +426,22 @@ def _display_title(spec: PromotionSpec) -> str:
 def _event_kicker(spec: PromotionSpec) -> str:
     kind = _event_copy_kind(spec)
     if kind == "football":
-        return "PUBLIC VIEWING"
+        return "Live im Markt"
     if kind == "chocolate":
-        return "VERKOSTUNG"
+        return "Genussmoment"
     if kind == "tasting":
-        return "GENUSSABEND"
+        return "Verkostung"
     if kind == "summer":
-        return "SOMMERAKTION"
-    return "MARKTAKTION"
+        return "Sommer im Markt"
+    return "Aktion im Markt"
 
 
 def _event_description_copy(spec: PromotionSpec) -> str:
     kind = _event_copy_kind(spec)
     if kind == "football":
-        return "Fußball gemeinsam erleben: Snacks, Getränke und echte Marktstimmung."
+        return "Gemeinsam schauen, anfeuern und genießen. Mit Snacks und Getränken vor Ort."
     if kind == "chocolate":
-        return "Schokolade probieren, genießen und neue Lieblingssorten entdecken."
+        return "Feine Schokoladen probieren, vergleichen und neue Lieblingssorten entdecken."
     if kind == "tasting":
         return "Ausgewählte Spezialitäten probieren und persönlich beraten lassen."
     if kind == "summer":
@@ -2755,32 +2755,39 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
 
     if is_event and event_background:
         entries = [
-            ("TERMIN", _short_event_info(spec.validity)),
-            ("INFO", _short_event_info(spec.price)),
-            ("ORT", _short_event_info(spec.origin)),
+            ("Termin", _short_event_info(spec.validity)),
+            ("Hinweis", _short_event_info(spec.price)),
+            ("Ort", _short_event_info(spec.origin)),
         ]
         entries = [(label, value) for label, value in entries if value]
         if entries:
-            panel_y = offer_y + int(offer_h * 0.08)
-            panel_h = int(offer_h * 0.62)
-            gap = max(8, int(inner_w * 0.012))
-            card_w = (inner_w - gap * (len(entries) - 1)) // len(entries)
-            label_font = _load_font(FONT_PATH_EXTRABOLD, max(14, int(panel_h * 0.18)))
+            panel_y = desc_y + max(int(text.h * 0.10), int(h * 0.038))
+            panel_y = min(panel_y, offer_y + int(offer_h * 0.08))
+            panel_h = max(int(offer_h * 0.60), int(h * 0.060))
+            radius = max(14, panel_h // 9)
+            shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+            sd = ImageDraw.Draw(shadow)
+            sd.rounded_rectangle((x, panel_y + max(4, h // 360), x + inner_w, panel_y + panel_h + max(4, h // 360)), radius=radius, fill=(0, 12, 30, 118))
+            canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=max(4, h // 360))))
+            draw.rounded_rectangle((x, panel_y, x + inner_w, panel_y + panel_h), radius=radius, fill=(*_darken(primary, 0.30), 214))
+            draw.rounded_rectangle((x, panel_y, x + inner_w, panel_y + max(5, panel_h // 22)), radius=radius, fill=(255, 214, 0, 228))
+
+            col_w = inner_w // len(entries)
+            label_font = _load_font(FONT_PATH_SEMIBOLD, max(13, int(panel_h * 0.16)))
             for i, (label, value) in enumerate(entries[:3]):
-                cx = x + i * (card_w + gap)
-                fill = (255, 214, 0, 238) if i == 0 else (*_darken(primary, 0.20), 226)
-                ink = primary if i == 0 else (255, 255, 255)
-                muted = _darken(primary, 0.02) if i == 0 else (186, 212, 232)
-                draw.rounded_rectangle((cx, panel_y, cx + card_w, panel_y + panel_h), radius=max(12, panel_h // 7), fill=fill)
-
+                cx = x + i * col_w
+                if i:
+                    line_x = cx
+                    draw.line((line_x, panel_y + int(panel_h * 0.24), line_x, panel_y + int(panel_h * 0.80)), fill=(255, 255, 255, 54), width=max(2, w // 900))
+                pad_x = int(col_w * 0.08)
                 label_box = draw.textbbox((0, 0), label, font=label_font)
-                label_y = panel_y + int(panel_h * 0.18) - label_box[1]
-                draw.text((cx + int(card_w * 0.08) - label_box[0], label_y), label, fill=muted, font=label_font)
+                label_y = panel_y + int(panel_h * 0.26) - label_box[1]
+                draw.text((cx + pad_x - label_box[0], label_y), label, fill=(196, 216, 232), font=label_font)
 
-                value_font = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, int(card_w * 0.84), int(panel_h * 0.34), int(panel_h * 0.20))
+                value_font = _fit_font_width(draw, value, FONT_PATH_BOLD, int(col_w * 0.82), int(panel_h * 0.30), int(panel_h * 0.18))
                 value_box = draw.textbbox((0, 0), value, font=value_font)
-                value_y = panel_y + int(panel_h * 0.52) - value_box[1]
-                draw.text((cx + int(card_w * 0.08) - value_box[0], value_y), value, fill=ink, font=value_font)
+                value_y = panel_y + int(panel_h * 0.56) - value_box[1]
+                draw.text((cx + pad_x - value_box[0], value_y), value, fill=(255, 255, 255), font=value_font)
     else:
         _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
 
