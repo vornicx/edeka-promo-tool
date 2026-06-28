@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import colorsys
 import math
+import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -375,6 +376,104 @@ def _normalize(value: str | None) -> str:
         return ""
     clean = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     return clean.lower()
+
+
+def _copy_clean(value: str | None) -> str:
+    text = (value or "").strip()
+    replacements = {
+        "Fussball": "Fußball",
+        "fussball": "Fußball",
+        "Getraenke": "Getränke",
+        "getraenke": "Getränke",
+        "Suesse": "Süße",
+        "suesse": "süße",
+        "Suess": "Süß",
+        "suess": "süß",
+        "Schokoladenverkostung": "Schokoladen-Verkostung",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _event_copy_kind(spec: PromotionSpec) -> str:
+    text = _normalize(f"{spec.product} {spec.claim or ''} {spec.event_description or ''} {spec.price or ''}")
+    if any(word in text for word in ["wm", "world cup", "weltmeisterschaft", "fussball", "public viewing"]):
+        return "football"
+    if any(word in text for word in ["chocolate", "schoko", "schokolade", "praline", "kakao"]):
+        return "chocolate"
+    if any(word in text for word in ["wein", "verkostung", "tasting"]):
+        return "tasting"
+    if any(word in text for word in ["sommer", "grill", "garten"]):
+        return "summer"
+    return "event"
+
+
+def _display_title(spec: PromotionSpec) -> str:
+    raw = _copy_clean(spec.product)
+    kind = _event_copy_kind(spec) if _is_event(spec) else ""
+    if kind == "football" and any(word in _normalize(raw) for word in ["wm", "world cup", "weltmeisterschaft"]):
+        return "WM-Party"
+    if kind == "football":
+        return "Fußballabend"
+    if kind == "chocolate":
+        return "Schoko-Party"
+    if kind == "tasting" and "verkostung" not in _normalize(raw):
+        return f"{raw} Verkostung".strip()
+    return raw
+
+
+def _event_kicker(spec: PromotionSpec) -> str:
+    kind = _event_copy_kind(spec)
+    if kind == "football":
+        return "PUBLIC VIEWING"
+    if kind == "chocolate":
+        return "VERKOSTUNG"
+    if kind == "tasting":
+        return "GENUSSABEND"
+    if kind == "summer":
+        return "SOMMERAKTION"
+    return "MARKTAKTION"
+
+
+def _event_description_copy(spec: PromotionSpec) -> str:
+    kind = _event_copy_kind(spec)
+    if kind == "football":
+        return "Fußball gemeinsam erleben: Snacks, Getränke und echte Marktstimmung."
+    if kind == "chocolate":
+        return "Schokolade probieren, genießen und neue Lieblingssorten entdecken."
+    if kind == "tasting":
+        return "Ausgewählte Spezialitäten probieren und persönlich beraten lassen."
+    if kind == "summer":
+        return "Sommerliche Aktionen, gute Angebote und Begegnung direkt im Markt."
+    raw = _copy_clean(spec.claim or spec.event_description or spec.origin or "")
+    if len(raw) <= 120:
+        return raw
+    shortened = raw[:117].rsplit(" ", 1)[0].rstrip(".,;:")
+    return f"{shortened}."
+
+
+def _short_event_info(value: str | None) -> str:
+    text = _copy_clean(value).upper()
+    if not text:
+        return ""
+    weekday_map = {
+        "MONTAG": "MO",
+        "DIENSTAG": "DI",
+        "MITTWOCH": "MI",
+        "DONNERSTAG": "DO",
+        "FREITAG": "FR",
+        "SAMSTAG": "SA",
+        "SONNTAG": "SO",
+    }
+    for full, short in weekday_map.items():
+        text = re.sub(rf"\b{full}\b", short, text)
+    text = text.replace("EDEKA MÜHLENBEIN KASSEL", "KASSEL")
+    text = text.replace("EDEKA MÜHLENBEIN", "IM MARKT")
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > 28:
+        text = text[:26].rsplit(" ", 1)[0].rstrip(".,;:") or text[:26].rstrip(".,;:")
+    return text
 
 
 def _resolve_builtin_asset(spec: PromotionSpec) -> Path | None:
@@ -2632,20 +2731,20 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
     x = text.x + int(text.w * 0.045)
     y = text.y + int(text.h * 0.07)
     inner_w = int(text.w * 0.91)
-    kicker = "MARKTAKTION" if is_event else "PRODUKTANGEBOT"
+    kicker = _event_kicker(spec) if is_event else "PRODUKTANGEBOT"
     kf = _fit_font_width(draw, kicker, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.085), int(text.h * 0.045))
     kb = draw.textbbox((0, 0), kicker, font=kf)
     draw.text((x + 1 - kb[0], y + 2 - kb[1]), kicker, fill=(0, 21, 45, 150), font=kf)
     draw.text((x - kb[0], y - kb[1]), kicker, fill=accent, font=kf)
     y += int(text.h * 0.14)
 
-    title = spec.product.upper()
+    title = _display_title(spec).upper()
     tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.34), int(text.h * (0.18 if high else 0.155)), int(text.h * 0.075), max_lines=2, line_spacing=0.98)
     y = _draw_wrapped_shadow(draw, tl, x, inner_w, y, tf, (255, 255, 255), align="left", line_spacing=0.98, shadow_offset=(0, max(2, h // 260)))
 
     offer_h = int(text.h * (0.31 if not is_event else 0.29))
     offer_y = text.bottom - offer_h - int(text.h * 0.055)
-    desc = (spec.event_description or spec.claim or spec.origin or "") if is_event else (spec.claim or spec.origin or spec.category or "")
+    desc = _event_description_copy(spec) if is_event else _copy_clean(spec.claim or spec.origin or spec.category or "")
     if desc:
         desc_y = y + int(text.h * 0.025)
         available = offer_y - desc_y - int(text.h * 0.035)
@@ -2655,24 +2754,33 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
             _draw_wrapped_shadow(draw, dl, x, inner_w, desc_y, df, (232, 241, 248), align="left", line_spacing=1.13, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
 
     if is_event and event_background:
-        info_items = [item for item in [spec.validity, spec.price, spec.origin] if item]
-        pill_y = offer_y + int(offer_h * 0.22)
-        pill_h = max(42, int(offer_h * 0.22))
-        pill_x = x
-        for item in info_items[:3]:
-            text_value = str(item).upper()
-            pf = _fit_font_width(draw, text_value, FONT_PATH_EXTRABOLD, int(inner_w * 0.42), int(pill_h * 0.42), int(pill_h * 0.25))
-            pb = draw.textbbox((0, 0), text_value, font=pf)
-            pill_w = min(inner_w - (pill_x - x), max(int(pill_h * 2.4), pb[2] - pb[0] + int(pill_h * 0.95)))
-            if pill_w <= int(pill_h * 1.8):
-                break
-            fill = (255, 214, 0, 236) if pill_x == x else (*_darken(primary, 0.18), 220)
-            ink = primary if pill_x == x else (255, 255, 255)
-            draw.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=pill_h // 2, fill=fill)
-            draw.text((pill_x + (pill_w - (pb[2] - pb[0])) // 2 - pb[0], pill_y + (pill_h - (pb[3] - pb[1])) // 2 - pb[1]), text_value, fill=ink, font=pf)
-            pill_x += pill_w + int(pill_h * 0.22)
-            if pill_x > x + inner_w - int(pill_h * 2.0):
-                break
+        entries = [
+            ("TERMIN", _short_event_info(spec.validity)),
+            ("INFO", _short_event_info(spec.price)),
+            ("ORT", _short_event_info(spec.origin)),
+        ]
+        entries = [(label, value) for label, value in entries if value]
+        if entries:
+            panel_y = offer_y + int(offer_h * 0.08)
+            panel_h = int(offer_h * 0.62)
+            gap = max(8, int(inner_w * 0.012))
+            card_w = (inner_w - gap * (len(entries) - 1)) // len(entries)
+            label_font = _load_font(FONT_PATH_EXTRABOLD, max(14, int(panel_h * 0.18)))
+            for i, (label, value) in enumerate(entries[:3]):
+                cx = x + i * (card_w + gap)
+                fill = (255, 214, 0, 238) if i == 0 else (*_darken(primary, 0.20), 226)
+                ink = primary if i == 0 else (255, 255, 255)
+                muted = _darken(primary, 0.02) if i == 0 else (186, 212, 232)
+                draw.rounded_rectangle((cx, panel_y, cx + card_w, panel_y + panel_h), radius=max(12, panel_h // 7), fill=fill)
+
+                label_box = draw.textbbox((0, 0), label, font=label_font)
+                label_y = panel_y + int(panel_h * 0.18) - label_box[1]
+                draw.text((cx + int(card_w * 0.08) - label_box[0], label_y), label, fill=muted, font=label_font)
+
+                value_font = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, int(card_w * 0.84), int(panel_h * 0.34), int(panel_h * 0.20))
+                value_box = draw.textbbox((0, 0), value, font=value_font)
+                value_y = panel_y + int(panel_h * 0.52) - value_box[1]
+                draw.text((cx + int(card_w * 0.08) - value_box[0], value_y), value, fill=ink, font=value_font)
     else:
         _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
 
