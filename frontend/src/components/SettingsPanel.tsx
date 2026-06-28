@@ -17,11 +17,30 @@ interface Props {
 interface SettingsData {
   api_key: string;
   selected_model: string;
+  image_model: string;
   enabled: boolean;
   has_api_key: boolean;
   masked_api_key: string;
   settings_path: string;
 }
+
+const IMAGE_MODELS = [
+  {
+    id: "google/gemini-3.1-flash-image",
+    name: "Nano Banana 2",
+    meta: "Beste Standardwahl",
+  },
+  {
+    id: "google/gemini-2.5-flash-image",
+    name: "Nano Banana",
+    meta: "Schnell und günstig",
+  },
+  {
+    id: "openai/gpt-image-1-mini",
+    name: "GPT Image Mini",
+    meta: "Fallback für reale Bilder",
+  },
+];
 
 function CloseIcon() {
   return (
@@ -38,6 +57,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [models, setModels] = useState<AIModelInfo[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("google/gemini-2.5-flash-lite");
+  const [imageModel, setImageModel] = useState("google/gemini-3.1-flash-image");
   const [filter, setFilter] = useState<"all" | "free" | "vision">("all");
 
   useEffect(() => {
@@ -55,6 +75,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
         setSettings(settingsData);
         setModels(modelsData);
         setSelectedModel(settingsData.selected_model || "google/gemini-2.5-flash-lite");
+        setImageModel(settingsData.image_model || "google/gemini-3.1-flash-image");
         setApiKey("");
       })
       .catch((err: unknown) => {
@@ -76,6 +97,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
       const nextSettings = await saveAISettings({
         api_key: apiKey.trim() || undefined,
         selected_model: selectedModel,
+        image_model: imageModel,
         enabled: true,
       });
       setSettings(nextSettings);
@@ -175,7 +197,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
 
               <div>
                 <div className="flex items-center justify-between gap-3">
-                  <label className="label mb-0">KI-Modell</label>
+                  <label className="label mb-0">Planungsmodell</label>
                   <div className="segmented w-auto">
                     {[
                       { value: "all", label: "Alle" },
@@ -235,6 +257,34 @@ export default function SettingsPanel({ open, onClose }: Props) {
                             <span className="text-edeka-blue">pro Design: {model.cost_est_design}</span>
                           </div>
                         </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-edeka-blue/15 bg-edeka-lightblue/60 p-4">
+                <label className="label">Bildmodell für KI-Events</label>
+                <p className="mb-3 text-xs leading-5 text-slate-600">
+                  Dieses Modell erzeugt das reale Bildmotiv für Event-Plakate. Ohne erfolgreiches Bild wird kein einfaches Ersatzlayout erstellt.
+                </p>
+                <div className="grid gap-2">
+                  {IMAGE_MODELS.map((model) => {
+                    const active = imageModel === model.id;
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => setImageModel(model.id)}
+                        className={`rounded-lg border p-3 text-left transition-all ${
+                          active
+                            ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"
+                        }`}
+                      >
+                        <span className="block text-sm font-extrabold">{model.name}</span>
+                        <span className="mt-0.5 block text-xs font-semibold text-slate-500">{model.id}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">{model.meta}</span>
                       </button>
                     );
                   })}

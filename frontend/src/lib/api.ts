@@ -57,6 +57,7 @@ export interface ComposeResponse {
 export interface AISettings {
   api_key: string;
   selected_model: string;
+  image_model: string;
   enabled: boolean;
   has_api_key: boolean;
   masked_api_key: string;
@@ -78,6 +79,7 @@ export interface AIModelInfo {
 export interface SaveAISettingsPayload {
   api_key?: string;
   selected_model: string;
+  image_model?: string;
   enabled: boolean;
 }
 

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "openai/gpt-4o-mini"
+    openrouter_image_model: str = "google/gemini-3.1-flash-image"
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma4:2b"

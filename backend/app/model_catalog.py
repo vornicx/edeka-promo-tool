@@ -1,9 +1,11 @@
 """Catalog of cheap OpenRouter models for promo planning.
 
 All models use one OpenRouter API key. Prices are per million tokens.
-The studio only asks the model for a compact JSON creative plan; the final
-poster image is rendered locally by the composer. Estimated cost assumes
-roughly 1.6K input tokens and 400 output tokens.
+The studio asks the selected model for a compact JSON creative plan. Product
+posters are rendered locally; AI event posters can additionally request one
+generated photographic background via the configured image model.
+Estimated cost assumes roughly 1.6K input tokens and 400 output tokens for
+planning only.
 """
 
 MODEL_CATALOG: list[dict] = [

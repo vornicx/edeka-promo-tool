@@ -164,6 +164,18 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
                     EventVisualComponent(type="program", label="VERKOSTUNG", description="Programmmodul fuer Beratung, Probieren und kleine Spezialitaeten.", visual_style="editorial, ruhig", priority=4),
                     *base,
                 ]
+            if kind == "football":
+                return [
+                    EventVisualComponent(type="atmosphere", label="FUSSBALLFIEBER", description="Realistische Public-Viewing-Atmosphäre mit Menschen, Jubel, Marktlicht, Snackmomenten und sportlicher Energie.", visual_style="fotografisch, dynamisch, professionell", priority=5),
+                    EventVisualComponent(type="program", label="MITFIEBERN", description="Programmmodul fuer gemeinsames Schauen, Feiern und Einkaufen rund um das Spiel.", visual_style="klar, lebendig, erwachsen", priority=4),
+                    *base,
+                ]
+            if kind == "chocolate":
+                return [
+                    EventVisualComponent(type="atmosphere", label="SCHOKO-MOMENT", description="Premium-Schokoladenwelt mit Tafeln, Pralinen, Kakaotexturen, warmem Licht und Genussatmosphäre.", visual_style="realistisch, hochwertig, sinnlich", priority=5),
+                    EventVisualComponent(type="program", label="PROBIEREN", description="Programmmodul fuer Verkostung, Beratung und besondere Genussmomente im Markt.", visual_style="editorial, appetitlich, sauber", priority=4),
+                    *base,
+                ]
             if kind == "sommer":
                 return [
                     EventVisualComponent(type="atmosphere", label="SOMMER IM MARKT", description="Helle Marktaktion mit offener, freundlicher Retail-Atmosphäre und starken Aktionsflächen.", visual_style="frisch, professionell, lebendig", priority=5),
@@ -183,7 +195,15 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
             ]
 
         # Event mood colours based on the description
-        if "wein" in event_desc or "abend" in event_desc or "premium" in event_desc:
+        if any(term in event_desc for term in ["wm", "world cup", "weltmeisterschaft", "fussball", "fußball", "public viewing"]):
+            mood_palette = ["#003B79", "#FFD600", "#1E8A4C", "#FFFFFF"]
+            mood_palette2 = ["#003B79", "#FFD600", "#D71920", "#F3F7F2"]
+            component_set = comps("football")
+        elif any(term in event_desc for term in ["chocolate", "schoko", "schokolade", "praline", "kakao"]):
+            mood_palette = ["#003B79", "#FFD600", "#5A2E1D", "#F4D6A2"]
+            mood_palette2 = ["#003B79", "#FFD600", "#3A1F16", "#C9A96E"]
+            component_set = comps("chocolate")
+        elif "wein" in event_desc or "abend" in event_desc or "premium" in event_desc:
             mood_palette = ["#003B79", "#FFD600", "#800020", "#D4C5A9"]
             mood_palette2 = ["#003B79", "#FFD600", "#2D1B4E", "#C9A96E"]
             component_set = comps("wein")

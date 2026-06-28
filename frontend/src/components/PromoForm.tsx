@@ -672,7 +672,7 @@ export default function PromoForm({ onCreated }: Props) {
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">KI-Angaben</p>
               <p className="mt-1 text-xs leading-5 text-slate-600">
-                Keine Vorlage auswählen. Die KI entscheidet Komposition, Farbwelt und visuelle Hierarchie aus Ihren Angaben.
+                Keine Vorlage auswählen. Bei Events erzeugt die KI ein reales Bildmotiv aus Titel, Termin, Ort und Beschreibung.
               </p>
             </div>
 

@@ -17,6 +17,7 @@ from app.services.intake import validate_and_create_spec
 from app.services.planner import build_local_plan, generate_ai_plan
 from app.services.composer import compose_promotion
 from app.services.exporter import export_promotion
+from app.services.image_generator import generate_event_background
 from app.adapters import OpenAICompatibleAdapter
 from app.config import settings
 
@@ -176,9 +177,20 @@ async def compose_selected(request: SelectDirectionRequest):
     output_dir = settings.output_dir / request.session_id
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"promo_{direction.name}.png"
+    event_background = None
+    if spec.campaign_kind.value == "event" and (spec.style or "").lower() == "ai":
+        event_background = await generate_event_background(spec, direction, fmt, output_dir)
+        if event_background is None:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Das KI-Bild konnte nicht erstellt werden. Bitte OpenRouter API-Key und Bildmodell "
+                    "prüfen. Im KI-Eventmodus wird kein einfaches Komponenten-Layout als Ersatz erzeugt."
+                ),
+            )
 
     try:
-        compose_promotion(spec, direction, fmt, output_path)
+        compose_promotion(spec, direction, fmt, output_path, event_background=event_background)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gestaltung konnte nicht erstellt werden: {e}")
 

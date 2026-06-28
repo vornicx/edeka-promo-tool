@@ -503,6 +503,16 @@ def _draw_product(canvas: Image.Image, product: Image.Image, cx: int, cy: int, a
     canvas.alpha_composite(rotated, (x, y))
 
 
+def _cover_image(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    target_w, target_h = size
+    source = image.convert("RGBA")
+    scale = max(target_w / source.width, target_h / source.height)
+    resized = source.resize((max(1, int(source.width * scale)), max(1, int(source.height * scale))), Image.Resampling.LANCZOS)
+    left = max(0, (resized.width - target_w) // 2)
+    top = max(0, (resized.height - target_h) // 2)
+    return resized.crop((left, top, left + target_w, top + target_h))
+
+
 # ---------------------------------------------------------------------------
 # Brand logo
 # ---------------------------------------------------------------------------
@@ -642,11 +652,11 @@ def _offer_value(spec: PromotionSpec) -> str:
     value = (spec.price or "").strip()
     if value:
         return value
-    return "EVENT" if _is_event(spec) else "0 €"
+    return "AKTION" if _is_event(spec) else "0 €"
 
 
 def _offer_label(spec: PromotionSpec) -> str:
-    return "EVENT" if _is_event(spec) else "ANGEBOT"
+    return "MARKTAKTION" if _is_event(spec) else "ANGEBOT"
 
 
 def _draw_price_value(
@@ -2255,6 +2265,18 @@ def _direction_event_components(spec: PromotionSpec, direction: CreativeDirectio
         return sorted(components, key=lambda c: int(c.get("priority") or 1), reverse=True)[:5]
 
     text = _normalize(f"{spec.product} {spec.claim or ''} {spec.event_description or ''}")
+    if any(word in text for word in ["wm", "world cup", "weltmeisterschaft", "fussball", "fußball", "public viewing"]):
+        return [
+            {"type": "atmosphere", "label": "FUSSBALLFIEBER", "description": "Fans, Jubel und Public-Viewing-Stimmung im Markt", "visual_style": "realistisch", "priority": 5},
+            {"type": "program", "label": "MITFIEBERN", "description": "Gemeinsam feiern, Snacks und Getränke", "visual_style": "lebendig", "priority": 4},
+            {"type": "location", "label": "EDEKA Mühlenbein Kassel", "description": "Lokaler Marktbezug", "visual_style": "ruhig", "priority": 3},
+        ]
+    if any(word in text for word in ["chocolate", "schoko", "schokolade", "praline", "kakao"]):
+        return [
+            {"type": "atmosphere", "label": "SCHOKO-MOMENT", "description": "Premium-Schokoladenverkostung mit warmer Eventstimmung", "visual_style": "realistisch", "priority": 5},
+            {"type": "program", "label": "PROBIEREN", "description": "Schokolade, Desserts und Genussstation", "visual_style": "premium", "priority": 4},
+            {"type": "location", "label": "EDEKA Mühlenbein Kassel", "description": "Lokaler Marktbezug", "visual_style": "ruhig", "priority": 3},
+        ]
     if any(word in text for word in ["wein", "abend", "verkostung"]):
         return [
             {"type": "atmosphere", "label": "ABENDSTIMMUNG", "description": "Premium-Verkostung im Markt", "visual_style": "premium", "priority": 5},
@@ -2542,7 +2564,29 @@ def _draw_editorial_offer(
     d.text((zone.x + pad - mb[0], zone.bottom - int(zone.h * 0.13) - mb[1]), meta, fill=muted, font=mf)
 
 
-def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType):
+def _draw_generated_event_backdrop(
+    canvas: Image.Image,
+    image_path: Path,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+):
+    w, h = canvas.size
+    try:
+        photo = _cover_image(Image.open(image_path), (w, h))
+    except Exception:  # noqa: BLE001
+        return
+    photo = photo.filter(ImageFilter.GaussianBlur(radius=max(2, w // 420)))
+    canvas.alpha_composite(photo)
+    wash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    wd = ImageDraw.Draw(wash)
+    wd.rectangle((0, 0, w, h), fill=(*_darken(primary, 0.20), 72))
+    wd.rectangle((0, int(h * 0.46), w, h), fill=(*_darken(primary, 0.38), 98))
+    wd.rectangle((0, 0, w, int(h * 0.20)), fill=(*_darken(primary, 0.30), 54))
+    canvas.alpha_composite(wash.filter(ImageFilter.GaussianBlur(radius=max(5, w // 160))))
+    _draw_spotlight(canvas, int(w * 0.42), int(h * 0.30), int(max(w, h) * 0.34), _lighten(accent, 0.12), 58, 2.2)
+
+
+def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, event_background: Path | None = None):
     """Photo-led AI renderer: one editorial poster, not a boxed scene."""
     w, h = canvas.size
     tall = h / w > 1.12
@@ -2557,10 +2601,13 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
     product = None if is_event else _load_product_image(spec, (int(w * 0.60), int(h * 0.56)))
     if product is not None:
         hero_images = [product]
-    _draw_editorial_backdrop(canvas, hero_images, primary, accent, theme)
+    if is_event and event_background:
+        _draw_generated_event_backdrop(canvas, event_background, primary, accent)
+    else:
+        _draw_editorial_backdrop(canvas, hero_images, primary, accent, theme)
     draw = ImageDraw.Draw(canvas)
 
-    if is_event:
+    if is_event and not event_background:
         _draw_ai_event_components(canvas, spec, direction, primary, accent, theme, paper)
     elif product:
         if tall:
@@ -2607,7 +2654,27 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
             df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, inner_w, available, int(text.h * 0.055), int(text.h * 0.032), max_lines=max_lines, line_spacing=1.13)
             _draw_wrapped_shadow(draw, dl, x, inner_w, desc_y, df, (232, 241, 248), align="left", line_spacing=1.13, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
 
-    _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
+    if is_event and event_background:
+        info_items = [item for item in [spec.validity, spec.price, spec.origin] if item]
+        pill_y = offer_y + int(offer_h * 0.22)
+        pill_h = max(42, int(offer_h * 0.22))
+        pill_x = x
+        for item in info_items[:3]:
+            text_value = str(item).upper()
+            pf = _fit_font_width(draw, text_value, FONT_PATH_EXTRABOLD, int(inner_w * 0.42), int(pill_h * 0.42), int(pill_h * 0.25))
+            pb = draw.textbbox((0, 0), text_value, font=pf)
+            pill_w = min(inner_w - (pill_x - x), max(int(pill_h * 2.4), pb[2] - pb[0] + int(pill_h * 0.95)))
+            if pill_w <= int(pill_h * 1.8):
+                break
+            fill = (255, 214, 0, 236) if pill_x == x else (*_darken(primary, 0.18), 220)
+            ink = primary if pill_x == x else (255, 255, 255)
+            draw.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=pill_h // 2, fill=fill)
+            draw.text((pill_x + (pill_w - (pb[2] - pb[0])) // 2 - pb[0], pill_y + (pill_h - (pb[3] - pb[1])) // 2 - pb[1]), text_value, fill=ink, font=pf)
+            pill_x += pill_w + int(pill_h * 0.22)
+            if pill_x > x + inner_w - int(pill_h * 2.0):
+                break
+    else:
+        _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
 
 
 # ---------------------------------------------------------------------------
@@ -2620,6 +2687,7 @@ def compose_promotion(
     format_type: FormatType,
     output_path: Path,
     scale: float = 1.0,
+    event_background: Path | None = None,
 ) -> Path:
     fmt = EXPORT_FORMATS[format_type]
     # `scale` < 1 renders a smaller canvas for fast previews; the layout is
@@ -2630,7 +2698,7 @@ def compose_promotion(
 
     style = (getattr(spec, "style", None) or "edeka").lower()
     if style == "ai":
-        _layout_ai(canvas, spec, direction, format_type)
+        _layout_ai(canvas, spec, direction, format_type, event_background=event_background)
     elif style == "luxe":
         _layout_luxe(canvas, spec, format_type)
     elif style == "editorial":

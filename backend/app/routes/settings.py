@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.user_settings import (
     AISettings,
+    DEFAULT_IMAGE_MODEL,
     DEFAULT_MODEL,
     get_effective_ai_settings,
     get_settings_path,
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 class SettingsResponse(BaseModel):
     api_key: str = ""
     selected_model: str = DEFAULT_MODEL
+    image_model: str = DEFAULT_IMAGE_MODEL
     enabled: bool = True
     has_api_key: bool = False
     masked_api_key: str = ""
@@ -32,6 +34,7 @@ class SettingsResponse(BaseModel):
 class SaveSettingsRequest(BaseModel):
     api_key: Optional[str] = None
     selected_model: str = DEFAULT_MODEL
+    image_model: str = DEFAULT_IMAGE_MODEL
     enabled: bool = True
 
 
@@ -62,6 +65,7 @@ async def get_settings() -> SettingsResponse:
     return SettingsResponse(
         api_key=effective.api_key,
         selected_model=effective.selected_model,
+        image_model=effective.image_model,
         enabled=effective.enabled,
         has_api_key=bool(effective.api_key),
         masked_api_key=mask_api_key(effective.api_key),
@@ -88,12 +92,14 @@ async def update_settings(request: SaveSettingsRequest) -> SettingsResponse:
         # Allow any model ID, just warn
         pass
 
-    next_settings = AISettings(api_key=api_key, selected_model=selected_model, enabled=request.enabled)
+    image_model = request.image_model.strip() or previous.image_model or DEFAULT_IMAGE_MODEL
+    next_settings = AISettings(api_key=api_key, selected_model=selected_model, image_model=image_model, enabled=request.enabled)
     save_user_settings(next_settings)
 
     return SettingsResponse(
         api_key=next_settings.api_key,
         selected_model=next_settings.selected_model,
+        image_model=next_settings.image_model,
         enabled=next_settings.enabled,
         has_api_key=bool(next_settings.api_key),
         masked_api_key=mask_api_key(next_settings.api_key),
