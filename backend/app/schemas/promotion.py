@@ -62,6 +62,14 @@ class EnrichmentSpec(BaseModel):
     waschbaer_presence: str = Field(..., description="Waschbaer-Praesenz")
 
 
+class EventVisualComponent(BaseModel):
+    type: str = Field(..., description="Komponententyp: atmosphere | program | date | location | accent")
+    label: str = Field(default="", description="Kurzer deutscher Labeltext")
+    description: str = Field(default="", description="Visuelle Beschreibung der Komponente")
+    visual_style: str = Field(default="", description="Stilhinweis fuer die Gestaltung")
+    priority: int = Field(default=1, ge=1, le=5, description="Gestaltungsprioritaet")
+
+
 class CreativeDirection(BaseModel):
     name: str = Field(..., description="Name der Richtung")
     intent: str = Field(..., description="Visuelle Absicht")
@@ -70,6 +78,10 @@ class CreativeDirection(BaseModel):
     text_safe_area: str = Field(..., description="Sicherer Textbereich")
     boldness: str = Field(..., description="Mutigkeitsgrad")
     waschbaer_presence: str = Field(..., description="Waschbaer-Praesenz")
+    event_components: list[EventVisualComponent] = Field(
+        default_factory=list,
+        description="Nur bei Events: von der KI entworfene visuelle Event-Komponenten, keine Produktfotos",
+    )
 
 
 class CreativeDirectionsResponse(BaseModel):

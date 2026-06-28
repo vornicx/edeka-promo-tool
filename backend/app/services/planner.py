@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.adapters.base import AIAdapter
-from app.schemas.promotion import CreativeDirection, EnrichmentSpec, PromotionSpec
+from app.schemas.promotion import CreativeDirection, EnrichmentSpec, EventVisualComponent, PromotionSpec
 
 
 SYSTEM_PROMPT = """Du bist Creative Director und Senior Grafikdesigner für EDEKA Mühlenbein.
@@ -15,6 +15,7 @@ VISUELLER ANSPRUCH:
 - Moderne grafische Elemente: geometrische Formen, Linien, Farbflächen, Verläufe
 - Bei Events: thematische Stimmung einfangen (Sommerfest ≠ Weinverkostung)
 - Bei Produkten: das Produkt heroisch inszenieren, nicht nur abbilden
+- Bei Events gibt es KEIN Produkt-Hero und KEINE Produktfotos. Entwirf stattdessen eigenständige Event-Komponenten: Atmosphäre, Programm, Termin, Ort, Aktivitätsmodule, Licht, Textur und Signaletik.
 - Ergebnis soll wie ein professioneller Handelsflyer wirken: sauber gerastert, hochwertig, mit klaren Komponenten fuer Bild, Preis, Headline und Termin.
 
 REGELN:
@@ -23,6 +24,7 @@ REGELN:
 - Der Waschbär darf subtil oder prominent eingebunden werden — nie Kindermalbuch-Stil
 - Textbereiche klar definieren, Hierarchie beachten
 - Kompositionen konkret beschreiben (nicht "schönes Layout", sondern "Produkt links im Spot, Headline rechts in fetter Serifen-Schrift, Preis als kreisförmiges Siegel unten rechts")
+- Fuer Event/Marktaktion muss jede Richtung 3-5 event_components liefern. Diese Komponenten sind vom Modell entworfene Layout-Bausteine, keine vorhandenen Produktbilder und keine Produktpromotion.
 
 Antworte NUR mit JSON:
 {
@@ -44,12 +46,22 @@ Antworte NUR mit JSON:
       "palette": ["#004C96", "#FFD600", "#HEXAKZENT1", "#HEXAKZENT2"],
       "text_safe_area": "top_left | top_right | bottom_left | bottom_right | center",
       "boldness": "low | medium | high",
-      "waschbaer_presence": "none | subtle | graphic_accent | featured"
+      "waschbaer_presence": "none | subtle | graphic_accent | featured",
+      "event_components": [
+        {
+          "type": "atmosphere | program | date | location | accent",
+          "label": "kurzer deutscher Labeltext, z.B. VERKOSTUNG",
+          "description": "konkrete visuelle Komponente fuer dieses Event",
+          "visual_style": "professionell, realistisch, nicht kindlich",
+          "priority": 1
+        }
+      ]
     }
   ]
 }
 
-Erzeuge GENAU 3 Designrichtungen mit unterschiedlichen Stimmungen. Sei kreativ, mutig und professionell."""
+Erzeuge GENAU 3 Designrichtungen mit unterschiedlichen Stimmungen. Sei kreativ, mutig und professionell.
+Bei Produktangeboten darf event_components leer sein. Bei Events darf event_components NIE leer sein."""
 
 
 VISION_APPEND = """
@@ -105,7 +117,7 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
     family = _product_family(spec)
     energy = _energy(spec)
     is_event = spec.campaign_kind.value == "event"
-    event_desc = (spec.event_description or "").lower() if is_event else ""
+    event_desc = f"{spec.product} {spec.event_description or ''} {spec.claim or ''}".lower() if is_event else ""
 
     enrichment = EnrichmentSpec(
         campaign_type="event" if is_event else ("fresh_product_offer" if family in {"fruta", "verdura"} else "daily_special"),
@@ -122,19 +134,71 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
     price_area = "top_right" if spec.format.value == "story" else "bottom_right"
 
     if is_event:
+        def comps(kind: str) -> list[EventVisualComponent]:
+            base = [
+                EventVisualComponent(
+                    type="date",
+                    label=spec.validity,
+                    description="Klarer Terminanker als kommerzielle Event-Information.",
+                    visual_style="präzise, plakativ, gut lesbar",
+                    priority=5,
+                ),
+                EventVisualComponent(
+                    type="location",
+                    label="EDEKA Mühlenbein Kassel",
+                    description="Lokaler Marktbezug als Vertrauensanker.",
+                    visual_style="lokal, hochwertig, ruhig",
+                    priority=4,
+                ),
+                EventVisualComponent(
+                    type="accent",
+                    label="MARKTAKTION",
+                    description="Dynamische Signaletik, die den Eventcharakter sichtbar macht.",
+                    visual_style="professionell, erwachsen, nicht illustrativ",
+                    priority=3,
+                ),
+            ]
+            if kind == "wein":
+                return [
+                    EventVisualComponent(type="atmosphere", label="ABENDSTIMMUNG", description="Elegante Verkostungsatmosphäre mit dunklen Reflexen, Tischkante und warmem Gegenlicht.", visual_style="premium, realistisch, erwachsen", priority=5),
+                    EventVisualComponent(type="program", label="VERKOSTUNG", description="Programmmodul fuer Beratung, Probieren und kleine Spezialitaeten.", visual_style="editorial, ruhig", priority=4),
+                    *base,
+                ]
+            if kind == "sommer":
+                return [
+                    EventVisualComponent(type="atmosphere", label="SOMMER IM MARKT", description="Helle Marktaktion mit offener, freundlicher Retail-Atmosphäre und starken Aktionsflächen.", visual_style="frisch, professionell, lebendig", priority=5),
+                    EventVisualComponent(type="program", label="PROBIEREN", description="Programmmodul fuer Verkostungen, Aktionen und Begegnung im Markt.", visual_style="klar, kommerziell", priority=4),
+                    *base,
+                ]
+            if kind == "familie":
+                return [
+                    EventVisualComponent(type="atmosphere", label="FAMILIENAKTION", description="Warme, einladende Marktstimmung mit klaren Aktionszonen, ohne Comic-Optik.", visual_style="freundlich, realistisch, aufgeräumt", priority=5),
+                    EventVisualComponent(type="program", label="MITMACHEN", description="Programmmodul fuer Familienaktionen und Begegnung im Markt.", visual_style="modern, zugänglich", priority=4),
+                    *base,
+                ]
+            return [
+                EventVisualComponent(type="atmosphere", label="MARKT-MOMENT", description="Grosszügige Event-Atmosphäre mit warmem Licht, Tiefenwirkung und hochwertiger Retail-Signaletik.", visual_style="fotografisch abstrahiert, sauber, nicht illustrativ", priority=5),
+                EventVisualComponent(type="program", label="AKTION IM MARKT", description="Programmmodul fuer die wichtigsten Eventpunkte.", visual_style="aufgeräumt, kommerziell", priority=4),
+                *base,
+            ]
+
         # Event mood colours based on the description
         if "wein" in event_desc or "abend" in event_desc or "premium" in event_desc:
             mood_palette = ["#003B79", "#FFD600", "#800020", "#D4C5A9"]
             mood_palette2 = ["#003B79", "#FFD600", "#2D1B4E", "#C9A96E"]
+            component_set = comps("wein")
         elif "sommer" in event_desc or "grill" in event_desc or "garten" in event_desc:
             mood_palette = ["#003B79", "#FFD600", "#E8612C", "#F4EDE4"]
             mood_palette2 = ["#003B79", "#FFD500", "#2A7F3F", "#FFF6E8"]
+            component_set = comps("sommer")
         elif "kinder" in event_desc or "familie" in event_desc:
             mood_palette = ["#004C96", "#FFD600", "#E6007E", "#00BFB2"]
             mood_palette2 = ["#004C96", "#FFD600", "#FF6B35", "#7BC8A4"]
+            component_set = comps("familie")
         else:
             mood_palette = ["#003B79", "#FFD600", "#FFFFFF", "#E7F0FA"]
             mood_palette2 = ["#003B79", "#FFD600", "#D71920", "#FFF5E6"]
+            component_set = comps("markt")
 
         directions = [
             CreativeDirection(
@@ -145,15 +209,17 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
                 text_safe_area="center",
                 boldness="high",
                 waschbaer_presence="subtle",
+                event_components=component_set,
             ),
             CreativeDirection(
                 name="Magazin-Look",
                 intent="Editoriale Anmutung mit starkem Foto-Moment und eleganter Typografie.",
-                composition="Produktfoto oder Illustration als atmosphärischer Hintergrund, Headline als überlagerte Type, dezente Farbakzente.",
+                composition="Atmosphärische Event-Komponenten als Hintergrund, Headline als überlagerte Type, dezente Farbakzente.",
                 palette=mood_palette2,
                 text_safe_area="bottom_left",
                 boldness="medium",
                 waschbaer_presence="none",
+                event_components=component_set,
             ),
             CreativeDirection(
                 name="Plakat Pur",
@@ -163,6 +229,7 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
                 text_safe_area="center",
                 boldness="high" if spec.differentiation_level.value == "alto" else "medium",
                 waschbaer_presence="featured",
+                event_components=component_set,
             ),
         ]
         return enrichment, directions
@@ -240,12 +307,18 @@ async def generate_ai_plan(
         system_prompt=system_prompt,
         user_prompt=_build_user_prompt(spec),
         temperature=0.55,
-        max_tokens=950,
+        max_tokens=1400 if spec.campaign_kind.value == "event" else 950,
         images=images,
     )
     enrichment = EnrichmentSpec(**result["enrichment"])
     directions = [CreativeDirection(**item) for item in result["directions"][:3]]
+    _, fallback = build_local_plan(spec)
+    if spec.campaign_kind.value == "event":
+        fallback_components = fallback[0].event_components if fallback else []
+        directions = [
+            d.model_copy(update={"event_components": d.event_components or fallback_components})
+            for d in directions
+        ]
     if len(directions) < 3:
-        _, fallback = build_local_plan(spec)
         directions = (directions + fallback)[:3]
     return enrichment, directions

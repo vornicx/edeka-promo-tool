@@ -1875,7 +1875,7 @@ def _ai_palette(spec: PromotionSpec, direction: CreativeDirection) -> tuple[
     tuple[int, int, int],
     tuple[int, int, int],
 ]:
-    product_color = _product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb(BRAND_BLUE)
+    product_color = _hex_to_rgb(BRAND_BLUE) if _is_event(spec) else (_product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb(BRAND_BLUE))
     palette = list(direction.palette or [])
     while len(palette) < 4:
         palette.append("#FFFFFF")
@@ -2101,47 +2101,6 @@ def _draw_ai_product_scene(
         _draw_ai_placeholder_product(canvas, spec, zone, primary, accent, theme, (22, 24, 28))
 
 
-def _draw_ai_event_scene(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    paper: tuple[int, int, int],
-):
-    d = ImageDraw.Draw(canvas)
-    radius = max(18, min(zone.w, zone.h) // 16)
-    _draw_soft_shadow(canvas, zone.x + int(zone.w * 0.08), zone.y + int(zone.h * 0.80), int(zone.w * 0.84), int(zone.h * 0.16),
-                      blur=max(18, zone.w // 24), intensity=95)
-    _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), radius, _lighten(paper, 0.04), _mix(_darken(primary, 0.05), theme, 0.30))
-
-    hay = _normalize(f"{spec.product} {spec.category or ''} {spec.claim or ''} {spec.event_description or ''}")
-    if any(word in hay for word in ["wein", "abend", "verkostung", "feinkost"]):
-        motif_keys = ["grapes", "soft_cheese", "juice_bottle"]
-    elif any(word in hay for word in ["sommer", "familie", "fest", "grill"]):
-        motif_keys = ["strawberries", "oranges", "juice_bottle"]
-    else:
-        motif_keys = ["mixed_fruit", "cheese_slices", "pizza"]
-    motif_images: list[Image.Image | None] = []
-    for key in motif_keys:
-        path = PRODUCT_ASSET_DIR / f"{key}.png"
-        if path.exists():
-            motif_images.append(_trim_alpha(Image.open(path).convert("RGBA")))
-        else:
-            motif_images.append(None)
-
-    hero_images: list[tuple[Image.Image, float, float, float, float]] = []
-    placements = [(0.16, 0.55, 0.78, -6.0), (0.86, 0.48, 0.62, 5.0), (0.50, 0.78, 0.42, -1.0)]
-    for idx, motif in enumerate(motif_images[:3]):
-        if motif is not None:
-            hero_images.append((motif, *placements[idx]))
-    if hero_images:
-        _draw_ai_photo_frame(canvas, zone, primary, accent, theme, paper, hero_images)
-    else:
-        _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), radius, _lighten(paper, 0.04), _mix(_darken(primary, 0.05), theme, 0.30))
-
-
 def _draw_ai_value_block(
     canvas: Image.Image,
     spec: PromotionSpec,
@@ -2269,20 +2228,148 @@ def _draw_ai_text_panel(
     _draw_ai_value_block(canvas, spec, value_zone, primary, accent, paper)
 
 
-def _ai_event_motifs(spec: PromotionSpec) -> list[Image.Image]:
-    hay = _normalize(f"{spec.product} {spec.category or ''} {spec.claim or ''} {spec.event_description or ''}")
-    if any(word in hay for word in ["wein", "abend", "verkostung", "feinkost"]):
-        keys = ["grapes", "soft_cheese", "juice_bottle"]
-    elif any(word in hay for word in ["sommer", "familie", "fest", "grill"]):
-        keys = ["strawberries", "oranges", "juice_bottle"]
-    else:
-        keys = ["mixed_fruit", "cheese_slices", "pizza"]
-    images: list[Image.Image] = []
-    for key in keys:
-        path = PRODUCT_ASSET_DIR / f"{key}.png"
-        if path.exists():
-            images.append(_trim_alpha(Image.open(path).convert("RGBA")))
-    return images
+def _direction_event_components(spec: PromotionSpec, direction: CreativeDirection) -> list[dict[str, str | int]]:
+    raw = getattr(direction, "event_components", None) or []
+    components: list[dict[str, str | int]] = []
+    for item in raw:
+        if hasattr(item, "model_dump"):
+            data = item.model_dump()
+        elif isinstance(item, dict):
+            data = item
+        else:
+            continue
+        label = str(data.get("label") or "").strip()
+        desc = str(data.get("description") or "").strip()
+        ctype = str(data.get("type") or "accent").strip().lower()
+        if label or desc:
+            components.append(
+                {
+                    "type": ctype,
+                    "label": label or ctype.upper(),
+                    "description": desc,
+                    "visual_style": str(data.get("visual_style") or "").strip(),
+                    "priority": int(data.get("priority") or 1),
+                }
+            )
+    if components:
+        return sorted(components, key=lambda c: int(c.get("priority") or 1), reverse=True)[:5]
+
+    text = _normalize(f"{spec.product} {spec.claim or ''} {spec.event_description or ''}")
+    if any(word in text for word in ["wein", "abend", "verkostung"]):
+        return [
+            {"type": "atmosphere", "label": "ABENDSTIMMUNG", "description": "Premium-Verkostung im Markt", "visual_style": "premium", "priority": 5},
+            {"type": "program", "label": "VERKOSTUNG", "description": "Beratung, Probieren und kleine Spezialitäten", "visual_style": "editorial", "priority": 4},
+            {"type": "location", "label": "EDEKA Mühlenbein Kassel", "description": "Lokaler Marktbezug", "visual_style": "ruhig", "priority": 3},
+        ]
+    if any(word in text for word in ["sommer", "fest", "familie"]):
+        return [
+            {"type": "atmosphere", "label": "SOMMER IM MARKT", "description": "Offene Marktaktion mit freundlicher Atmosphäre", "visual_style": "lebendig", "priority": 5},
+            {"type": "program", "label": "PROBIEREN", "description": "Verkostungen und Aktionen direkt im Markt", "visual_style": "klar", "priority": 4},
+            {"type": "location", "label": "EDEKA Mühlenbein Kassel", "description": "Lokaler Marktbezug", "visual_style": "ruhig", "priority": 3},
+        ]
+    return [
+        {"type": "atmosphere", "label": "MARKT-MOMENT", "description": "Eventatmosphäre direkt bei EDEKA Mühlenbein", "visual_style": "professionell", "priority": 5},
+        {"type": "program", "label": "AKTION IM MARKT", "description": "Programm und Begegnung vor Ort", "visual_style": "klar", "priority": 4},
+        {"type": "location", "label": "EDEKA Mühlenbein Kassel", "description": "Lokaler Marktbezug", "visual_style": "ruhig", "priority": 3},
+    ]
+
+
+def _draw_event_component_band(
+    canvas: Image.Image,
+    zone: Zone,
+    label: str,
+    detail: str,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    theme: tuple[int, int, int],
+    idx: int,
+):
+    d = ImageDraw.Draw(canvas)
+    slant = max(12, int(zone.w * 0.055))
+    fill = _mix(_darken(primary, 0.22), theme, 0.12 + idx * 0.08)
+    body = [(zone.x + slant, zone.y), (zone.right, zone.y), (zone.right - slant, zone.bottom), (zone.x, zone.bottom)]
+    shadow = [(x + max(4, zone.w // 90), y + max(5, zone.h // 18)) for x, y in body]
+    _aa_polygon(canvas, shadow, fill=(0, 16, 38, 86))
+    _aa_polygon(canvas, body, fill=(*fill, 218))
+    d.line((zone.x + slant, zone.y, zone.right, zone.y), fill=accent if idx == 0 else _lighten(theme, 0.25), width=max(3, zone.h // 18))
+
+    pad = int(zone.w * 0.075)
+    inner = zone.w - pad * 2 - slant
+    label = label.upper()
+    lf = _fit_font_width(d, label, FONT_PATH_EXTRABOLD, inner, int(zone.h * 0.46), int(zone.h * 0.22))
+    lb = d.textbbox((0, 0), label, font=lf)
+    lx = zone.x + pad + slant // 2
+    ly = zone.y + (zone.h - (lb[3] - lb[1])) // 2
+    d.text((lx + 1 - lb[0], ly + 2 - lb[1]), label, fill=(0, 14, 34, 150), font=lf)
+    d.text((lx - lb[0], ly - lb[1]), label, fill=(255, 255, 255), font=lf)
+
+
+def _draw_ai_event_components(
+    canvas: Image.Image,
+    spec: PromotionSpec,
+    direction: CreativeDirection,
+    primary: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    theme: tuple[int, int, int],
+    paper: tuple[int, int, int],
+):
+    w, h = canvas.size
+    tall = h / w > 1.12
+    components = _direction_event_components(spec, direction)
+    visual = Zone(int(w * 0.055), int(h * (0.16 if tall else 0.14)), int(w * 0.89), int(h * (0.34 if tall else 0.38)))
+
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    # Store/event atmosphere generated from the component brief: light, depth,
+    # signage and program surfaces, but no product-photo assets.
+    d.polygon(
+        [(visual.x, visual.y + int(visual.h * 0.18)), (visual.right, visual.y), (visual.right, visual.bottom), (visual.x, visual.bottom - int(visual.h * 0.10))],
+        fill=(*_mix(_darken(primary, 0.18), theme, 0.20), 110),
+    )
+    for i in range(5):
+        x = visual.x + int(visual.w * (0.08 + i * 0.20))
+        d.line((x, visual.y - int(visual.h * 0.08), x + int(visual.w * 0.12), visual.bottom), fill=(*_lighten(paper, 0.04), 28), width=max(8, w // 115))
+    for i in range(4):
+        y = visual.y + int(visual.h * (0.18 + i * 0.17))
+        d.line((visual.x + int(visual.w * 0.04), y, visual.right - int(visual.w * 0.04), y - int(visual.h * 0.05)), fill=(*accent, 34), width=max(5, h // 360))
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=max(8, w // 120)))
+    canvas.alpha_composite(layer)
+
+    atmosphere = next((c for c in components if c.get("type") == "atmosphere"), components[0])
+    headline = str(atmosphere.get("label") or "MARKTAKTION").upper()
+    hd = ImageDraw.Draw(canvas)
+    wf = _fit_font_width(hd, headline, FONT_PATH_EXTRABOLD, int(visual.w * 0.72), int(visual.h * 0.20), int(visual.h * 0.09))
+    wb = hd.textbbox((0, 0), headline, font=wf)
+    wx = visual.x + int(visual.w * 0.05)
+    wy = visual.y + int(visual.h * 0.08)
+    hd.text((wx + 2 - wb[0], wy + 3 - wb[1]), headline, fill=(0, 14, 34, 150), font=wf)
+    hd.text((wx - wb[0], wy - wb[1]), headline, fill=accent, font=wf)
+
+    band_components = [c for c in components if c is not atmosphere][:3]
+    if not band_components:
+        band_components = components[:3]
+    band_h = int(visual.h * (0.16 if tall else 0.17))
+    for idx, component in enumerate(band_components[:3]):
+        if tall:
+            bx = visual.x + int(visual.w * 0.08)
+            by = visual.y + int(visual.h * (0.46 + idx * 0.18))
+            bw = int(visual.w * (0.76 if idx == 0 else 0.66))
+        else:
+            positions = [(0.08, 0.50, 0.34), (0.31, 0.70, 0.38), (0.58, 0.50, 0.34)]
+            px, py, pw = positions[idx]
+            bx = visual.x + int(visual.w * px)
+            by = visual.y + int(visual.h * py)
+            bw = int(visual.w * pw)
+        _draw_event_component_band(
+            canvas,
+            Zone(bx, by, bw, band_h),
+            str(component.get("label") or ""),
+            str(component.get("description") or ""),
+            primary,
+            accent,
+            theme,
+            idx,
+        )
 
 
 def _draw_editorial_backdrop(
@@ -2387,21 +2474,15 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
     footer_h = int(h * 0.12)
     safe_bottom = h - footer_h - int(h * 0.026)
 
-    hero_images = _ai_event_motifs(spec) if is_event else []
-    product = _load_product_image(spec, (int(w * 0.60), int(h * 0.56)))
-    if product:
+    hero_images: list[Image.Image] = []
+    product = None if is_event else _load_product_image(spec, (int(w * 0.60), int(h * 0.56)))
+    if product is not None:
         hero_images = [product]
     _draw_editorial_backdrop(canvas, hero_images, primary, accent, theme)
     draw = ImageDraw.Draw(canvas)
 
     if is_event:
-        if tall:
-            placements = [(0.28, 0.25, 0.60, -3.0), (0.74, 0.28, 0.48, 3.0), (0.52, 0.39, 0.27, 0.0)]
-        else:
-            placements = [(0.18, 0.36, 0.55, -3.0), (0.74, 0.33, 0.47, 3.0), (0.50, 0.45, 0.25, 0.0)]
-        for idx, img in enumerate(hero_images[:3]):
-            px, py, scale, angle = placements[idx]
-            _draw_photo_cutout(canvas, img, int(w * px), int(h * py), (int(w * scale), int(h * scale)), angle=angle, shadow_alpha=105)
+        _draw_ai_event_components(canvas, spec, direction, primary, accent, theme, paper)
     elif product:
         if tall:
             _draw_photo_cutout(canvas, product, int(w * 0.50), int(h * 0.31), (int(w * 0.86), int(h * 0.46)), angle=-1.0, shadow_alpha=118)

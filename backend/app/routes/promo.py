@@ -115,8 +115,9 @@ async def create_promo(request: CreatePromoRequest):
     session_id = str(uuid.uuid4())[:8]
     _cleanup_old_sessions()
 
-    # Resolve product image for vision-enhanced planning
-    image_base64 = _resolve_product_image_base64(request.product_image)
+    # Product photos are only context for product offers. Event posters must be
+    # generated from event components, not from stored product assets.
+    image_base64 = None if spec.campaign_kind.value == "event" else _resolve_product_image_base64(request.product_image)
 
     if not request.use_ai_planning:
         enrichment, directions = build_local_plan(spec)
