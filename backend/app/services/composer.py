@@ -2153,84 +2153,70 @@ def _vignette(canvas: Image.Image, strength: int = 70):
 
 
 def _grade_photo(canvas: Image.Image, image_path: Path, primary: tuple[int, int, int]):
-    """Full-bleed photo with a cinematic grade so headline type can sit ON it."""
+    """Full-bleed hero photo, kept clean. Only a light top scrim for the brand
+    mark and a dark base behind the footer — the content card brings its own
+    legible surface, so the image itself is never flooded with text."""
     w, h = canvas.size
     try:
         photo = _cover_image(Image.open(image_path), (w, h)).convert("RGB")
     except Exception:  # noqa: BLE001
         canvas.paste(_diagonal_gradient((w, h), _darken(primary, 0.05), _darken(primary, 0.5)), (0, 0))
         return
-    # Pull the image into one cohesive grade: slight desaturation + contrast.
-    photo = ImageEnhance.Color(photo).enhance(0.90)
-    photo = ImageEnhance.Contrast(photo).enhance(1.07)
+    photo = ImageEnhance.Color(photo).enhance(0.97)
+    photo = ImageEnhance.Contrast(photo).enhance(1.05)
     canvas.paste(photo, (0, 0))
 
-    ink = _mix(DISPLAY_INK, _darken(primary, 0.55), 0.45)
-    # Bottom-up scrim: clear at ~42% height, deep ink at the base (legible footer
-    # of type) — this is what makes text-on-photo read as design, not a label.
-    bottom = Image.new("L", (1, h), 0)
-    bp = bottom.load()
-    for yy in range(h):
-        t = (yy / max(1, h - 1) - 0.40) / 0.60
-        bp[0, yy] = int(max(0.0, min(1.0, t)) ** 1.25 * 250)
-    bscrim = Image.new("RGBA", (w, h), (*ink, 0))
-    bscrim.putalpha(bottom.resize((w, h)))
-    canvas.alpha_composite(bscrim)
-    # Soft top scrim so the brand lockup always reads.
+    ink = _mix(DISPLAY_INK, _darken(primary, 0.55), 0.40)
+    # Light top scrim so the brand lockup always reads on the clean photo.
     top = Image.new("L", (1, h), 0)
     tp = top.load()
     for yy in range(h):
-        tp[0, yy] = int(max(0.0, min(1.0, 1.0 - yy / (h * 0.24))) * 160)
+        tp[0, yy] = int(max(0.0, min(1.0, 1.0 - yy / (h * 0.20))) * 135)
     tscrim = Image.new("RGBA", (w, h), (*ink, 0))
     tscrim.putalpha(top.resize((w, h)))
     canvas.alpha_composite(tscrim)
-    _vignette(canvas, 78)
+    # Dark base under the global footer band so it stays cohesive.
+    base = Image.new("L", (1, h), 0)
+    bp = base.load()
+    for yy in range(h):
+        t = (yy / max(1, h - 1) - 0.82) / 0.18
+        bp[0, yy] = int(max(0.0, min(1.0, t)) * 220)
+    bscrim = Image.new("RGBA", (w, h), (*ink, 0))
+    bscrim.putalpha(base.resize((w, h)))
+    canvas.alpha_composite(bscrim)
+    _vignette(canvas, 62)
 
 
 def _halftone(canvas: Image.Image, color: tuple[int, int, int]):
-    """Corner halftone dots — retail energy for the no-photo graphic field."""
+    """Top-right halftone dots — a subtle retail texture for the no-photo field."""
     w, h = canvas.size
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    step = max(16, w // 34)
-    r0 = step * 0.20
-    for yy in range(int(h * 0.5), h, step):
-        for xx in range(0, int(w * 0.52), step):
-            fade = (1.0 - xx / (w * 0.52)) * ((yy - h * 0.5) / (h * 0.5))
+    step = max(16, w // 36)
+    r0 = step * 0.18
+    for yy in range(0, int(h * 0.46), step):
+        for xx in range(int(w * 0.56), w, step):
+            fade = ((xx - w * 0.56) / (w * 0.44)) * (1.0 - yy / (h * 0.46))
             if fade <= 0:
                 continue
             r = r0 * (0.35 + fade)
-            d.ellipse((xx - r, yy - r, xx + r, yy + r), fill=(*color, int(70 * fade)))
+            d.ellipse((xx - r, yy - r, xx + r, yy + r), fill=(*color, int(64 * fade)))
     canvas.alpha_composite(layer)
 
 
 def _graphic_backdrop(canvas: Image.Image, spec: PromotionSpec, primary: tuple[int, int, int], accent: tuple[int, int, int], theme: tuple[int, int, int]):
-    """Designed graphic poster field for events with no AI photo: diagonal colour
-    grade, an oversized ghost word bleeding off-frame, an accent slash and
-    halftone texture — a real composition, not a flat gradient with boxes."""
+    """Calm designed field for events with no photo: a diagonal brand grade with
+    one accent slash and subtle halftone — a clean stage for the content card."""
     w, h = canvas.size
-    base = _mix(DISPLAY_INK, _darken(primary, 0.32), 0.6)
-    canvas.paste(_diagonal_gradient((w, h), _darken(base, 0.0), _darken(base, 0.46)), (0, 0))
-
-    # Oversized ghost word for depth (the first word of the title).
-    words = _display_title(spec).split()
-    word = (words[0] if words else "Markt").upper()
-    gf = _load_font(FONT_PATH_DISPLAY_COMPRESSED, int(h * 0.46))
-    gl = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(gl)
-    gb = gd.textbbox((0, 0), word, font=gf)
-    gd.text((int(w * 0.99) - (gb[2] - gb[0]) - gb[0], int(h * 0.12) - gb[1]), word, font=gf, fill=(*_lighten(base, 0.12), 34))
-    canvas.alpha_composite(gl)
-
-    # Single bold accent slash across the upper third.
+    base = _mix(DISPLAY_INK, _darken(primary, 0.30), 0.55)
+    canvas.paste(_diagonal_gradient((w, h), _darken(base, 0.0), _darken(base, 0.5)), (0, 0))
     slash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    _aa_polygon(slash, [(0, int(h * 0.32)), (w, int(h * 0.135)), (w, int(h * 0.175)), (0, int(h * 0.36))], fill=(*accent, 46))
+    _aa_polygon(slash, [(0, int(h * 0.30)), (w, int(h * 0.12)), (w, int(h * 0.155)), (0, int(h * 0.335))], fill=(*accent, 38))
     canvas.alpha_composite(slash)
-
     _halftone(canvas, accent)
-    _draw_spotlight(canvas, int(w * 0.22), int(h * 0.26), int(max(w, h) * 0.30), _lighten(accent, 0.2), 44, 2.4)
-    _draw_spotlight(canvas, int(w * 0.82), int(h * 0.70), int(max(w, h) * 0.26), _lighten(primary, 0.25), 40, 2.6)
-    _vignette(canvas, 70)
+    _draw_spotlight(canvas, int(w * 0.24), int(h * 0.24), int(max(w, h) * 0.30), _lighten(accent, 0.2), 38, 2.4)
+    _draw_spotlight(canvas, int(w * 0.80), int(h * 0.36), int(max(w, h) * 0.26), _lighten(primary, 0.25), 36, 2.6)
+    _vignette(canvas, 66)
 
 
 def _product_backdrop(canvas: Image.Image, primary: tuple[int, int, int], theme: tuple[int, int, int]):
@@ -2313,15 +2299,106 @@ def _draw_headline(canvas: Image.Image, x: int, y: int, font, lines: list[str], 
     return cy
 
 
-def _draw_info_line(canvas: Image.Image, x: int, y: int, h: int, parts: list[str], accent: tuple[int, int, int], max_w: int):
-    draw = ImageDraw.Draw(canvas)
-    tick_w = max(6, h // 5)
-    draw.rectangle((x, y, x + tick_w, y + h), fill=accent)
-    tx = x + tick_w + int(h * 0.55)
-    text = "    ·    ".join(p for p in parts if p)
-    f = _fit_font_width(draw, text, FONT_PATH_DISPLAY_MED, max_w - (tx - x), int(h * 0.92), int(h * 0.5))
-    fb = draw.textbbox((0, 0), text, font=f)
-    draw.text((tx - fb[0], y + (h - (fb[3] - fb[1])) // 2 - fb[1]), text, font=f, fill=WARM_WHITE)
+def _panel_mask(size: tuple[int, int], radius: int, round_bottom: bool = True) -> Image.Image:
+    w, h = size
+    m = Image.new("L", (w, h), 0)
+    d = ImageDraw.Draw(m)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=radius, fill=255)
+    if not round_bottom:
+        d.rectangle((0, h - radius - 1, w - 1, h - 1), fill=255)
+    return m
+
+
+def _glass_panel(canvas: Image.Image, box, radius: int, accent: tuple[int, int, int], round_bottom: bool = True):
+    """A premium frosted-glass content card: the photo behind is blurred and
+    darkened so the image shows through softly while the type stays crisp. A
+    hairline highlight and a soft drop shadow lift it off the artwork."""
+    x0, y0, x1, y1 = (int(v) for v in box)
+    w, h = canvas.size
+    cw, ch = x1 - x0, y1 - y0
+    # drop shadow lifts the card off the photo
+    sh = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((x0, y0 + max(6, ch // 50), x1, y1 + max(6, ch // 50)), radius=radius, fill=(0, 0, 0, 110))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(12, cw // 26))))
+    # frosted region: blurred crop + dark vertical tint for legibility
+    region = canvas.crop((x0, y0, x1, y1)).convert("RGB").filter(ImageFilter.GaussianBlur(radius=max(14, cw // 12)))
+    region = region.convert("RGBA")
+    tg = Image.new("L", (1, ch), 0)
+    tp = tg.load()
+    for yy in range(ch):
+        tp[0, yy] = int(168 + 72 * (yy / max(1, ch - 1)))
+    tint = Image.new("RGBA", (cw, ch), (*DISPLAY_INK, 0))
+    tint.putalpha(tg.resize((cw, ch)))
+    region.alpha_composite(tint)
+    region.putalpha(_panel_mask((cw, ch), radius, round_bottom))
+    canvas.alpha_composite(region, (x0, y0))
+    d = ImageDraw.Draw(canvas, "RGBA")
+    d.rounded_rectangle((x0, y0, x1, y1), radius=radius, outline=(255, 255, 255, 40), width=max(2, w // 1000))
+    d.line((x0 + radius, y0 + max(2, h // 1100), x1 - radius, y0 + max(2, h // 1100)), fill=(255, 255, 255, 60), width=max(1, h // 2000))
+
+
+def _icon_pin(canvas: Image.Image, cx: int, cy: int, s: int, color: tuple[int, int, int]):
+    S = 4
+    tile = Image.new("RGBA", (s * S, s * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    cxx = s * S / 2
+    r = s * S * 0.34
+    topy = s * S * 0.06
+    d.ellipse((cxx - r, topy, cxx + r, topy + 2 * r), fill=color)
+    d.polygon([(cxx - r * 0.82, topy + r * 1.12), (cxx + r * 0.82, topy + r * 1.12), (cxx, s * S * 0.96)], fill=color)
+    hr = r * 0.40
+    cyh = topy + r
+    d.ellipse((cxx - hr, cyh - hr, cxx + hr, cyh + hr), fill=(255, 255, 255, 255))
+    canvas.alpha_composite(tile.resize((s, s), Image.LANCZOS), (int(cx - s / 2), int(cy - s / 2)))
+
+
+def _draw_eyebrow(canvas: Image.Image, x: int, y: int, label: str, h: int, accent: tuple[int, int, int]):
+    d = ImageDraw.Draw(canvas, "RGBA")
+    r = int(h * 0.30)
+    cyc = y + h // 2
+    d.ellipse((x, cyc - r, x + 2 * r, cyc + r), fill=accent)
+    f = _load_font(FONT_PATH_DISPLAY_MED, int(h * 0.86))
+    fb = d.textbbox((0, 0), "AG", font=f)
+    _tracked_text(d, x + 2 * r + int(h * 0.5), cyc - (fb[3] - fb[1]) // 2 - fb[1], label.upper(), f, WARM_WHITE, max(2, int(h * 0.12)))
+
+
+def _draw_date_chip(canvas: Image.Image, x: int, y: int, h: int, day: str, time: str, accent: tuple[int, int, int], primary: tuple[int, int, int]) -> int:
+    """Calendar-style chip: an accent day cell + the time. Returns its right x."""
+    d = ImageDraw.Draw(canvas, "RGBA")
+    sq = h
+    d.rounded_rectangle((x, y, x + sq, y + h), radius=max(8, h // 5), fill=accent)
+    df = _fit_font_width(d, day, FONT_PATH_DISPLAY, int(sq * 0.74), int(h * 0.54), int(h * 0.26))
+    db = d.textbbox((0, 0), day, font=df)
+    d.text((x + (sq - (db[2] - db[0])) // 2 - db[0], y + (h - (db[3] - db[1])) // 2 - db[1]), day, font=df, fill=primary)
+    tx = x + sq + int(h * 0.34)
+    tf = _load_font(FONT_PATH_DISPLAY_MED, int(h * 0.56))
+    tb = d.textbbox((0, 0), time, font=tf)
+    d.text((tx, y + (h - (tb[3] - tb[1])) // 2 - tb[1]), time, font=tf, fill=WARM_WHITE)
+    return tx + (tb[2] - tb[0])
+
+
+def _draw_pin_row(canvas: Image.Image, x: int, y: int, h: int, text: str, accent: tuple[int, int, int]) -> int:
+    d = ImageDraw.Draw(canvas, "RGBA")
+    _icon_pin(canvas, x + int(h * 0.34), y + h // 2, int(h * 0.92), accent)
+    tx = x + int(h * 0.92)
+    f = _load_font(FONT_PATH_DISPLAY_MED, int(h * 0.66))
+    fb = d.textbbox((0, 0), text, font=f)
+    d.text((tx, y + (h - (fb[3] - fb[1])) // 2 - fb[1]), text, font=f, fill=WARM_WHITE)
+    return tx + (fb[2] - fb[0])
+
+
+def _draw_cta_pill(canvas: Image.Image, right_x: int, y: int, h: int, text: str, accent: tuple[int, int, int], primary: tuple[int, int, int]) -> int:
+    """Right-aligned accent pill — the single bold call-to-action. Returns left x."""
+    d = ImageDraw.Draw(canvas, "RGBA")
+    text = text.upper()
+    f = _fit_font_width(d, text, FONT_PATH_DISPLAY, int(right_x * 0.5), int(h * 0.46), int(h * 0.26))
+    tb = d.textbbox((0, 0), text, font=f)
+    padx = int(h * 0.55)
+    pw = (tb[2] - tb[0]) + padx * 2
+    x0 = right_x - pw
+    d.rounded_rectangle((x0, y, x0 + pw, y + h), radius=h // 2, fill=accent)
+    d.text((x0 + padx - tb[0], y + (h - (tb[3] - tb[1])) // 2 - tb[1]), text, font=f, fill=primary)
+    return x0
 
 
 def _draw_price_lockup(canvas: Image.Image, x: int, baseline_y: int, spec: PromotionSpec, accent: tuple[int, int, int], big_h: int) -> int:
@@ -2355,47 +2432,54 @@ def _draw_price_lockup(canvas: Image.Image, x: int, baseline_y: int, spec: Promo
     return top
 
 
-def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, margin: int, safe_bottom: int, tall: bool):
+def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, margin: int, safe_bottom: int, ratio: float):
+    """Keep the hero image clean; carry the message in one premium content card."""
     w, h = canvas.size
-    x = margin + int(w * 0.018)
-    block_w = w - margin * 2 - int(w * 0.036)
+    draw = ImageDraw.Draw(canvas)
 
     kicker = _event_kicker(spec)
     title = _display_title(spec).upper()
     kind = _event_copy_kind(spec)
     day, time_value = _event_date_parts(spec.validity)
-    date_part = ", ".join(p for p in [day if day and day != "TERMIN" else "", time_value] if p) or "VOR ORT"
+    day_lbl = day if day and day != "TERMIN" else "TERMIN"
+    time_lbl = time_value or "VOR ORT"
     price = (spec.price or "").strip()
-    cta = price.upper() if price else ("EINTRITT FREI" if kind == "football" else "AKTION IM MARKT")
+    cta = price if price else ("Eintritt frei" if kind == "football" else "Aktion im Markt")
     place = _short_event_info(spec.origin)
-    place_text = "BEI EDEKA MÜHLENBEIN" + (f" · {place}" if place and place not in {"KASSEL", "IM MARKT"} else "")
+    loc_text = "EDEKA Mühlenbein" + ("" if place in {"", "KASSEL", "IM MARKT"} else f" · {place.title()}")
 
-    draw = ImageDraw.Draw(canvas)
-    kicker_h = int(h * (0.034 if tall else 0.030))
-    place_h = int(h * (0.036 if tall else 0.032))
-    info_h = int(h * (0.030 if tall else 0.028))
-    head_max_h = int(h * (0.34 if tall else 0.24))
-    hf, hl, line_h, head_total, head_widest = _fit_headline(draw, title, block_w, head_max_h, max_lines=2 if not tall else 3)
+    card_x0, card_x1 = margin, w - margin
+    card_w = card_x1 - card_x0
+    pad = int(card_w * 0.06)
+    inner_w = card_w - 2 * pad
 
-    underline_gap = int(h * 0.022)
-    underline_h = max(5, int(h * 0.011))
-    gap = int(h * 0.020)
-    kicker_block = int(kicker_h * 1.05)
-    total = kicker_block + gap + head_total + underline_gap + underline_h + gap + place_h + int(gap * 0.6) + info_h
-    top = safe_bottom - int(h * 0.045) - total
-    top = max(top, int(h * (0.30 if tall else 0.22)))
+    eyebrow_h = int(h * 0.026)
+    title_cap = int(h * 0.078)
+    chip_h = int(h * 0.052)
+    loc_h = int(h * 0.034)
+    gap = int(h * 0.024)
+    pad_v = int(h * 0.030)
 
-    cy = _draw_kicker(canvas, x, top, kicker, kicker_h, accent)
-    cy += int(gap * 0.4)
-    head_bottom = _draw_headline(canvas, x, cy, hf, hl, line_h, fill=(255, 255, 255))
-    uy = head_bottom + underline_gap
-    draw.rectangle((x, uy, x + min(int(block_w * 0.46), head_widest), uy + underline_h), fill=accent)
-    py = uy + underline_h + gap
-    pf = _fit_font_width(draw, place_text, FONT_PATH_DISPLAY_MED, block_w, int(place_h * 0.92), int(place_h * 0.5))
-    pb = draw.textbbox((0, 0), place_text, font=pf)
-    draw.text((x - pb[0], py - pb[1]), place_text, font=pf, fill=WARM_WHITE)
-    iy = py + (pb[3] - pb[1]) + int(gap * 0.8)
-    _draw_info_line(canvas, x, iy, info_h, [date_part, cta], accent, block_w)
+    hf, hl, line_h, head_total, head_widest = _fit_headline(draw, title, inner_w, title_cap * 2, max_lines=2)
+
+    content_h = eyebrow_h + int(gap * 0.6) + head_total + gap + chip_h + int(gap * 0.9) + loc_h
+    card_h = content_h + pad_v * 2
+    card_top = safe_bottom - card_h
+    card_top = min(max(card_top, int(h * 0.40)), int(h * 0.62))
+
+    radius = int(w * 0.030)
+    _glass_panel(canvas, (card_x0, card_top, card_x1, safe_bottom), radius, accent, round_bottom=False)
+
+    ix = card_x0 + pad
+    iy = card_top + pad_v
+    _draw_eyebrow(canvas, ix, iy, kicker, eyebrow_h, accent)
+    iy += eyebrow_h + int(gap * 0.6)
+    iy = _draw_headline(canvas, ix, iy, hf, hl, line_h, fill=(255, 255, 255))
+    iy += gap
+    _draw_date_chip(canvas, ix, iy, chip_h, day_lbl, time_lbl, accent, primary)
+    _draw_cta_pill(canvas, card_x1 - pad, iy, chip_h, cta, accent, primary)
+    iy += chip_h + int(gap * 0.9)
+    _draw_pin_row(canvas, ix, iy, loc_h, loc_text, accent)
 
 
 def _compose_product(canvas: Image.Image, spec: PromotionSpec, product: Image.Image | None, primary, accent, margin: int, safe_bottom: int, tall: bool, square: bool):
@@ -2489,14 +2573,13 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
         _graphic_backdrop(canvas, spec, primary, accent, theme)
     else:
         _product_backdrop(canvas, primary, theme)
-
-    _draw_poster_frame(canvas, margin, (*WARM_WHITE, 55), safe_bottom)
+        _draw_poster_frame(canvas, margin, (*WARM_WHITE, 55), safe_bottom)
 
     brand_h = int(h * (0.058 if not square else 0.07))
     _draw_brand_lockup(canvas, margin + int(w * 0.012), margin + int(h * 0.006), brand_h, accent, sub_color=WARM_WHITE, halo=True)
 
     if is_event:
-        _compose_event(canvas, spec, primary, accent, margin, safe_bottom, tall)
+        _compose_event(canvas, spec, primary, accent, margin, safe_bottom, ratio)
     else:
         _compose_product(canvas, spec, product, primary, accent, margin, safe_bottom, tall, square)
 
