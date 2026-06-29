@@ -1,0 +1,13 @@
+Bundled display typefaces
+=========================
+
+Fira Sans Condensed / Fira Sans Compressed
+  Files: FiraSansCondensed-Heavy.otf, FiraSansCompressed-Heavy.otf,
+         FiraSansCondensed-SemiBold.otf, FiraSansCondensed-Medium.otf
+  License: SIL Open Font License 1.1 (free for commercial use & embedding)
+  Source: Mozilla Fira project (https://github.com/mozilla/Fira)
+  Used for poster display headlines, prices and supporting type.
+
+Open Sans
+  License: SIL Open Font License 1.1
+  Used for body / utility text.

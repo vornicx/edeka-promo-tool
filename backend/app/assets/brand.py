@@ -27,6 +27,14 @@ FONT_PATH_BOLD = _resolve_font("OpenSans-Bold.ttf")
 FONT_PATH_SEMIBOLD = _resolve_font("OpenSans-Semibold.ttf")
 FONT_PATH_EXTRABOLD = _resolve_font("OpenSans-ExtraBold.ttf")
 
+# Condensed display family (Fira Sans, SIL OFL) for poster headlines, prices and
+# supporting type. Gives the creative layouts a punchy, editorial poster voice
+# that the humanist Open Sans cannot. See FONTS_LICENSE.txt.
+FONT_PATH_DISPLAY = _resolve_font("FiraSansCondensed-Heavy.otf")
+FONT_PATH_DISPLAY_COMPRESSED = _resolve_font("FiraSansCompressed-Heavy.otf")
+FONT_PATH_DISPLAY_MED = _resolve_font("FiraSansCondensed-SemiBold.otf")
+FONT_PATH_DISPLAY_LIGHT = _resolve_font("FiraSansCondensed-Medium.otf")
+
 WASCHBAER_LOGO_PATH = Path(__file__).parent / "waschbaer_logo.png"
 
 SECTION_GRADIENTS: dict[str, tuple[str, str]] = {

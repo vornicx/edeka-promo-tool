@@ -7,13 +7,17 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 from app.assets.brand import (
     BRAND_ANTHRACITE,
     BRAND_BLUE,
     BRAND_YELLOW,
     FONT_PATH_BOLD,
+    FONT_PATH_DISPLAY,
+    FONT_PATH_DISPLAY_COMPRESSED,
+    FONT_PATH_DISPLAY_LIGHT,
+    FONT_PATH_DISPLAY_MED,
     FONT_PATH_EXTRABOLD,
     FONT_PATH_REGULAR,
     FONT_PATH_SEMIBOLD,
@@ -2115,670 +2119,386 @@ def _ai_palette(spec: PromotionSpec, direction: CreativeDirection) -> tuple[
     return primary, accent, _hsv_adjust(theme, 1.18, 1.0), paper
 
 
-def _rounded_gradient_rect(
-    canvas: Image.Image,
-    box: tuple[int, int, int, int],
-    radius: int,
-    top: tuple[int, int, int],
-    bottom: tuple[int, int, int],
-    alpha: int = 255,
-    outline: tuple[int, int, int] | None = None,
-    outline_width: int = 0,
-):
-    x0, y0, x1, y1 = box
-    w, h = max(1, x1 - x0), max(1, y1 - y0)
-    grad = _vertical_gradient((w, h), top, bottom).convert("RGBA")
+# ---------------------------------------------------------------------------
+# Editorial creative system (AI mode)
+#
+# The AI layouts are built like real posters: the photo (or a designed graphic
+# field) fills the frame, a cinematic colour grade fuses type and image, and the
+# message lives directly ON the artwork as a confident typographic hierarchy —
+# not a collage of rounded cards. One accent colour (EDEKA yellow) carries the
+# marketing pop; everything else stays disciplined.
+# ---------------------------------------------------------------------------
+
+DISPLAY_INK = (12, 19, 32)      # deep cinematic navy-black for grades
+WARM_WHITE = (247, 245, 239)
+
+
+def _tracked_text(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, tracking: int) -> int:
+    """Draw letter-spaced caps (an editorial eyebrow). Returns the width drawn."""
+    cx = x
+    for ch in text:
+        draw.text((cx, y), ch, font=font, fill=fill)
+        cx += draw.textlength(ch, font=font) + tracking
+    return int(cx - tracking - x) if text else 0
+
+
+def _vignette(canvas: Image.Image, strength: int = 70):
+    w, h = canvas.size
     mask = Image.new("L", (w, h), 0)
-    md = ImageDraw.Draw(mask)
-    md.rounded_rectangle((0, 0, w - 1, h - 1), radius=radius, fill=alpha)
-    grad.putalpha(mask)
-    canvas.alpha_composite(grad, (x0, y0))
-    if outline and outline_width:
-        ImageDraw.Draw(canvas).rounded_rectangle(
-            (x0, y0, x1, y1),
-            radius=radius,
-            outline=outline,
-            width=outline_width,
-        )
-
-
-def _draw_ai_background(
-    canvas: Image.Image,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-):
-    w, h = canvas.size
-    canvas.paste(_diagonal_gradient((w, h), _darken(primary, 0.04), _darken(primary, 0.45)), (0, 0))
-
-    # Oversized generated graphic shapes make AI mode visibly different.
-    _draw_spotlight(canvas, int(w * 0.20), int(h * 0.18), int(max(w, h) * 0.28), _lighten(accent, 0.18), 130, 2.2)
-    _draw_spotlight(canvas, int(w * 0.86), int(h * 0.48), int(max(w, h) * 0.30), theme, 95, 2.0)
-    _draw_spotlight(canvas, int(w * 0.36), int(h * 0.82), int(max(w, h) * 0.24), _lighten(primary, 0.42), 80, 2.4)
-
-    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    step = max(24, w // 18)
-    line_color = (*_lighten(primary, 0.35), 50)
-    for x in range(-w, w * 2, step):
-        d.line((x, int(h * 0.02), x + int(w * 0.50), int(h * 0.58)), fill=line_color, width=max(2, w // 430))
-    d.polygon(
-        [(int(w * 0.68), 0), (w, 0), (w, int(h * 0.50)), (int(w * 0.82), int(h * 0.42))],
-        fill=(*theme, 130),
-    )
-    d.polygon(
-        [(0, int(h * 0.72)), (int(w * 0.44), int(h * 0.62)), (int(w * 0.55), h), (0, h)],
-        fill=(*_darken(primary, 0.24), 145),
-    )
+    ImageDraw.Draw(mask).ellipse((int(-w * 0.18), int(-h * 0.18), int(w * 1.18), int(h * 1.18)), fill=255)
+    mask = mask.point(lambda a: 255 - a).filter(ImageFilter.GaussianBlur(radius=max(20, w // 26)))
+    layer = Image.new("RGBA", (w, h), (4, 7, 12, 0))
+    layer.putalpha(mask.point(lambda a: int(a / 255 * strength)))
     canvas.alpha_composite(layer)
 
 
-def _draw_ai_placeholder_product(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    ink: tuple[int, int, int],
-):
-    d = ImageDraw.Draw(canvas)
-    hay = _normalize(f"{spec.product} {spec.category or ''}")
-    if any(word in hay for word in FRUIT_WORDS + ["erdbeer", "apfel", "orange", "banane", "traube"]):
-        colors = [accent, theme, (232, 52, 66), (78, 154, 62), (255, 236, 123)]
-        base_y = zone.y + int(zone.h * 0.66)
-        for i, color in enumerate(colors[:5]):
-            r = int(min(zone.w, zone.h) * (0.16 + 0.02 * (i % 2)))
-            cx = zone.x + int(zone.w * (0.22 + i * 0.14))
-            cy = base_y - int(zone.h * (0.10 if i % 2 else 0.02))
-            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color, outline=_darken(color, 0.22), width=max(3, r // 12))
-            d.ellipse((cx - r // 3, cy - r // 2, cx + r // 8, cy - r // 5), fill=(255, 255, 255, 80))
-        return
-
-    pack_w, pack_h = int(zone.w * 0.52), int(zone.h * 0.66)
-    px = zone.cx - pack_w // 2
-    py = zone.cy - pack_h // 2
-    _rounded_gradient_rect(canvas, (px, py, px + pack_w, py + pack_h), max(18, pack_w // 12), _lighten(theme, 0.42), _lighten(accent, 0.20))
-    d.rounded_rectangle((px + int(pack_w * 0.10), py + int(pack_h * 0.12), px + int(pack_w * 0.90), py + int(pack_h * 0.38)),
-                        radius=max(8, pack_w // 22), fill=primary)
-    title = "FRISCH"
-    tf = _fit_font_width(d, title, FONT_PATH_EXTRABOLD, int(pack_w * 0.70), int(pack_h * 0.14), int(pack_h * 0.07))
-    tb = d.textbbox((0, 0), title, font=tf)
-    d.text((zone.cx - (tb[2] - tb[0]) // 2 - tb[0], py + int(pack_h * 0.22) - tb[1]), title, fill=accent, font=tf)
-    d.ellipse((zone.cx - int(pack_w * 0.18), py + int(pack_h * 0.50), zone.cx + int(pack_w * 0.18), py + int(pack_h * 0.86)),
-              fill=_lighten(primary, 0.10), outline=ink, width=max(3, pack_w // 80))
-
-
-def _draw_photo_cutout(
-    canvas: Image.Image,
-    image: Image.Image,
-    cx: int,
-    cy: int,
-    max_size: tuple[int, int],
-    angle: float = 0.0,
-    shadow_alpha: int = 90,
-):
-    img = image.copy()
-    img.thumbnail(max_size, Image.Resampling.LANCZOS)
-    if angle:
-        img = img.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
-    x = cx - img.width // 2
-    y = cy - img.height // 2
-    sw = int(img.width * 0.78)
-    sh = max(10, int(img.height * 0.13))
-    sx = x + (img.width - sw) // 2
-    sy = y + int(img.height * 0.82)
-    _draw_soft_shadow(canvas, sx, sy, sw, sh, blur=max(10, img.width // 18), intensity=shadow_alpha)
-    canvas.alpha_composite(img, (x, y))
-
-
-def _draw_ai_photo_frame(
-    canvas: Image.Image,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    paper: tuple[int, int, int],
-    hero_images: list[tuple[Image.Image, float, float, float, float]],
-):
-    radius = max(18, min(zone.w, zone.h) // 15)
-    _draw_soft_shadow(
-        canvas,
-        zone.x + int(zone.w * 0.05),
-        zone.y + int(zone.h * 0.82),
-        int(zone.w * 0.90),
-        int(zone.h * 0.16),
-        blur=max(18, zone.w // 22),
-        intensity=110,
-    )
-
-    frame = Image.new("RGBA", (zone.w, zone.h), (0, 0, 0, 0))
-    fd = ImageDraw.Draw(frame)
-    fd.rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, fill=(*_mix(paper, theme, 0.12), 255))
-    fd.rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, outline=(*accent, 230), width=max(2, zone.w // 260))
-
-    # A blurred, enlarged copy of the real product photo carries the scene.
-    for img, px, py, scale, angle in hero_images[:2]:
-        bg = img.copy()
-        bg.thumbnail((int(zone.w * scale * 1.45), int(zone.h * scale * 1.45)), Image.Resampling.LANCZOS)
-        if angle:
-            bg = bg.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
-        alpha = bg.getchannel("A").point(lambda a: min(165, int(a * 0.36)))
-        bg.putalpha(alpha)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=max(10, zone.w // 24)))
-        frame.alpha_composite(bg, (int(zone.w * px) - bg.width // 2, int(zone.h * py) - bg.height // 2))
-
-    wash = Image.new("RGBA", (zone.w, zone.h), (0, 0, 0, 0))
-    wd = ImageDraw.Draw(wash)
-    wd.rectangle((0, 0, zone.w, zone.h), fill=(*_lighten(paper, 0.02), 58))
-    wd.polygon(
-        [(0, int(zone.h * 0.70)), (zone.w, int(zone.h * 0.53)), (zone.w, zone.h), (0, zone.h)],
-        fill=(*_mix(_darken(primary, 0.08), theme, 0.22), 48),
-    )
-    frame.alpha_composite(wash)
-
-    mask = Image.new("L", (zone.w, zone.h), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, zone.w, zone.h), radius=radius, fill=255)
-    frame.putalpha(mask)
-    canvas.alpha_composite(frame, (zone.x, zone.y))
-
-    for img, px, py, scale, angle in hero_images:
-        _draw_photo_cutout(
-            canvas,
-            img,
-            zone.x + int(zone.w * px),
-            zone.y + int(zone.h * py),
-            (int(zone.w * scale), int(zone.h * scale)),
-            angle=angle,
-            shadow_alpha=105,
-        )
-
-
-def _draw_ai_product_scene(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    paper: tuple[int, int, int],
-):
-    product = _load_product_image(spec, (int(zone.w * 0.78), int(zone.h * 0.74)))
-    if product:
-        _draw_ai_photo_frame(
-            canvas,
-            zone,
-            primary,
-            accent,
-            theme,
-            paper,
-            [(product, 0.50, 0.55, 0.94, -1.5)],
-        )
-    else:
-        _rounded_gradient_rect(canvas, (zone.x, zone.y, zone.right, zone.bottom), max(18, zone.w // 16), _lighten(paper, 0.02), _mix(primary, theme, 0.2))
-        _draw_ai_placeholder_product(canvas, spec, zone, primary, accent, theme, (22, 24, 28))
-
-
-def _draw_ai_value_block(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    paper: tuple[int, int, int],
-):
-    d = ImageDraw.Draw(canvas)
-    fill = accent
-    text = primary if _luminance(accent) > 145 else paper
-    muted = _mix(text, fill, 0.38)
-    radius = max(12, min(zone.w, zone.h) // 7)
-    d.rounded_rectangle((zone.x, zone.y, zone.right, zone.bottom), radius=radius, fill=fill)
-
-    pad = int(zone.w * 0.07)
-    inner_w = zone.w - pad * 2
-    y = zone.y + int(zone.h * 0.12)
-    label = _offer_label(spec)
-    lf = _fit_font_width(d, label, FONT_PATH_EXTRABOLD, inner_w, int(zone.h * 0.16), int(zone.h * 0.08))
-    lb = d.textbbox((0, 0), label, font=lf)
-    d.text((zone.x + pad - lb[0], y - lb[1]), label, fill=text, font=lf)
-    label_h = lb[3] - lb[1]
-
-    if spec.old_price and not _is_event(spec):
-        old = f"statt {spec.old_price}"
-        of = _fit_font_width(d, old, FONT_PATH_BOLD, int(inner_w * 0.52), int(zone.h * 0.105), int(zone.h * 0.055))
-        ob = d.textbbox((0, 0), old, font=of)
-        ox = zone.right - pad - (ob[2] - ob[0])
-        oy = y + label_h + int(zone.h * 0.035)
-        d.text((ox - ob[0], oy - ob[1]), old, fill=muted, font=of)
-        d.line((ox, oy + (ob[3] - ob[1]) * 0.55, ox + (ob[2] - ob[0]), oy + (ob[3] - ob[1]) * 0.55),
-               fill=RED, width=max(2, zone.h // 70))
-
-    value = _offer_value(spec)
-    vf = _fit_font_width(d, value, FONT_PATH_EXTRABOLD, inner_w, int(zone.h * 0.54), int(zone.h * 0.24))
-    vb = d.textbbox((0, 0), value, font=vf)
-    value_y = zone.y + int(zone.h * (0.39 if spec.old_price and not _is_event(spec) else 0.34))
-    d.text((zone.x + pad - vb[0], value_y - vb[1]), value, fill=text, font=vf)
-
-    validity = spec.validity.upper()
-    mf = _fit_font_width(d, validity, FONT_PATH_BOLD, inner_w, int(zone.h * 0.15), int(zone.h * 0.075))
-    mb = d.textbbox((0, 0), validity, font=mf)
-    d.text((zone.x + pad - mb[0], zone.bottom - int(zone.h * 0.14) - mb[1]), validity, fill=muted, font=mf)
-
-
-def _draw_ai_text_panel(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    direction: CreativeDirection,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    paper: tuple[int, int, int],
-    high: bool,
-):
-    d = ImageDraw.Draw(canvas)
-    panel_alpha = 238 if _luminance(paper) > 185 else 250
-    radius = max(16, min(zone.w, zone.h) // 14)
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
-    ld.rounded_rectangle((zone.x, zone.y, zone.right, zone.bottom), radius=radius, fill=(*paper, panel_alpha))
-    ld.rounded_rectangle((zone.x, zone.y, zone.right, zone.bottom), radius=radius, outline=(*accent, 220), width=max(3, zone.w // 210))
-    canvas.alpha_composite(layer)
-    d = ImageDraw.Draw(canvas)
-
-    pad = int(zone.w * 0.07)
-    x = zone.x + pad
-    y = zone.y + int(zone.h * 0.08)
-    inner_w = zone.w - pad * 2
-    ink = (24, 28, 32)
-    muted = _mix(ink, paper, 0.44)
-
-    kicker = "MARKTAKTION" if _is_event(spec) else "PRODUKTANGEBOT"
-    kf = _fit_font_width(d, kicker, FONT_PATH_EXTRABOLD, inner_w, int(zone.h * 0.085), int(zone.h * 0.045))
-    kb = d.textbbox((0, 0), kicker, font=kf)
-    d.text((x - kb[0], y - kb[1]), kicker, fill=theme, font=kf)
-    d.rounded_rectangle((x, y + int(zone.h * 0.09), x + int(inner_w * 0.22), y + int(zone.h * 0.09) + max(4, zone.h // 95)),
-                        radius=max(3, zone.h // 300), fill=accent)
-    y += int(zone.h * 0.14)
-
-    title = spec.product.upper()
-    title_h = int(zone.h * (0.30 if high else 0.26))
-    tf, tl = _fit_wrapped(
-        d,
-        title,
-        FONT_PATH_EXTRABOLD,
-        inner_w,
-        title_h,
-        int(zone.h * (0.18 if high else 0.155)),
-        int(zone.h * 0.075),
-        max_lines=2,
-        line_spacing=0.98,
-    )
-    y = _draw_wrapped(d, tl, x, inner_w, y, tf, ink, align="left", line_spacing=0.98)
-
-    value_h = int(zone.h * 0.30)
-    value_zone = Zone(x, zone.bottom - int(zone.h * 0.08) - value_h, inner_w, value_h)
-
-    desc = ""
-    if _is_event(spec):
-        desc = spec.event_description or spec.claim or spec.origin or "Direkt bei EDEKA Mühlenbein in Kassel."
-    else:
-        desc = spec.claim or spec.origin or (spec.category or "")
-    if desc:
-        gap = int(zone.h * 0.035)
-        desc_y = y + gap
-        available = value_zone.y - desc_y - int(zone.h * 0.045)
-        if available >= int(zone.h * 0.065):
-            max_lines = 1 if available < int(zone.h * 0.12) else 2
-            df, dl = _fit_wrapped(
-                d,
-                desc,
-                FONT_PATH_SEMIBOLD,
-                inner_w,
-                available,
-                int(zone.h * (0.052 if max_lines == 1 else 0.058)),
-                int(zone.h * 0.032),
-                max_lines=max_lines,
-                line_spacing=1.13,
-            )
-            _draw_wrapped(d, dl, x, inner_w, desc_y, df, muted, align="left", line_spacing=1.13)
-
-    _draw_ai_value_block(canvas, spec, value_zone, primary, accent, paper)
-
-
-def _draw_editorial_backdrop(
-    canvas: Image.Image,
-    images: list[Image.Image],
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-):
-    w, h = canvas.size
-    canvas.paste(_diagonal_gradient((w, h), _darken(primary, 0.02), _darken(primary, 0.34)), (0, 0))
-    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    if images:
-        for idx, image in enumerate(images[:3]):
-            bg = image.copy()
-            bg.thumbnail((int(w * (1.18 if idx == 0 else 0.90)), int(h * (0.86 if idx == 0 else 0.64))), Image.Resampling.LANCZOS)
-            bg = bg.rotate(-4 if idx == 0 else (4 if idx == 1 else 0), expand=True, resample=Image.Resampling.BICUBIC)
-            alpha = bg.getchannel("A").point(lambda a: min(116, int(a * (0.28 if idx == 0 else 0.20))))
-            bg.putalpha(alpha)
-            bg = bg.filter(ImageFilter.GaussianBlur(radius=max(18, w // 22)))
-            pos = [(0.30, 0.32), (0.78, 0.38), (0.54, 0.60)][idx]
-            x = int(w * pos[0]) - bg.width // 2
-            y = int(h * pos[1]) - bg.height // 2
-            layer.alpha_composite(bg, (x, y))
-    d = ImageDraw.Draw(layer)
-    d.rectangle((0, 0, w, h), fill=(*_darken(primary, 0.18), 44))
-    canvas.alpha_composite(layer)
-    _draw_spotlight(canvas, int(w * 0.30), int(h * 0.30), int(max(w, h) * 0.36), _lighten(accent, 0.10), 76, 2.4)
-    _draw_spotlight(canvas, int(w * 0.84), int(h * 0.72), int(max(w, h) * 0.30), theme, 50, 2.6)
-
-
-def _draw_editorial_reading_wash(canvas: Image.Image, zone: Zone, primary: tuple[int, int, int], side: str):
-    w, h = canvas.size
-    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    px = layer.load()
-    base = _darken(primary, 0.48)
-    for y in range(max(0, zone.y - int(h * 0.08)), min(h, zone.bottom + int(h * 0.04))):
-        for x in range(w):
-            if side == "right":
-                tx = max(0.0, min(1.0, (x - zone.x + int(w * 0.12)) / max(1, zone.w + int(w * 0.16))))
-            elif side == "left":
-                tx = max(0.0, min(1.0, (zone.right - x + int(w * 0.12)) / max(1, zone.w + int(w * 0.16))))
-            else:
-                tx = 1.0
-            ty = max(0.0, min(1.0, (y - zone.y + int(h * 0.08)) / max(1, zone.h + int(h * 0.12))))
-            alpha = int(132 * min(1.0, tx) * min(1.0, ty))
-            if alpha > 0:
-                px[x, y] = (*base, max(px[x, y][3], alpha))
-    layer = layer.filter(ImageFilter.GaussianBlur(radius=max(14, w // 70)))
-    canvas.alpha_composite(layer)
-
-
-def _draw_editorial_offer(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    zone: Zone,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-):
-    d = ImageDraw.Draw(canvas)
-    slant = max(12, int(zone.w * 0.055))
-    shadow = [(zone.x + slant + 5, zone.y + 8), (zone.right + 5, zone.y + 8), (zone.right - slant + 5, zone.bottom + 8), (zone.x + 5, zone.bottom + 8)]
-    body = [(zone.x + slant, zone.y), (zone.right, zone.y), (zone.right - slant, zone.bottom), (zone.x, zone.bottom)]
-    _aa_polygon(canvas, shadow, fill=(0, 14, 35, 92))
-    _aa_polygon(canvas, body, fill=accent)
-    header_h = max(18, int(zone.h * 0.22))
-    header = [(zone.x + slant, zone.y), (zone.right, zone.y), (zone.right - int(slant * 0.35), zone.y + header_h), (zone.x + int(slant * 0.65), zone.y + header_h)]
-    _aa_polygon(canvas, header, fill=RED if not _is_event(spec) else _darken(primary, 0.12))
-    ink = primary if _luminance(accent) > 145 else (255, 255, 255)
-    muted = _mix(ink, accent, 0.45)
-    pad = int(zone.w * 0.075)
-    label = _offer_label(spec)
-    lf = _fit_font_width(d, label, FONT_PATH_EXTRABOLD, int(zone.w * 0.46), int(header_h * 0.50), int(header_h * 0.28))
-    lb = d.textbbox((0, 0), label, font=lf)
-    d.text((zone.x + pad + slant // 2 - lb[0], zone.y + (header_h - (lb[3] - lb[1])) // 2 - lb[1]), label, fill=(255, 255, 255), font=lf)
-    if spec.old_price and not _is_event(spec):
-        old = f"statt {spec.old_price}"
-        of = _fit_font_width(d, old, FONT_PATH_BOLD, int(zone.w * 0.34), int(zone.h * 0.13), int(zone.h * 0.07))
-        ob = d.textbbox((0, 0), old, font=of)
-        ox = zone.right - pad - slant - (ob[2] - ob[0])
-        oy = zone.y + (header_h - (ob[3] - ob[1])) // 2
-        d.text((ox - ob[0], oy - ob[1]), old, fill=(255, 255, 255), font=of)
-        d.line((ox, oy + (ob[3] - ob[1]) * 0.55, ox + (ob[2] - ob[0]), oy + (ob[3] - ob[1]) * 0.55), fill=accent, width=max(2, zone.h // 70))
-
-    # Events repeat the date in their own strip, so the validity meta is dropped
-    # here to avoid duplication. The price/value is vertically centred in the
-    # band between the header and the (optional) meta line, never overlapping it.
-    is_ev = _is_event(spec)
-    meta = "" if is_ev else spec.validity.upper()
-    meta_reserve = int(zone.h * 0.20) if meta else int(zone.h * 0.10)
-    value = _offer_value(spec)
-    value_top = zone.y + header_h + int(zone.h * 0.04)
-    value_band_h = max(int(zone.h * 0.22), zone.bottom - meta_reserve - value_top)
-    vf = _fit_font_width(d, value, FONT_PATH_EXTRABOLD, zone.w - pad * 2 - slant, value_band_h, int(zone.h * 0.22))
-    vb = d.textbbox((0, 0), value, font=vf)
-    value_y = value_top + (value_band_h - (vb[3] - vb[1])) // 2
-    d.text((zone.x + pad - vb[0], value_y - vb[1]), value, fill=ink, font=vf)
-    if meta:
-        mf = _fit_font_width(d, meta, FONT_PATH_BOLD, zone.w - pad * 2 - slant, int(zone.h * 0.13), int(zone.h * 0.07))
-        mb = d.textbbox((0, 0), meta, font=mf)
-        d.text((zone.x + pad - mb[0], zone.bottom - int(zone.h * 0.13) - mb[1]), meta, fill=muted, font=mf)
-
-
-def _draw_generated_event_backdrop(
-    canvas: Image.Image,
-    image_path: Path,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-):
+def _grade_photo(canvas: Image.Image, image_path: Path, primary: tuple[int, int, int]):
+    """Full-bleed photo with a cinematic grade so headline type can sit ON it."""
     w, h = canvas.size
     try:
-        photo = _cover_image(Image.open(image_path), (w, h))
+        photo = _cover_image(Image.open(image_path), (w, h)).convert("RGB")
     except Exception:  # noqa: BLE001
+        canvas.paste(_diagonal_gradient((w, h), _darken(primary, 0.05), _darken(primary, 0.5)), (0, 0))
         return
-    photo = photo.filter(ImageFilter.GaussianBlur(radius=max(2, w // 420)))
-    canvas.alpha_composite(photo)
-    wash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    wd = ImageDraw.Draw(wash)
-    wd.rectangle((0, 0, w, h), fill=(*_darken(primary, 0.20), 72))
-    wd.rectangle((0, int(h * 0.46), w, h), fill=(*_darken(primary, 0.38), 98))
-    wd.rectangle((0, 0, w, int(h * 0.20)), fill=(*_darken(primary, 0.30), 54))
-    canvas.alpha_composite(wash.filter(ImageFilter.GaussianBlur(radius=max(5, w // 160))))
-    _draw_spotlight(canvas, int(w * 0.42), int(h * 0.30), int(max(w, h) * 0.34), _lighten(accent, 0.12), 58, 2.2)
+    # Pull the image into one cohesive grade: slight desaturation + contrast.
+    photo = ImageEnhance.Color(photo).enhance(0.90)
+    photo = ImageEnhance.Contrast(photo).enhance(1.07)
+    canvas.paste(photo, (0, 0))
+
+    ink = _mix(DISPLAY_INK, _darken(primary, 0.55), 0.45)
+    # Bottom-up scrim: clear at ~42% height, deep ink at the base (legible footer
+    # of type) — this is what makes text-on-photo read as design, not a label.
+    bottom = Image.new("L", (1, h), 0)
+    bp = bottom.load()
+    for yy in range(h):
+        t = (yy / max(1, h - 1) - 0.40) / 0.60
+        bp[0, yy] = int(max(0.0, min(1.0, t)) ** 1.25 * 250)
+    bscrim = Image.new("RGBA", (w, h), (*ink, 0))
+    bscrim.putalpha(bottom.resize((w, h)))
+    canvas.alpha_composite(bscrim)
+    # Soft top scrim so the brand lockup always reads.
+    top = Image.new("L", (1, h), 0)
+    tp = top.load()
+    for yy in range(h):
+        tp[0, yy] = int(max(0.0, min(1.0, 1.0 - yy / (h * 0.24))) * 160)
+    tscrim = Image.new("RGBA", (w, h), (*ink, 0))
+    tscrim.putalpha(top.resize((w, h)))
+    canvas.alpha_composite(tscrim)
+    _vignette(canvas, 78)
 
 
-def _draw_event_card_stack(
-    canvas: Image.Image,
-    spec: PromotionSpec,
-    x: int,
-    y: int,
-    inner_w: int,
-    header_h: int,
-    date_h: int,
-    cards_h: int,
-    gap: int,
-    primary: tuple[int, int, int],
-    accent: tuple[int, int, int],
-    theme: tuple[int, int, int],
-    h: int,
-) -> int:
-    """Clean, structured event flyer block: hero header card (kicker + title +
-    location ribbon), a date strip and a row of detail chips. Returns the y of
-    the bottom edge of the block. Shared by the photo-background and the
-    no-background AI event layouts so both read like a real event flyer."""
+def _halftone(canvas: Image.Image, color: tuple[int, int, int]):
+    """Corner halftone dots — retail energy for the no-photo graphic field."""
+    w, h = canvas.size
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    step = max(16, w // 34)
+    r0 = step * 0.20
+    for yy in range(int(h * 0.5), h, step):
+        for xx in range(0, int(w * 0.52), step):
+            fade = (1.0 - xx / (w * 0.52)) * ((yy - h * 0.5) / (h * 0.5))
+            if fade <= 0:
+                continue
+            r = r0 * (0.35 + fade)
+            d.ellipse((xx - r, yy - r, xx + r, yy + r), fill=(*color, int(70 * fade)))
+    canvas.alpha_composite(layer)
+
+
+def _graphic_backdrop(canvas: Image.Image, spec: PromotionSpec, primary: tuple[int, int, int], accent: tuple[int, int, int], theme: tuple[int, int, int]):
+    """Designed graphic poster field for events with no AI photo: diagonal colour
+    grade, an oversized ghost word bleeding off-frame, an accent slash and
+    halftone texture — a real composition, not a flat gradient with boxes."""
+    w, h = canvas.size
+    base = _mix(DISPLAY_INK, _darken(primary, 0.32), 0.6)
+    canvas.paste(_diagonal_gradient((w, h), _darken(base, 0.0), _darken(base, 0.46)), (0, 0))
+
+    # Oversized ghost word for depth (the first word of the title).
+    words = _display_title(spec).split()
+    word = (words[0] if words else "Markt").upper()
+    gf = _load_font(FONT_PATH_DISPLAY_COMPRESSED, int(h * 0.46))
+    gl = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(gl)
+    gb = gd.textbbox((0, 0), word, font=gf)
+    gd.text((int(w * 0.99) - (gb[2] - gb[0]) - gb[0], int(h * 0.12) - gb[1]), word, font=gf, fill=(*_lighten(base, 0.12), 34))
+    canvas.alpha_composite(gl)
+
+    # Single bold accent slash across the upper third.
+    slash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    _aa_polygon(slash, [(0, int(h * 0.32)), (w, int(h * 0.135)), (w, int(h * 0.175)), (0, int(h * 0.36))], fill=(*accent, 46))
+    canvas.alpha_composite(slash)
+
+    _halftone(canvas, accent)
+    _draw_spotlight(canvas, int(w * 0.22), int(h * 0.26), int(max(w, h) * 0.30), _lighten(accent, 0.2), 44, 2.4)
+    _draw_spotlight(canvas, int(w * 0.82), int(h * 0.70), int(max(w, h) * 0.26), _lighten(primary, 0.25), 40, 2.6)
+    _vignette(canvas, 70)
+
+
+def _product_backdrop(canvas: Image.Image, primary: tuple[int, int, int], theme: tuple[int, int, int]):
+    """Premium retail backdrop: a graded brand field with a spotlight behind the
+    product so the cut-out reads as a hero, plus a bottom scrim that anchors the
+    type block in a dark, legible zone."""
+    w, h = canvas.size
+    top = _mix(_darken(primary, 0.04), DISPLAY_INK, 0.22)
+    canvas.paste(_diagonal_gradient((w, h), top, _darken(primary, 0.46)), (0, 0))
+    _draw_spotlight(canvas, int(w * 0.5), int(h * 0.34), int(max(w, h) * 0.46), _lighten(primary, 0.42), 100, 1.7)
+    _draw_spotlight(canvas, int(w * 0.84), int(h * 0.80), int(max(w, h) * 0.28), theme, 36, 2.5)
+    ink = _mix(DISPLAY_INK, _darken(primary, 0.5), 0.5)
+    grad = Image.new("L", (1, h), 0)
+    gp = grad.load()
+    for yy in range(h):
+        t = (yy / max(1, h - 1) - 0.46) / 0.54
+        gp[0, yy] = int(max(0.0, min(1.0, t)) ** 1.3 * 214)
+    scrim = Image.new("RGBA", (w, h), (*ink, 0))
+    scrim.putalpha(grad.resize((w, h)))
+    canvas.alpha_composite(scrim)
+    _vignette(canvas, 72)
+
+
+def _draw_poster_frame(canvas: Image.Image, margin: int, rgba: tuple[int, int, int, int], bottom: int):
+    w, _ = canvas.size
+    inset = int(margin * 0.55)
+    ImageDraw.Draw(canvas, "RGBA").rectangle(
+        (inset, inset, w - inset, bottom - inset), outline=rgba, width=max(2, w // 640)
+    )
+
+
+def _draw_cutout(canvas: Image.Image, img: Image.Image, cx: int, cy: int, max_size: tuple[int, int], angle: float = 0.0):
+    im = img.copy()
+    im.thumbnail(max_size, Image.Resampling.LANCZOS)
+    if angle:
+        im = im.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+    x = cx - im.width // 2
+    y = cy - im.height // 2
+    sw = int(im.width * 0.80)
+    sh = max(10, int(im.height * 0.12))
+    _draw_soft_shadow(canvas, x + (im.width - sw) // 2, y + int(im.height * 0.84), sw, sh, blur=max(12, im.width // 16), intensity=125)
+    canvas.alpha_composite(im, (x, y))
+
+
+def _draw_kicker(canvas: Image.Image, x: int, y: int, label: str, h: int, accent: tuple[int, int, int]) -> int:
+    """Accent rule + letter-spaced eyebrow. Returns the bottom y."""
     draw = ImageDraw.Draw(canvas)
-    day, time_value = _event_date_parts(spec.validity)
-    radius = max(18, header_h // 7)
+    rule_w = int(h * 2.1)
+    rule_h = max(3, h // 6)
+    draw.rectangle((x, y, x + rule_w, y + rule_h), fill=accent)
+    ky = y + rule_h + int(h * 0.30)
+    kf = _load_font(FONT_PATH_DISPLAY_MED, int(h * 0.66))
+    _tracked_text(draw, x, ky, label.upper(), kf, WARM_WHITE, max(2, int(h * 0.11)))
+    return ky + int(h * 0.66) + int(h * 0.12)
 
-    identity = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    idd = ImageDraw.Draw(identity)
-    idd.rounded_rectangle((x, y + max(4, h // 360), x + inner_w, y + header_h + max(4, h // 360)), radius=radius, fill=(0, 12, 30, 150))
-    canvas.alpha_composite(identity.filter(ImageFilter.GaussianBlur(radius=max(2, h // 520))))
+
+def _fit_headline(draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int, max_lines: int = 3):
+    # Allow long hyphenated titles (e.g. SCHOKOLADEN-VERKOSTUNG) to break at the
+    # hyphen, then restore the hyphen on any line that stayed whole.
+    wrappable = re.sub(r"-(?=\S)", "- ", text)
+    font, lines = _fit_wrapped(
+        draw, wrappable, FONT_PATH_DISPLAY, max_w, max_h,
+        start_size=int(max_h), min_size=int(max_h * 0.16),
+        max_lines=max_lines, line_spacing=0.84,
+    )
+    lines = [ln.replace("- ", "-") for ln in lines]
+    line_h = _text_size(draw, "ÁgMy", font)[1]
+    total = int(line_h * 0.84 * (len(lines) - 1)) + line_h
+    widest = max((_text_size(draw, ln, font)[0] for ln in lines), default=0)
+    return font, lines, line_h, total, widest
+
+
+def _draw_headline(canvas: Image.Image, x: int, y: int, font, lines: list[str], line_h: int, fill=(255, 255, 255), shadow: int = 150) -> int:
     draw = ImageDraw.Draw(canvas)
-    draw.rounded_rectangle((x, y, x + inner_w, y + header_h), radius=radius, fill=(*_darken(primary, 0.24), 224))
-    draw.rectangle((x, y, x + inner_w, y + max(6, header_h // 24)), fill=(255, 214, 0, 238))
+    cy = y
+    for line in lines:
+        draw.text((x + max(2, line_h // 40), cy + max(2, line_h // 30)), line, font=font, fill=(0, 0, 0, shadow))
+        draw.text((x, cy), line, font=font, fill=fill)
+        cy += int(line_h * 0.84)
+    return cy
+
+
+def _draw_info_line(canvas: Image.Image, x: int, y: int, h: int, parts: list[str], accent: tuple[int, int, int], max_w: int):
+    draw = ImageDraw.Draw(canvas)
+    tick_w = max(6, h // 5)
+    draw.rectangle((x, y, x + tick_w, y + h), fill=accent)
+    tx = x + tick_w + int(h * 0.55)
+    text = "    ·    ".join(p for p in parts if p)
+    f = _fit_font_width(draw, text, FONT_PATH_DISPLAY_MED, max_w - (tx - x), int(h * 0.92), int(h * 0.5))
+    fb = draw.textbbox((0, 0), text, font=f)
+    draw.text((tx - fb[0], y + (h - (fb[3] - fb[1])) // 2 - fb[1]), text, font=f, fill=WARM_WHITE)
+
+
+def _draw_price_lockup(canvas: Image.Image, x: int, baseline_y: int, spec: PromotionSpec, accent: tuple[int, int, int], big_h: int) -> int:
+    """Left-aligned hero price in accent: euros + superscript cents + currency,
+    with an optional struck-through old price. Returns the top y of the price."""
+    draw = ImageDraw.Draw(canvas)
+    euros, cents, cur = _split_price(_offer_value(spec))
+    ef = _load_font(FONT_PATH_DISPLAY_COMPRESSED, big_h)
+    eb = draw.textbbox((0, 0), euros, font=ef)
+    ew, eh = eb[2] - eb[0], eb[3] - eb[1]
+    top = baseline_y - eh
+    sh = max(2, big_h // 90)
+    draw.text((x - eb[0] + sh, top - eb[1] + sh), euros, font=ef, fill=(0, 0, 0, 140))
+    draw.text((x - eb[0], top - eb[1]), euros, font=ef, fill=accent)
+    tail_x = x + ew + int(big_h * 0.05)
+    cf = _load_font(FONT_PATH_DISPLAY_COMPRESSED, int(big_h * 0.5))
+    if cents:
+        cbb = draw.textbbox((0, 0), cents, font=cf)
+        draw.text((tail_x - cbb[0], top - cbb[1]), cents, font=cf, fill=accent)
+    curf = _load_font(FONT_PATH_DISPLAY_MED, int(big_h * 0.4))
+    if cur:
+        cu = draw.textbbox((0, 0), cur, font=curf)
+        draw.text((tail_x - cu[0], baseline_y - (cu[3] - cu[1]) - cu[1]), cur, font=curf, fill=accent)
+    if spec.old_price and not _is_event(spec):
+        old = f"statt {spec.old_price}"
+        of = _load_font(FONT_PATH_DISPLAY_MED, int(big_h * 0.20))
+        ob = draw.textbbox((0, 0), old, font=of)
+        ox, oy = x, top - (ob[3] - ob[1]) - int(big_h * 0.10)
+        draw.text((ox - ob[0], oy - ob[1]), old, font=of, fill=WARM_WHITE)
+        draw.line((ox, oy + (ob[3] - ob[1]) * 0.5, ox + (ob[2] - ob[0]), oy + (ob[3] - ob[1]) * 0.5), fill=RED, width=max(2, big_h // 36))
+    return top
+
+
+def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, margin: int, safe_bottom: int, tall: bool):
+    w, h = canvas.size
+    x = margin + int(w * 0.018)
+    block_w = w - margin * 2 - int(w * 0.036)
 
     kicker = _event_kicker(spec)
-    kf = _fit_font_width(draw, kicker, FONT_PATH_SEMIBOLD, int(inner_w * 0.42), int(header_h * 0.13), int(header_h * 0.075))
-    kb = draw.textbbox((0, 0), kicker, font=kf)
-    kicker_w = kb[2] - kb[0] + int(header_h * 0.34)
-    kicker_h = int(header_h * 0.18)
-    kicker_x = x + (inner_w - kicker_w) // 2
-    kicker_y = y + int(header_h * 0.12)
-    draw.rounded_rectangle((kicker_x, kicker_y, kicker_x + kicker_w, kicker_y + kicker_h), radius=kicker_h // 2, fill=(255, 214, 0, 226))
-    draw.text((kicker_x + (kicker_w - (kb[2] - kb[0])) // 2 - kb[0], kicker_y + (kicker_h - (kb[3] - kb[1])) // 2 - kb[1]), kicker, fill=primary, font=kf)
-
     title = _display_title(spec).upper()
+    kind = _event_copy_kind(spec)
+    day, time_value = _event_date_parts(spec.validity)
+    date_part = ", ".join(p for p in [day if day and day != "TERMIN" else "", time_value] if p) or "VOR ORT"
+    price = (spec.price or "").strip()
+    cta = price.upper() if price else ("EINTRITT FREI" if kind == "football" else "AKTION IM MARKT")
     place = _short_event_info(spec.origin)
-    place_text = f"BEI EDEKA MÜHLENBEIN · {place}" if place and place not in {"KASSEL", "IM MARKT"} else "BEI EDEKA MÜHLENBEIN"
-    ribbon_h = int(header_h * 0.21)
-    ribbon_y = y + header_h - ribbon_h - int(header_h * 0.08)
-    title_y = y + int(header_h * 0.28)
-    title_area_h = max(int(header_h * 0.30), ribbon_y - title_y - int(header_h * 0.045))
-    tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, int(inner_w * 0.90), title_area_h, int(header_h * 0.40), int(header_h * 0.15), max_lines=2, line_spacing=0.88)
-    _draw_wrapped_shadow(draw, tl, x + int(inner_w * 0.06), int(inner_w * 0.88), title_y, tf, (255, 255, 255), align="center", line_spacing=0.90, shadow_offset=(0, max(2, h // 300)))
+    place_text = "BEI EDEKA MÜHLENBEIN" + (f" · {place}" if place and place not in {"KASSEL", "IM MARKT"} else "")
 
-    ribbon_x = x + int(inner_w * 0.18)
-    ribbon_w = int(inner_w * 0.64)
-    slant = int(ribbon_h * 0.40)
-    ribbon = [(ribbon_x, ribbon_y), (ribbon_x + ribbon_w, ribbon_y), (ribbon_x + ribbon_w - slant, ribbon_y + ribbon_h), (ribbon_x + slant, ribbon_y + ribbon_h)]
-    _aa_polygon(canvas, ribbon, fill=(255, 214, 0, 236))
-    rf = _fit_font_width(draw, place_text, FONT_PATH_EXTRABOLD, int(ribbon_w * 0.88), int(ribbon_h * 0.60), int(ribbon_h * 0.34))
-    rb = draw.textbbox((0, 0), place_text, font=rf)
-    draw.text((ribbon_x + (ribbon_w - (rb[2] - rb[0])) // 2 - rb[0], ribbon_y + (ribbon_h - (rb[3] - rb[1])) // 2 - rb[1]), place_text, fill=primary, font=rf)
+    draw = ImageDraw.Draw(canvas)
+    kicker_h = int(h * (0.034 if tall else 0.030))
+    place_h = int(h * (0.036 if tall else 0.032))
+    info_h = int(h * (0.030 if tall else 0.028))
+    head_max_h = int(h * (0.34 if tall else 0.24))
+    hf, hl, line_h, head_total, head_widest = _fit_headline(draw, title, block_w, head_max_h, max_lines=2 if not tall else 3)
 
-    date_y = y + header_h + gap
-    draw.rounded_rectangle((x, date_y, x + inner_w, date_y + date_h), radius=max(12, date_h // 5), fill=(255, 214, 0, 242))
-    day_w = int(inner_w * 0.20)
-    draw.rounded_rectangle((x, date_y, x + day_w, date_y + date_h), radius=max(12, date_h // 5), fill=(*_darken(primary, 0.16), 236))
-    draw.rectangle((x + day_w - max(12, date_h // 5), date_y, x + day_w, date_y + date_h), fill=(*_darken(primary, 0.16), 236))
-    day_text = day if day and day != "TERMIN" else "TERMIN"
-    time_text = time_value or "VOR ORT"
-    day_font = _fit_font_width(draw, day_text, FONT_PATH_EXTRABOLD, int(day_w * 0.72), int(date_h * 0.58), int(date_h * 0.34))
-    day_box = draw.textbbox((0, 0), day_text, font=day_font)
-    draw.text((x + (day_w - (day_box[2] - day_box[0])) // 2 - day_box[0], date_y + (date_h - (day_box[3] - day_box[1])) // 2 - day_box[1]), day_text, fill=(255, 255, 255), font=day_font)
-    time_font = _fit_font_width(draw, time_text, FONT_PATH_EXTRABOLD, int(inner_w * 0.70), int(date_h * 0.62), int(date_h * 0.34))
-    time_box = draw.textbbox((0, 0), time_text, font=time_font)
-    time_x = x + day_w + (inner_w - day_w - (time_box[2] - time_box[0])) // 2
-    draw.text((time_x - time_box[0], date_y + (date_h - (time_box[3] - time_box[1])) // 2 - time_box[1]), time_text, fill=primary, font=time_font)
+    underline_gap = int(h * 0.022)
+    underline_h = max(5, int(h * 0.011))
+    gap = int(h * 0.020)
+    kicker_block = int(kicker_h * 1.05)
+    total = kicker_block + gap + head_total + underline_gap + underline_h + gap + place_h + int(gap * 0.6) + info_h
+    top = safe_bottom - int(h * 0.045) - total
+    top = max(top, int(h * (0.30 if tall else 0.22)))
 
-    cards = _event_detail_cards(spec, day, time_value)[1:]
-    card_y = date_y + date_h + gap
-    card_gap = max(10, int(inner_w * 0.012))
-    card_count = max(1, len(cards))
-    card_w = (inner_w - card_gap * (card_count - 1)) // card_count
-    for i, (label, value) in enumerate(cards):
-        cx = x + i * (card_w + card_gap)
-        fill = (255, 255, 255, 238) if i != 1 else (255, 214, 0, 240)
-        ink = primary
-        draw.rounded_rectangle((cx, card_y, cx + card_w, card_y + cards_h), radius=max(12, cards_h // 10), fill=fill)
-        draw.rectangle((cx, card_y, cx + card_w, card_y + max(5, cards_h // 18)), fill=primary if i != 1 else _darken(primary, 0.05))
-        lf = _fit_font_width(draw, label, FONT_PATH_EXTRABOLD, int(card_w * 0.84), int(cards_h * 0.18), int(cards_h * 0.10))
-        lb = draw.textbbox((0, 0), label, font=lf)
-        label_y = card_y + int(cards_h * 0.20) - lb[1]
-        draw.text((cx + (card_w - (lb[2] - lb[0])) // 2 - lb[0], label_y), label, fill=_darken(primary, 0.04), font=lf)
-        vf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, int(card_w * 0.86), int(cards_h * 0.31), int(cards_h * 0.16))
-        vb = draw.textbbox((0, 0), value, font=vf)
-        value_y = card_y + int(cards_h * 0.58) - vb[1]
-        draw.text((cx + (card_w - (vb[2] - vb[0])) // 2 - vb[0], value_y), value, fill=ink, font=vf)
+    cy = _draw_kicker(canvas, x, top, kicker, kicker_h, accent)
+    cy += int(gap * 0.4)
+    head_bottom = _draw_headline(canvas, x, cy, hf, hl, line_h, fill=(255, 255, 255))
+    uy = head_bottom + underline_gap
+    draw.rectangle((x, uy, x + min(int(block_w * 0.46), head_widest), uy + underline_h), fill=accent)
+    py = uy + underline_h + gap
+    pf = _fit_font_width(draw, place_text, FONT_PATH_DISPLAY_MED, block_w, int(place_h * 0.92), int(place_h * 0.5))
+    pb = draw.textbbox((0, 0), place_text, font=pf)
+    draw.text((x - pb[0], py - pb[1]), place_text, font=pf, fill=WARM_WHITE)
+    iy = py + (pb[3] - pb[1]) + int(gap * 0.8)
+    _draw_info_line(canvas, x, iy, info_h, [date_part, cta], accent, block_w)
 
-    return card_y + cards_h
+
+def _compose_product(canvas: Image.Image, spec: PromotionSpec, product: Image.Image | None, primary, accent, margin: int, safe_bottom: int, tall: bool, square: bool):
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    if square:
+        x = int(w * 0.50)
+        block_w = w - x - margin - int(w * 0.018)
+    else:
+        x = margin + int(w * 0.018)
+        block_w = w - margin * 2 - int(w * 0.036)
+
+    title = spec.product.upper()
+    claim = _copy_clean(spec.claim or spec.origin or spec.category or "")
+    kicker_h = int(h * (0.030 if not square else 0.028))
+    head_max_h = int(h * (0.135 if not square else 0.125))
+    big_price = int(h * (0.115 if not square else 0.105))
+    claim_h = int(h * 0.030)
+    validity_h = int(h * 0.024)
+    gap = int(h * 0.020)
+
+    hf, hl, line_h, head_total, head_widest = _fit_headline(draw, title, block_w, head_max_h, max_lines=2)
+    cl: list[str] = []
+    cl_h = 0
+    claim_block = 0
+    if claim:
+        cf, cl = _fit_wrapped(draw, claim, FONT_PATH_DISPLAY_LIGHT, block_w, int(claim_h * 2.2), claim_h, int(claim_h * 0.55), max_lines=2, line_spacing=1.08)
+        cl_h = _text_size(draw, "Ág", cf)[1]
+        claim_block = int(cl_h * 1.08 * len(cl))
+    old_block = int(big_price * 0.32) if (spec.old_price and not _is_event(spec)) else 0
+
+    # --- bottom-anchored type stack (validity → price → claim → headline → kicker) ---
+    bottom = safe_bottom - int(h * 0.035)
+    validity = spec.validity.upper()
+    vfit = _fit_font_width(draw, validity, FONT_PATH_DISPLAY_MED, block_w, validity_h, int(validity_h * 0.6))
+    vb = draw.textbbox((0, 0), validity, font=vfit)
+    draw.text((x - vb[0], bottom - (vb[3] - vb[1]) - vb[1]), validity, font=vfit, fill=_mix(WARM_WHITE, primary, 0.20))
+
+    price_baseline = bottom - (vb[3] - vb[1]) - int(gap * 0.7)
+    price_top = _draw_price_lockup(canvas, x, price_baseline, spec, accent, big_price)
+
+    cur = price_top - old_block - int(gap * 0.9)
+    if claim:
+        cur -= claim_block
+        cyy = cur
+        for line in cl:
+            lb = draw.textbbox((0, 0), line, font=cf)
+            draw.text((x - lb[0], cyy - lb[1]), line, font=cf, fill=_mix(WARM_WHITE, primary, 0.06))
+            cyy += int(cl_h * 1.08)
+        cur -= int(gap * 0.7)
+
+    cur -= head_total
+    head_top = cur
+    _draw_headline(canvas, x, head_top, hf, hl, line_h, fill=(255, 255, 255))
+
+    kicker_block = int(kicker_h * 1.05)
+    cur = head_top - int(gap * 0.5) - kicker_block
+    _draw_kicker(canvas, x, cur, "Angebot", kicker_h, accent)
+    block_top = cur
+
+    # --- product hero, fitted strictly above the type block (no overlap) ---
+    if product is not None:
+        if square:
+            _draw_cutout(canvas, product, int(w * 0.27), int(h * 0.46), (int(w * 0.44), int(h * 0.64)), angle=-1.5)
+        else:
+            avail_top = margin + int(h * 0.115)
+            avail_bottom = block_top - int(h * 0.015)
+            cy = (avail_top + avail_bottom) // 2
+            box_h = max(int(h * 0.18), avail_bottom - avail_top)
+            _draw_cutout(canvas, product, int(w * 0.52), cy, (int(w * 0.82), box_h), angle=-1.5)
 
 
 def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDirection, fmt: FormatType, event_background: Path | None = None):
-    """Photo-led AI renderer: one editorial poster, not a boxed scene."""
+    """Editorial, photo-led AI poster — type lives on the artwork, one accent."""
     w, h = canvas.size
-    tall = h / w > 1.12
+    ratio = h / w
+    tall = ratio > 1.12
+    square = 0.92 <= ratio <= 1.12
     is_event = _is_event(spec)
-    high = direction.boldness == "high" or _enum_val(spec.differentiation_level) == "alto"
-    primary, accent, theme, paper = _ai_palette(spec, direction)
-    margin = int(w * (0.060 if tall else 0.055))
+    primary, _accent_raw, theme, paper = _ai_palette(spec, direction)
+    accent = _hex_to_rgb(BRAND_YELLOW)  # one disciplined marketing accent
+    margin = int(w * 0.055)
     footer_h = int(h * 0.12)
-    safe_bottom = h - footer_h - int(h * 0.026)
+    safe_bottom = h - footer_h
 
-    hero_images: list[Image.Image] = []
-    product = None if is_event else _load_product_image(spec, (int(w * 0.60), int(h * 0.56)))
-    if product is not None:
-        hero_images = [product]
+    product = None if is_event else _load_product_image(spec, (int(w * 0.86), int(h * 0.52)))
+
     if is_event and event_background:
-        _draw_generated_event_backdrop(canvas, event_background, primary, accent)
+        _grade_photo(canvas, event_background, primary)
+    elif is_event:
+        _graphic_backdrop(canvas, spec, primary, accent, theme)
     else:
-        _draw_editorial_backdrop(canvas, hero_images, primary, accent, theme)
-    draw = ImageDraw.Draw(canvas)
+        _product_backdrop(canvas, primary, theme)
 
-    if is_event and not event_background:
-        # No photo scene available: the structured event-card stack below is the
-        # hero. A subtle themed glow keeps the backdrop alive without the noisy
-        # vector "stage" that used to read as broken UI.
-        _draw_spotlight(canvas, int(w * 0.30), int(h * 0.30), int(max(w, h) * 0.34), _lighten(accent, 0.16), 70, 2.3)
-        _draw_spotlight(canvas, int(w * 0.82), int(h * 0.66), int(max(w, h) * 0.28), theme, 54, 2.4)
-    elif product:
-        if tall:
-            _draw_photo_cutout(canvas, product, int(w * 0.50), int(h * 0.31), (int(w * 0.86), int(h * 0.46)), angle=-1.0, shadow_alpha=118)
-        else:
-            _draw_photo_cutout(canvas, product, int(w * 0.28), int(h * 0.45), (int(w * 0.51), int(h * 0.52)), angle=-1.0, shadow_alpha=118)
+    _draw_poster_frame(canvas, margin, (*WARM_WHITE, 55), safe_bottom)
 
-    # Brand on the image, not inside a separate component.
-    brand_h = int(h * (0.060 if tall else 0.074))
-    _draw_brand_lockup(canvas, margin, int(h * 0.038), brand_h, accent, sub_color=(245, 248, 252), halo=True)
-
-    if is_event and not event_background:
-        # Hero event flyer: the structured card stack fills the poster.
-        text = Zone(margin, int(h * 0.205), w - margin * 2, safe_bottom - int(h * 0.205))
-        wash_side = "full"
-    elif tall:
-        text = Zone(margin, int(h * (0.55 if is_event else 0.51)), w - margin * 2, safe_bottom - int(h * (0.55 if is_event else 0.51)))
-        wash_side = "full"
-    else:
-        text = Zone(int(w * (0.57 if not is_event else 0.09)), int(h * (0.24 if not is_event else 0.57)), int(w * (0.35 if not is_event else 0.82)), safe_bottom - int(h * (0.24 if not is_event else 0.57)))
-        wash_side = "right" if not is_event else "full"
-
-    _draw_editorial_reading_wash(canvas, text, primary, wash_side)
-    draw = ImageDraw.Draw(canvas)
-
-    x = text.x + int(text.w * 0.045)
-    y = text.y + int(text.h * 0.07)
-    inner_w = int(text.w * 0.91)
-    desc_y = y
-    offer_h = int(text.h * 0.31)
-    offer_y = text.bottom - offer_h - int(text.h * 0.055)
+    brand_h = int(h * (0.058 if not square else 0.07))
+    _draw_brand_lockup(canvas, margin + int(w * 0.012), margin + int(h * 0.006), brand_h, accent, sub_color=WARM_WHITE, halo=True)
 
     if is_event:
-        gap = max(10, int(inner_w * 0.014))
-        if event_background:
-            # Compact card stack sitting over the photo scene (bottom band).
-            header_h = min(int(text.h * 0.34), max(int(h * 0.125), int(text.h * 0.30)))
-            date_h = min(int(text.h * 0.14), max(int(h * 0.038), int(text.h * 0.12)))
-            cards_h = min(int(text.h * 0.16), max(int(h * 0.045), int(text.h * 0.14)))
-        else:
-            # Hero flyer: reserve the bottom for a clean offer ribbon + one desc
-            # line, then fit the card stack into the space above so nothing overlaps.
-            offer_h = int(h * 0.110)
-            offer_y = safe_bottom - offer_h
-            desc_box_h = max(int(h * 0.040), int(text.h * 0.060))
-            region_bottom = offer_y - desc_box_h - int(h * 0.034)
-            band_h = region_bottom - y
-            header_h = int(band_h * 0.56)
-            date_h = int(band_h * 0.17)
-            cards_h = int(band_h * 0.21)
-        stack_bottom = _draw_event_card_stack(
-            canvas, spec, x, y, inner_w, header_h, date_h, cards_h, gap, primary, accent, theme, h
-        )
-        draw = ImageDraw.Draw(canvas)
-        desc_y = stack_bottom + int(h * 0.022)
+        _compose_event(canvas, spec, primary, accent, margin, safe_bottom, tall)
     else:
-        kicker = "PRODUKTANGEBOT"
-        kf = _fit_font_width(draw, kicker, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.085), int(text.h * 0.045))
-        kb = draw.textbbox((0, 0), kicker, font=kf)
-        draw.text((x + 1 - kb[0], y + 2 - kb[1]), kicker, fill=(0, 21, 45, 150), font=kf)
-        draw.text((x - kb[0], y - kb[1]), kicker, fill=accent, font=kf)
-        y += int(text.h * 0.14)
-
-        title = spec.product.upper()
-        tf, tl = _fit_wrapped(draw, title, FONT_PATH_EXTRABOLD, inner_w, int(text.h * 0.34), int(text.h * (0.18 if high else 0.155)), int(text.h * 0.075), max_lines=2, line_spacing=0.98)
-        y = _draw_wrapped_shadow(draw, tl, x, inner_w, y, tf, (255, 255, 255), align="left", line_spacing=0.98, shadow_offset=(0, max(2, h // 260)))
-        desc_y = y + int(text.h * 0.025)
-
-    desc = _event_description_copy(spec) if is_event else _copy_clean(spec.claim or spec.origin or spec.category or "")
-    if desc:
-        if is_event:
-            desc_box_h = max(int(h * 0.038), int(text.h * (0.085 if event_background else 0.060)))
-            limit = (safe_bottom if event_background else offer_y) - desc_box_h - int(h * 0.018)
-            desc_y = min(desc_y, limit)
-            df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, int(inner_w * 0.92), desc_box_h, int(desc_box_h * 0.36), int(desc_box_h * 0.20), max_lines=2, line_spacing=1.10)
-            draw.rounded_rectangle((x, desc_y, x + inner_w, desc_y + desc_box_h), radius=max(10, desc_box_h // 6), fill=(*_darken(primary, 0.34), 186))
-            _draw_wrapped_shadow(draw, dl, x + int(inner_w * 0.04), int(inner_w * 0.92), desc_y + int(desc_box_h * 0.18), df, (245, 249, 252), align="center", line_spacing=1.10, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
-        else:
-            available = offer_y - desc_y - int(text.h * 0.035)
-            if available >= int(text.h * 0.055):
-                max_lines = 1 if available < int(text.h * 0.12) else 2
-                df, dl = _fit_wrapped(draw, desc, FONT_PATH_SEMIBOLD, inner_w, available, int(text.h * 0.055), int(text.h * 0.032), max_lines=max_lines, line_spacing=1.13)
-                _draw_wrapped_shadow(draw, dl, x, inner_w, desc_y, df, (232, 241, 248), align="left", line_spacing=1.13, shadow=(0, 18, 40, 145), shadow_offset=(0, max(1, h // 420)))
-
-    if not (is_event and event_background):
-        _draw_editorial_offer(canvas, spec, Zone(x, offer_y, inner_w, offer_h), primary, accent)
+        _compose_product(canvas, spec, product, primary, accent, margin, safe_bottom, tall, square)
 
 
 # ---------------------------------------------------------------------------
