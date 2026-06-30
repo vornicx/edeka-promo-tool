@@ -1253,7 +1253,7 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     text_x = x
     # The Waschbär logo reads noticeably larger than the wordmark: render it at a
     # multiple of the lockup height and vertically centre it on the text block.
-    logo_h = int(mascot_h * 1.4)
+    logo_h = int(mascot_h * 1.3)
     mascot = _load_mascot(logo_h)
     if mascot is not None:
         my = y + (mascot_h - logo_h) // 2
@@ -1478,7 +1478,7 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
         _draw_product(canvas, product, pz.cx, pz.cy, angle=0.0)
 
     # Brand lockup top-left (gold wordmark, mascot with halo on the dark bg).
-    _draw_brand_lockup(canvas, margin, int(h * 0.055), int(h * (0.06 if tall else 0.078)), accent,
+    _draw_brand_lockup(canvas, margin, int(h * 0.055), int(h * (0.074 if tall else 0.086)), accent,
                        sub_color=muted, halo=True)
     # "ANGEBOT" kicker, top-right.
     kh = int(h * 0.02)
@@ -1581,7 +1581,7 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
                       blur=max(14, prod.w // 15), intensity=70)
     _draw_product_or_name(canvas, draw, spec, prod, ink)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.06 if tall else 0.085)), ink, sub_color=muted, halo=False)
+    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.092)), ink, sub_color=muted, halo=False)
     _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
 
     # Price star (product colour), the clear retail seal — bottom-right.
@@ -1649,7 +1649,7 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     _draw_product_or_name(canvas, draw, spec, prod, white)
 
     # Brand lockup.
-    _draw_brand_lockup(canvas, col_x, lock_y, int(h * (0.058 if tall else 0.072)), lock_color,
+    _draw_brand_lockup(canvas, col_x, lock_y, int(h * (0.074 if tall else 0.084)), lock_color,
                        sub_color=_mix(lock_color, accent, 0.0), halo=False)
 
     # Kicker + big headline.
@@ -1765,7 +1765,7 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
         head_y = int(h * 0.64)
 
     _paste_product(canvas, spec, pz, shadow=120, name_color=ink)
-    _draw_brand_top(canvas, margin, int(h * 0.05), int(h * (0.058 if tall else 0.075)), ink)
+    _draw_brand_top(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.085)), ink)
     _draw_context_tags(canvas, spec, margin, int(h * (0.13 if tall else 0.16)), int(w * 0.05))
 
     kh = int(h * 0.02)
@@ -1810,7 +1810,7 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     # Masthead rule + EDEKA wordmark, top.
     top = int(h * 0.06)
     draw.line((margin, top, w - margin, top), fill=deep, width=max(2, h // 360))
-    mh = int(h * (0.05 if tall else 0.062))
+    mh = int(h * (0.066 if tall else 0.078))
     _draw_brand_top(canvas, margin, top + int(h * 0.012), mh, deep)
     kk = _offer_label(spec)
     _draw_kicker(draw, w - margin - _kicker_width(draw, kk, int(h * 0.018)), top + int(h * 0.022), kk, int(h * 0.018), accent)
@@ -1906,7 +1906,7 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     _paste_product(canvas, spec, pz, shadow=70, name_color=ink)
 
     # Vintage wordmark top-centre.
-    _draw_brand_top(canvas, margin * 2, int(h * 0.06), int(h * (0.055 if tall else 0.07)), ink)
+    _draw_brand_top(canvas, margin * 2, int(h * 0.06), int(h * (0.070 if tall else 0.082)), ink)
     _draw_kicker(draw, w - margin * 2 - _kicker_width(draw, "SEIT 1907", int(h * 0.016)), int(h * 0.075), "SEIT 1907", int(h * 0.016), deep)
 
     # Heavy headline + claim.
@@ -2059,7 +2059,7 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     star_cx, star_cy, star_r = int(w * 0.68), int(h * 0.49), int(w * 0.235 * cfg.star_scale)
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), cfg.halo_alpha)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.072), accent)
+    _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.080), accent)
     _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.34), int(h * 0.365), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
@@ -2087,7 +2087,7 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.475), int(w * 0.238 * cfg.star_scale)
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), cfg.halo_alpha)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.060), accent)
+    _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.074), accent)
     _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.34), int(h * 0.35), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
@@ -2723,7 +2723,7 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
         _product_backdrop(canvas, primary, theme)
         _draw_poster_frame(canvas, margin, (*WARM_WHITE, 55), safe_bottom)
 
-    brand_h = int(h * (0.058 if not square else 0.07))
+    brand_h = int(h * (0.074 if not square else 0.084))
     _draw_brand_lockup(canvas, margin + int(w * 0.012), margin + int(h * 0.006), brand_h, accent, sub_color=WARM_WHITE, halo=True)
 
     if is_event:
