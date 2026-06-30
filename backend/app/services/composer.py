@@ -2470,10 +2470,31 @@ def _draw_price_lockup(canvas: Image.Image, x: int, baseline_y: int, spec: Promo
     return top
 
 
+def _top_date_chip(canvas: Image.Image, right_x: int, y: int, h: int, value: str, primary: tuple[int, int, int], accent: tuple[int, int, int]):
+    """A compact date/time chip pinned to the top-right corner so the schedule
+    lives up top and the lower components don't have to carry everything."""
+    d = ImageDraw.Draw(canvas, "RGBA")
+    icon_s = int(h * 0.52)
+    f = _fit_font_width(d, value, FONT_PATH_DISPLAY_MED, int(canvas.size[0] * 0.40), int(h * 0.44), int(h * 0.24))
+    fb = d.textbbox((0, 0), value, font=f)
+    padx = int(h * 0.44)
+    inner = int(h * 0.30)
+    pw = padx + icon_s + inner + (fb[2] - fb[0]) + padx
+    x0 = right_x - pw
+    rad = int(h * 0.30)
+    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((x0, y + max(3, h // 14), x0 + pw, y + h + max(3, h // 14)), radius=rad, fill=(0, 8, 22, 95))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(5, h // 9))))
+    d.rounded_rectangle((x0, y, x0 + pw, y + h), radius=rad, fill=_darken(primary, 0.16))
+    d.rounded_rectangle((x0, y, x0 + pw, y + h), radius=rad, outline=(*accent, 170), width=max(2, h // 36))
+    canvas.alpha_composite(_icon("calendar", icon_s, accent), (int(x0 + padx), int(y + (h - icon_s) // 2)))
+    d.text((x0 + padx + icon_s + inner - fb[0], y + (h - (fb[3] - fb[1])) // 2 - fb[1]), value, font=f, fill=WARM_WHITE)
+
+
 def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, margin: int, safe_bottom: int, ratio: float):
-    """Keep the photo as a clean backdrop and carry the message in a set of
-    refined, discrete components: a brand header panel, an accent date bar and a
-    row of icon info chips. One disciplined accent; everything centred."""
+    """Distribute the components instead of stacking them all at the bottom: the
+    date sits in a top-right chip, the title in a header panel and the programme
+    in a spaced row of icon chips — clean, ordered, with the photo breathing."""
     w, h = canvas.size
     d = ImageDraw.Draw(canvas)
     blue = _hex_to_rgb(BRAND_BLUE)
@@ -2485,71 +2506,58 @@ def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, ma
     title = _display_title(spec).upper()
     day, time_value = _event_date_parts(spec.validity)
     date_value = ", ".join(p for p in [day if day and day != "TERMIN" else "", time_value] if p) or (_short_event_info(spec.validity) or "VOR ORT")
-    place = _short_event_info(spec.origin)
-    generic_place = {"", "KASSEL", "IM MARKT", "EDEKA MÜHLENBEIN", "BEI EDEKA MÜHLENBEIN", "BEIM EDEKA MUHLENBEIN", "BEIM EDEKA MÜHLENBEIN"}
-    place_text = "EDEKA Mühlenbein" + (f" · {place.title()}" if place not in generic_place else "")
     chips = _event_detail_cards(spec, day, time_value)[1:]
+
+    # ---- date/time chip, top-right (distributes a component away from the base) ----
+    dchip_h = int(h * (0.050 if ratio <= 1.5 else 0.044))
+    _top_date_chip(canvas, w - margin, margin + int(h * 0.008), dchip_h, date_value, blue, accent)
 
     mod_x0, mod_x1 = margin, w - margin
     mod_w = mod_x1 - mod_x0
     cx = (mod_x0 + mod_x1) // 2
     radius = int(w * 0.026)
-    gap = int(h * 0.013)
+    gap = int(h * 0.026)  # generous air between the two lower components
 
-    pad_v = int(h * 0.020)
-    pill_h = int(h * 0.026)
-    title_cap = int(h * 0.052)
-    place_h = int(h * 0.024)
-    date_h = int(h * 0.044)
-    chip_h = int(h * 0.078)
+    pad_v = int(h * 0.026)
+    pill_h = int(h * 0.028)
+    title_cap = int(h * 0.058)
+    chip_h = int(h * 0.090)
 
-    hf, hl, line_h, head_total, head_widest = _fit_headline(d, title, int(mod_w * 0.84), title_cap * 2, max_lines=2)
-    header_h = pad_v + pill_h + int(gap * 0.7) + head_total + int(gap * 0.8) + place_h + pad_v
-    total = header_h + gap + date_h + gap + chip_h
-    mod_top = safe_bottom - int(h * 0.012) - total
-    mod_top = min(max(mod_top, int(h * 0.42)), int(h * 0.60))
+    hf, hl, line_h, head_total, head_widest = _fit_headline(d, title, int(mod_w * 0.86), title_cap * 2, max_lines=2)
+    header_h = pad_v + pill_h + int(gap * 0.55) + head_total + pad_v
+    total = header_h + gap + chip_h
+    mod_top = safe_bottom - int(h * 0.018) - total
+    mod_top = min(max(mod_top, int(h * 0.46)), int(h * 0.60))
 
-    # Soft scrim so the discrete panels sit on a cohesive base, photo clean above.
+    # Soft scrim so the lower components sit on a cohesive base; photo clean above.
     ink = _mix(DISPLAY_INK, _darken(blue, 0.5), 0.4)
     scr = Image.new("L", (1, h), 0)
     sp = scr.load()
-    fade_start = mod_top / h - 0.07
+    fade_start = mod_top / h - 0.08
     for yy in range(h):
-        t = (yy / max(1, h - 1) - fade_start) / 0.18
-        sp[0, yy] = int(max(0.0, min(1.0, t)) * 145)
+        t = (yy / max(1, h - 1) - fade_start) / 0.20
+        sp[0, yy] = int(max(0.0, min(1.0, t)) * 140)
     simg = Image.new("RGBA", (w, h), (*ink, 0))
     simg.putalpha(scr.resize((w, h)))
     canvas.alpha_composite(simg)
 
-    # ---- header panel ----
+    # ---- header panel: kicker + title (place is on the brand mark + footer) ----
     y = mod_top
     _solid_panel(canvas, (mod_x0, y, mod_x1, y + header_h), radius, p_top, p_bot, top_accent=accent, accent_h=max(4, int(h * 0.006)))
     iy = y + pad_v
     _pill(canvas, cx, iy, pill_h, kicker, accent, pill_ink)
-    iy += pill_h + int(gap * 0.7)
+    iy += pill_h + int(gap * 0.55)
     for ln in hl:
         lb = d.textbbox((0, 0), ln, font=hf)
         lx = cx - (lb[2] - lb[0]) // 2 - lb[0]
         d.text((lx + max(2, line_h // 40), iy + max(2, line_h // 32)), ln, font=hf, fill=(0, 0, 0, 150))
         d.text((lx, iy), ln, font=hf, fill=(255, 255, 255))
         iy += int(line_h * 0.84)
-    iy += int(gap * 0.8)
-    icon_s = int(place_h * 0.92)
-    pf = _fit_font_width(d, place_text, FONT_PATH_DISPLAY_MED, int(mod_w * 0.7), int(place_h * 0.86), int(place_h * 0.5))
-    pb = d.textbbox((0, 0), place_text, font=pf)
-    grp_w = icon_s + int(place_h * 0.26) + (pb[2] - pb[0])
-    gx = cx - grp_w // 2
-    canvas.alpha_composite(_icon("pin", icon_s, accent), (int(gx), int(iy + (place_h - icon_s) // 2)))
-    d.text((gx + icon_s + int(place_h * 0.26) - pb[0], iy + (place_h - (pb[3] - pb[1])) // 2 - pb[1]), place_text, font=pf, fill=_mix(WARM_WHITE, p_top, 0.25))
 
-    # ---- accent date bar ----
+    # ---- programme: a spaced row of icon chips ----
     y += header_h + gap
-    _date_bar(canvas, mod_x0, y, mod_w, date_h, date_value, blue, accent)
-
-    # ---- info chips ----
-    y += date_h + gap
     n = max(1, len(chips))
-    cgap = int(mod_w * 0.022)
+    cgap = int(mod_w * 0.028)
     cw = (mod_w - cgap * (n - 1)) // n
     for i, (l1, l2) in enumerate(chips):
         cxx = mod_x0 + i * (cw + cgap)
