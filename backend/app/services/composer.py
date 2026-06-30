@@ -1454,10 +1454,10 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw = ImageDraw.Draw(canvas)
 
     if tall:
-        pz = Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.28))
+        pz = Zone(margin, int(h * 0.105), w - margin * 2, int(h * 0.45))
         head_y = int(h * 0.63)
     else:
-        pz = Zone(margin, int(h * 0.15), int(w * 0.58), int(h * 0.40))
+        pz = Zone(int(w * 0.04), int(h * 0.13), int(w * 0.60), int(h * 0.43))
         head_y = int(h * 0.61)
 
     # Spotlight: product-coloured glow + warm white core so the product pops.
@@ -1552,12 +1552,12 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
 
     if tall:
         disc_cx, disc_cy, disc_r = int(w * 0.74), int(h * 0.18), int(w * 0.62)
-        prod = Zone(int(w * 0.08), int(h * 0.10), int(w * 0.84), int(h * 0.34))
+        prod = Zone(int(w * 0.05), int(h * 0.095), int(w * 0.74), int(h * 0.45))
         price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.52), int(w * 0.205 * pm)
         head_y = int(h * 0.66)
     else:
         disc_cx, disc_cy, disc_r = int(w * 0.80), int(h * 0.18), int(w * 0.50)
-        prod = Zone(int(w * 0.08), int(h * 0.14), int(w * 0.54), int(h * 0.48))
+        prod = Zone(int(w * 0.05), int(h * 0.12), int(w * 0.58), int(h * 0.46))
         price_cx, price_cy, price_r = int(w * 0.82), int(h * 0.60), int(w * 0.172 * pm)
         head_y = int(h * 0.62)
 
@@ -1752,11 +1752,11 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     draw = ImageDraw.Draw(canvas)
 
     if tall:
-        pz = Zone(margin, int(h * 0.12), w - margin * 2, int(h * 0.32))
+        pz = Zone(margin, int(h * 0.11), w - margin * 2, int(h * 0.40))
         price_cx, price_cy, price_r = int(w * 0.74), int(h * 0.56), int(w * 0.178 * pm)
         head_y = int(h * 0.60)
     else:
-        pz = Zone(margin, int(h * 0.14), int(w * 0.56), int(h * 0.44))
+        pz = Zone(int(w * 0.04), int(h * 0.13), int(w * 0.60), int(h * 0.45))
         price_cx, price_cy, price_r = int(w * 0.80), int(h * 0.66), int(w * 0.160 * pm)
         head_y = int(h * 0.64)
 
@@ -1812,10 +1812,10 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     _draw_kicker(draw, w - margin - _kicker_width(draw, kk, int(h * 0.018)), top + int(h * 0.022), kk, int(h * 0.018), accent)
 
     if tall:
-        pz = Zone(margin, int(h * 0.13), w - margin * 2, int(h * 0.34))
-        head_y = int(h * 0.51)
+        pz = Zone(margin, int(h * 0.115), w - margin * 2, int(h * 0.38))
+        head_y = int(h * 0.53)
     else:
-        pz = Zone(int(w * 0.30), int(h * 0.16), int(w * 0.66), int(h * 0.50))
+        pz = Zone(int(w * 0.31), int(h * 0.15), int(w * 0.66), int(h * 0.52))
         head_y = int(h * 0.40)
 
     _paste_product(canvas, spec, pz, shadow=0, duotone=(deep, cream), name_color=deep)
@@ -1891,11 +1891,11 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     draw = ImageDraw.Draw(canvas)
 
     if tall:
-        pz = Zone(margin * 2, int(h * 0.13), w - margin * 4, int(h * 0.30))
+        pz = Zone(margin * 2, int(h * 0.115), w - margin * 4, int(h * 0.42))
         star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.52), int(w * 0.210 * min(pm, 1.05))
         head_y = int(h * 0.66)
     else:
-        pz = Zone(margin * 2, int(h * 0.14), int(w * 0.54), int(h * 0.42))
+        pz = Zone(int(w * 0.10), int(h * 0.13), int(w * 0.56), int(h * 0.46))
         star_cx, star_cy, star_r = int(w * 0.77), int(h * 0.60), int(w * 0.195 * min(pm, 1.05))
         head_y = int(h * 0.68)
 
