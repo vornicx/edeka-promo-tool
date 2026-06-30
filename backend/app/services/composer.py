@@ -2171,7 +2171,7 @@ def _grade_photo(canvas: Image.Image, image_path: Path, primary: tuple[int, int,
     top = Image.new("L", (1, h), 0)
     tp = top.load()
     for yy in range(h):
-        tp[0, yy] = int(max(0.0, min(1.0, 1.0 - yy / (h * 0.20))) * 135)
+        tp[0, yy] = int(max(0.0, min(1.0, 1.0 - yy / (h * 0.24))) * 165)
     tscrim = Image.new("RGBA", (w, h), (*ink, 0))
     tscrim.putalpha(top.resize((w, h)))
     canvas.alpha_composite(tscrim)
@@ -2261,7 +2261,7 @@ def _draw_cutout(canvas: Image.Image, img: Image.Image, cx: int, cy: int, max_si
     canvas.alpha_composite(im, (x, y))
 
 
-def _draw_kicker(canvas: Image.Image, x: int, y: int, label: str, h: int, accent: tuple[int, int, int]) -> int:
+def _kicker_rule(canvas: Image.Image, x: int, y: int, label: str, h: int, accent: tuple[int, int, int]) -> int:
     """Accent rule + letter-spaced eyebrow. Returns the bottom y."""
     draw = ImageDraw.Draw(canvas)
     rule_w = int(h * 2.1)
@@ -2471,24 +2471,29 @@ def _draw_price_lockup(canvas: Image.Image, x: int, baseline_y: int, spec: Promo
 
 
 def _top_date_chip(canvas: Image.Image, right_x: int, y: int, h: int, value: str, primary: tuple[int, int, int], accent: tuple[int, int, int]):
-    """A compact date/time chip pinned to the top-right corner so the schedule
-    lives up top and the lower components don't have to carry everything."""
+    """A slim, dark date/time chip pinned top-right: deep navy body, a small
+    accent calendar mark and letter-spaced caps — refined, never a bright bubble."""
     d = ImageDraw.Draw(canvas, "RGBA")
-    icon_s = int(h * 0.52)
-    f = _fit_font_width(d, value, FONT_PATH_DISPLAY_MED, int(canvas.size[0] * 0.40), int(h * 0.44), int(h * 0.24))
-    fb = d.textbbox((0, 0), value, font=f)
-    padx = int(h * 0.44)
-    inner = int(h * 0.30)
-    pw = padx + icon_s + inner + (fb[2] - fb[0]) + padx
+    ink_top, ink_bot = (18, 31, 52), (8, 15, 28)
+    icon_s = int(h * 0.44)
+    f = _fit_font_width(d, value, FONT_PATH_DISPLAY_MED, int(canvas.size[0] * 0.42), int(h * 0.40), int(h * 0.22))
+    tracking = max(1, int(h * 0.05))
+    tw = _tracked_w(d, value, f, tracking)
+    padx = int(h * 0.42)
+    inner = int(h * 0.28)
+    pw = padx + icon_s + inner + tw + padx
     x0 = right_x - pw
-    rad = int(h * 0.30)
+    rad = int(h * 0.22)
     sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).rounded_rectangle((x0, y + max(3, h // 14), x0 + pw, y + h + max(3, h // 14)), radius=rad, fill=(0, 8, 22, 95))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(5, h // 9))))
-    d.rounded_rectangle((x0, y, x0 + pw, y + h), radius=rad, fill=_darken(primary, 0.16))
-    d.rounded_rectangle((x0, y, x0 + pw, y + h), radius=rad, outline=(*accent, 170), width=max(2, h // 36))
+    ImageDraw.Draw(sh).rounded_rectangle((x0, y + max(3, h // 12), x0 + pw, y + h + max(3, h // 12)), radius=rad, fill=(0, 6, 18, 90))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(5, h // 8))))
+    body = _vertical_gradient((pw, h), ink_top, ink_bot).convert("RGBA")
+    body.putalpha(_panel_mask((pw, h), rad))
+    canvas.alpha_composite(body, (x0, y))
+    d.line((x0 + rad, y + max(1, h // 40), x0 + pw - rad, y + max(1, h // 40)), fill=(255, 255, 255, 30), width=max(1, h // 48))
     canvas.alpha_composite(_icon("calendar", icon_s, accent), (int(x0 + padx), int(y + (h - icon_s) // 2)))
-    d.text((x0 + padx + icon_s + inner - fb[0], y + (h - (fb[3] - fb[1])) // 2 - fb[1]), value, font=f, fill=WARM_WHITE)
+    fb = d.textbbox((0, 0), "Ag", font=f)
+    _tracked_text(d, x0 + padx + icon_s + inner, y + (h - (fb[3] - fb[1])) // 2 - fb[1], value, f, WARM_WHITE, tracking)
 
 
 def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, margin: int, safe_bottom: int, ratio: float):
@@ -2496,72 +2501,83 @@ def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, ma
     date sits in a top-right chip, the title in a header panel and the programme
     in a spaced row of icon chips — clean, ordered, with the photo breathing."""
     w, h = canvas.size
-    d = ImageDraw.Draw(canvas)
-    blue = _hex_to_rgb(BRAND_BLUE)
-    p_top = _lighten(blue, 0.06)
-    p_bot = _darken(blue, 0.34)
-    pill_ink = _darken(blue, 0.28)
+    d = ImageDraw.Draw(canvas, "RGBA")
+    ink_top, ink_bot = (17, 29, 49), (7, 13, 25)
+    label_col = _mix(WARM_WHITE, ink_top, 0.46)
 
     kicker = _event_kicker(spec).upper()
     title = _display_title(spec).upper()
     day, time_value = _event_date_parts(spec.validity)
     date_value = ", ".join(p for p in [day if day and day != "TERMIN" else "", time_value] if p) or (_short_event_info(spec.validity) or "VOR ORT")
-    chips = _event_detail_cards(spec, day, time_value)[1:]
+    cells = _event_detail_cards(spec, day, time_value)[1:]
 
-    # ---- date/time chip, top-right (distributes a component away from the base) ----
-    dchip_h = int(h * (0.050 if ratio <= 1.5 else 0.044))
-    _top_date_chip(canvas, w - margin, margin + int(h * 0.008), dchip_h, date_value, blue, accent)
+    # ---- date/time chip, top-right ----
+    dchip_h = int(h * (0.046 if ratio <= 1.5 else 0.040))
+    _top_date_chip(canvas, w - margin, margin + int(h * 0.006), dchip_h, date_value, primary, accent)
 
     mod_x0, mod_x1 = margin, w - margin
     mod_w = mod_x1 - mod_x0
     cx = (mod_x0 + mod_x1) // 2
-    radius = int(w * 0.026)
-    gap = int(h * 0.026)  # generous air between the two lower components
+    radius = int(w * 0.012)              # restrained corners, not bubbly
+    rule_h = max(2, int(h * 0.0017))     # a hairline accent, not a thick bar
 
+    gap = int(h * 0.016)
+    strip_h = int(h * (0.092 if ratio >= 1.3 else 0.082))
     pad_v = int(h * 0.026)
-    pill_h = int(h * 0.028)
-    title_cap = int(h * 0.058)
-    chip_h = int(h * 0.090)
+    kick_h = int(h * 0.018)
+    title_cap = int(h * 0.062)
+    content_w = int(mod_w * 0.88)
+    hf, hl, line_h, head_total, head_widest = _fit_headline(d, title, content_w, title_cap * 2, max_lines=2)
+    header_h = pad_v + int(kick_h * 1.4) + int(gap * 0.7) + head_total + pad_v
+    total = header_h + gap + strip_h
+    mod_top = safe_bottom - int(h * 0.022) - total
+    mod_top = min(max(mod_top, int(h * 0.44)), int(h * 0.60))
 
-    hf, hl, line_h, head_total, head_widest = _fit_headline(d, title, int(mod_w * 0.86), title_cap * 2, max_lines=2)
-    header_h = pad_v + pill_h + int(gap * 0.55) + head_total + pad_v
-    total = header_h + gap + chip_h
-    mod_top = safe_bottom - int(h * 0.018) - total
-    mod_top = min(max(mod_top, int(h * 0.46)), int(h * 0.60))
-
-    # Soft scrim so the lower components sit on a cohesive base; photo clean above.
-    ink = _mix(DISPLAY_INK, _darken(blue, 0.5), 0.4)
+    # ---- cinematic base so the panels sit on darkened, cohesive photo ----
+    ink = _mix(DISPLAY_INK, _darken(primary, 0.5), 0.4)
     scr = Image.new("L", (1, h), 0)
     sp = scr.load()
-    fade_start = mod_top / h - 0.08
+    fade_start = mod_top / h - 0.12
     for yy in range(h):
-        t = (yy / max(1, h - 1) - fade_start) / 0.20
-        sp[0, yy] = int(max(0.0, min(1.0, t)) * 140)
+        t = (yy / max(1, h - 1) - fade_start) / 0.22
+        sp[0, yy] = int(max(0.0, min(1.0, t)) ** 1.15 * 170)
     simg = Image.new("RGBA", (w, h), (*ink, 0))
     simg.putalpha(scr.resize((w, h)))
     canvas.alpha_composite(simg)
 
-    # ---- header panel: kicker + title (place is on the brand mark + footer) ----
+    # ---- title panel: centred eyebrow + headline on a dark refined surface ----
     y = mod_top
-    _solid_panel(canvas, (mod_x0, y, mod_x1, y + header_h), radius, p_top, p_bot, top_accent=accent, accent_h=max(4, int(h * 0.006)))
+    _solid_panel(canvas, (mod_x0, y, mod_x1, y + header_h), radius, ink_top, ink_bot, top_accent=accent, accent_h=rule_h)
     iy = y + pad_v
-    _pill(canvas, cx, iy, pill_h, kicker, accent, pill_ink)
-    iy += pill_h + int(gap * 0.55)
+    kf = _load_font(FONT_PATH_DISPLAY_MED, kick_h)
+    ktr = max(2, int(kick_h * 0.22))
+    kw = _tracked_w(d, kicker, kf, ktr)
+    kb = d.textbbox((0, 0), kicker, font=kf)
+    _tracked_text(d, cx - kw // 2, iy - kb[1], kicker, kf, accent, ktr)
+    iy += int(kick_h * 1.4) + int(gap * 0.7)
     for ln in hl:
         lb = d.textbbox((0, 0), ln, font=hf)
-        lx = cx - (lb[2] - lb[0]) // 2 - lb[0]
-        d.text((lx + max(2, line_h // 40), iy + max(2, line_h // 32)), ln, font=hf, fill=(0, 0, 0, 150))
-        d.text((lx, iy), ln, font=hf, fill=(255, 255, 255))
+        d.text((cx - (lb[2] - lb[0]) // 2 - lb[0], iy), ln, font=hf, fill=(255, 255, 255))
         iy += int(line_h * 0.84)
 
-    # ---- programme: a spaced row of icon chips ----
+    # ---- programme: one slim strip, cells split by hairline dividers, no clipart ----
     y += header_h + gap
-    n = max(1, len(chips))
-    cgap = int(mod_w * 0.028)
-    cw = (mod_w - cgap * (n - 1)) // n
-    for i, (l1, l2) in enumerate(chips):
-        cxx = mod_x0 + i * (cw + cgap)
-        _info_chip(canvas, (cxx, y, cxx + cw, y + chip_h), int(radius * 0.7), _chip_icon(f"{l1} {l2}"), l1, l2, p_top, p_bot, accent)
+    _solid_panel(canvas, (mod_x0, y, mod_x1, y + strip_h), radius, ink_top, ink_bot, top_accent=accent, accent_h=rule_h)
+    n = max(1, len(cells))
+    cellw = mod_w / n
+    for i, (l1, l2) in enumerate(cells):
+        ccx = int(mod_x0 + cellw * (i + 0.5))
+        if i > 0:
+            dx = int(mod_x0 + cellw * i)
+            d.line((dx, y + int(strip_h * 0.24), dx, y + int(strip_h * 0.76)), fill=(*WARM_WHITE, 28), width=max(1, w // 1500))
+        l1f = _fit_font_width(d, l1, FONT_PATH_DISPLAY_MED, int(cellw * 0.82), int(strip_h * 0.19), int(strip_h * 0.11))
+        tr = max(1, int(strip_h * 0.05))
+        l1w = _tracked_w(d, l1, l1f, tr)
+        b1 = d.textbbox((0, 0), l1, font=l1f)
+        _tracked_text(d, ccx - l1w // 2, y + int(strip_h * 0.27) - b1[1], l1, l1f, label_col, tr)
+        l2f = _fit_font_width(d, l2, FONT_PATH_DISPLAY, int(cellw * 0.84), int(strip_h * 0.33), int(strip_h * 0.15))
+        b2 = d.textbbox((0, 0), l2, font=l2f)
+        d.text((ccx - (b2[2] - b2[0]) // 2 - b2[0], y + int(strip_h * 0.49) - b2[1]), l2, font=l2f, fill=(255, 255, 255))
 
 
 def _compose_product(canvas: Image.Image, spec: PromotionSpec, product: Image.Image | None, primary, accent, margin: int, safe_bottom: int, tall: bool, square: bool):
@@ -2619,7 +2635,7 @@ def _compose_product(canvas: Image.Image, spec: PromotionSpec, product: Image.Im
 
     kicker_block = int(kicker_h * 1.05)
     cur = head_top - int(gap * 0.5) - kicker_block
-    _draw_kicker(canvas, x, cur, "Angebot", kicker_h, accent)
+    _kicker_rule(canvas, x, cur, "Angebot", kicker_h, accent)
     block_top = cur
 
     # --- product hero, fitted strictly above the type block (no overlap) ---
