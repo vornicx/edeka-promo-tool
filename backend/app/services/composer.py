@@ -1257,6 +1257,7 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     # The Waschbär logo reads noticeably larger than the wordmark: render it at a
     # multiple of the lockup height and vertically centre it on the text block.
     logo_h = int(mascot_h * 1.4)
+    mascot_bottom = y + mascot_h
     mascot = _load_mascot(logo_h)
     if mascot is not None:
         my = y + (mascot_h - logo_h) // 2
@@ -1264,6 +1265,7 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
             _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(logo_h * 0.72), (255, 255, 255), 70)
         canvas.alpha_composite(mascot, (x, my))
         text_x = x + mascot.width + int(mascot_h * 0.12)
+        mascot_bottom = my + mascot.height
 
     ed_h = int(mascot_h * 0.48)
     ed_font = _load_font(FONT_PATH_EXTRABOLD, ed_h)
@@ -1277,6 +1279,7 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     draw.text((text_x - eb[0], ty - eb[1]), "EDEKA", fill=accent, font=ed_font)
     ty2 = ty + (eb[3] - eb[1]) + gap
     draw.text((text_x - sbb[0], ty2 - sbb[1]), sub, fill=sub_color, font=sub_font)
+    return max(mascot_bottom, ty2 + (sbb[3] - sbb[1]))
 
 
 def _draw_angebot_badge(
@@ -1584,8 +1587,8 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
                       blur=max(14, prod.w // 15), intensity=70)
     _draw_product_or_name(canvas, draw, spec, prod, ink)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.092)), ink, sub_color=muted, halo=False)
-    _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
+    bl = _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.092)), ink, sub_color=muted, halo=False)
+    _draw_context_tags(canvas, spec, margin, max(int(h * (0.135 if tall else 0.17)), bl + int(h * 0.015)), int(w * 0.05))
 
     # Price star (product colour), the clear retail seal — bottom-right.
     scx, scy = int(w * 0.78), int(h * (0.50 if tall else 0.54))
@@ -1733,9 +1736,9 @@ def _paste_product(canvas, spec, zone, shadow=70, duotone=None, name_color=(40, 
     return True
 
 
-def _draw_brand_top(canvas, x, y, mascot_h, color, halo=False) -> None:
+def _draw_brand_top(canvas, x, y, mascot_h, color, halo=False) -> int:
     """Compact lockup: mascot + EDEKA Mühlenbein (used by the extra styles)."""
-    _draw_brand_lockup(canvas, x, y, mascot_h, color, sub_color=_mix(color, (128, 128, 128), 0.4), halo=halo)
+    return _draw_brand_lockup(canvas, x, y, mascot_h, color, sub_color=_mix(color, (128, 128, 128), 0.4), halo=halo)
 
 
 def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
@@ -1768,8 +1771,8 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
         head_y = int(h * 0.64)
 
     _paste_product(canvas, spec, pz, shadow=120, name_color=ink)
-    _draw_brand_top(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.085)), ink)
-    _draw_context_tags(canvas, spec, margin, int(h * (0.13 if tall else 0.16)), int(w * 0.05))
+    bl = _draw_brand_top(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.085)), ink)
+    _draw_context_tags(canvas, spec, margin, max(int(h * (0.13 if tall else 0.16)), bl + int(h * 0.015)), int(w * 0.05))
 
     kh = int(h * 0.02)
     _draw_kicker(draw, margin, head_y, (spec.category or "Frisch"), kh, accent)
@@ -2030,14 +2033,14 @@ def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     star_cx, star_cy, star_r = int(w * 0.77), int(h * 0.47), int(w * 0.22 * cfg.star_scale)
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), cfg.halo_alpha)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
+    bl = _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
     _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary, _offer_label(spec))
 
     # Product hero on the left, lifted by a warm spotlight.
     _draw_spotlight(canvas, int(w * 0.28), int(h * 0.42), int(w * 0.32), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.04), int(h * 0.20), int(w * 0.46), int(h * 0.40)), white, fill_scale=1.02)
 
-    _draw_context_tags(canvas, spec, margin, int(h * 0.205), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
+    _draw_context_tags(canvas, spec, margin, max(int(h * 0.205), bl + int(h * 0.015)), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
 
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
@@ -2062,12 +2065,12 @@ def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     star_cx, star_cy, star_r = int(w * 0.68), int(h * 0.49), int(w * 0.235 * cfg.star_scale)
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), cfg.halo_alpha)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.080), accent)
+    bl = _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.080), accent)
     _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.34), int(h * 0.365), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.035), int(h * 0.165), int(w * 0.68), int(h * 0.43)), white, fill_scale=1.04)
-    _draw_context_tags(canvas, spec, margin, int(h * 0.145), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
+    _draw_context_tags(canvas, spec, margin, max(int(h * 0.145), bl + int(h * 0.015)), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
 
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
@@ -2090,12 +2093,12 @@ def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
     star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.475), int(w * 0.238 * cfg.star_scale)
     _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), cfg.halo_alpha)
 
-    _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.074), accent)
+    bl = _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.074), accent)
     _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary, _offer_label(spec))
 
     _draw_spotlight(canvas, int(w * 0.34), int(h * 0.35), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
     _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.02), int(h * 0.115), int(w * 0.70), int(h * 0.455)), white, fill_scale=1.04)
-    _draw_context_tags(canvas, spec, margin, int(h * 0.105), int(w * 0.046), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
+    _draw_context_tags(canvas, spec, margin, max(int(h * 0.105), bl + int(h * 0.015)), int(w * 0.046), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
 
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
     discount = _discount_percent(spec.old_price or "", spec.price)
