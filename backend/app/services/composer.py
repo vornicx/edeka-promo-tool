@@ -1251,12 +1251,16 @@ def _draw_brand_lockup(canvas: Image.Image, x: int, y: int, mascot_h: int, accen
     """The Waschbär mascot + EDEKA wordmark — the store's brand mark, top-left."""
     draw = ImageDraw.Draw(canvas)
     text_x = x
-    mascot = _load_mascot(mascot_h)
+    # The Waschbär logo reads noticeably larger than the wordmark: render it at a
+    # multiple of the lockup height and vertically centre it on the text block.
+    logo_h = int(mascot_h * 1.4)
+    mascot = _load_mascot(logo_h)
     if mascot is not None:
+        my = y + (mascot_h - logo_h) // 2
         if halo:  # soft halo so the dark mascot reads on a dark background
-            _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(mascot_h * 0.75), (255, 255, 255), 70)
-        canvas.alpha_composite(mascot, (x, y))
-        text_x = x + mascot.width + int(mascot_h * 0.14)
+            _draw_spotlight(canvas, x + mascot.width // 2, y + mascot_h // 2, int(logo_h * 0.72), (255, 255, 255), 70)
+        canvas.alpha_composite(mascot, (x, my))
+        text_x = x + mascot.width + int(mascot_h * 0.12)
 
     ed_h = int(mascot_h * 0.48)
     ed_font = _load_font(FONT_PATH_EXTRABOLD, ed_h)
