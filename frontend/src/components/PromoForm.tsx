@@ -46,9 +46,10 @@ const STYLES = [
   { value: "luxe", label: "Dark Luxe", meta: "Premium" },
   { value: "editorial", label: "Editorial", meta: "Hell & klar" },
   { value: "colorblock", label: "Color Block", meta: "Grafisch" },
-  { value: "lifestyle", label: "Foto Lifestyle", meta: "Natürlich" },
-  { value: "magazine", label: "Magazin", meta: "Duoton" },
-  { value: "retro", label: "Retro", meta: "Vintage" },
+  { value: "frischemarkt", label: "Frischemarkt", meta: "Frisch & klar" },
+  { value: "prospekt", label: "Prospekt", meta: "Knüller" },
+  { value: "markttafel", label: "Markt-Tafel", meta: "Tafel" },
+  { value: "bio", label: "Bio / Natur", meta: "Natürlich" },
 ];
 
 const TONES = [

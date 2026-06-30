@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/examples", tags=["examples"])
 
 _TONES = {t.value for t in ToneType}
 _LEVELS = {d.value for d in DifferentiationLevel}
-_STYLES = {"edeka", "luxe", "editorial", "colorblock", "lifestyle", "magazine", "retro"}
+_STYLES = {"edeka", "luxe", "editorial", "colorblock", "frischemarkt", "prospekt", "markttafel", "bio"}
 _FORMATS = {f.value for f in FormatType}
 
 _THUMB_LONG = 380  # render previews small (and fast); export keeps full quality

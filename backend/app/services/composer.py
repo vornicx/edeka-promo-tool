@@ -1945,6 +1945,176 @@ def _draw_retro_rays(canvas, cx, cy, radius, rays, color):
     canvas.alpha_composite(layer)
 
 
+def _draw_seal(canvas: Image.Image, cx: int, cy: int, r: int, text: str, fill: tuple[int, int, int] = GREEN):
+    """A small round brand seal (e.g. BIO) with a white ring."""
+    d = ImageDraw.Draw(canvas, "RGBA")
+    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).ellipse((cx - r, cy - r + r // 8, cx + r, cy + r + r // 8), fill=(0, 30, 10, 80))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(max(3, r // 8))))
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=fill)
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(255, 255, 255), width=max(2, r // 10))
+    f = _fit_font_width(d, text, FONT_PATH_EXTRABOLD, int(r * 1.4), int(r * 0.7), int(r * 0.3))
+    b = d.textbbox((0, 0), text, font=f)
+    d.text((cx - (b[2] - b[0]) // 2 - b[0], cy - (b[3] - b[1]) // 2 - b[1]), text, fill=(255, 255, 255), font=f)
+
+
+def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, ink, muted,
+                         price_color, kicker_word, lock_block_color, lock_page_color,
+                         lock_halo=False, seal=None):
+    """Shared supermarket layout: a colour block holds the big product, a clean
+    text column carries the kicker, headline, claim and an EDEKA-size price.
+    Themed per style (fresh / bio / market board)."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    tall = h / w > 1.12
+    pm, hm, am = _level_scale(spec)
+    white = (255, 255, 255)
+    canvas.paste(_vertical_gradient((w, h), _lighten(page, 0.03), _darken(page, 0.03)), (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    content_bottom = h - int(h * 0.145)
+
+    if tall:
+        band_h = int(h * 0.46)
+        canvas.alpha_composite(_vertical_gradient((w, band_h), block_a, block_b).convert("RGBA"), (0, 0))
+        prod = Zone(int(w * 0.08), int(h * 0.045), int(w * 0.84), int(band_h - h * 0.075))
+        col_x, col_w = int(w * 0.08), int(w * 0.84)
+        head_y = int(band_h + h * 0.04)
+        lock_color, lock_y = lock_block_color, int(h * 0.045)
+    else:
+        band_w = int(w * 0.49)
+        canvas.alpha_composite(_vertical_gradient((band_w, h), block_a, block_b).convert("RGBA"), (0, 0))
+        prod = Zone(int(w * 0.01), int(h * 0.15), int(band_w - w * 0.02), int(h * 0.64))
+        col_x, col_w = int(w * 0.54), int(w * 0.40)
+        head_y = int(h * 0.30)
+        lock_color, lock_y = lock_page_color, int(h * 0.08)
+
+    sw, shh = int(prod.w * 0.5), int(prod.h * 0.05)
+    _draw_soft_shadow(canvas, prod.cx - sw // 2, int(prod.cy + prod.h * 0.32), sw, shh, blur=max(14, prod.w // 15), intensity=70)
+    _draw_product_or_name(canvas, draw, spec, prod, white)
+
+    bl = _draw_brand_lockup(canvas, col_x, lock_y, int(h * (0.074 if tall else 0.084)), lock_color,
+                            sub_color=_mix(lock_color, (128, 128, 128), 0.35), halo=lock_halo)
+    if seal:
+        _draw_seal(canvas, int(w * (0.86 if tall else 0.40)), int(lock_y + h * 0.035), int(h * 0.05), seal)
+
+    kh = int(h * (0.018 if tall else 0.02))
+    ky = head_y if tall else max(head_y, bl + int(h * 0.02))
+    _draw_kicker(draw, col_x, ky, (spec.category or kicker_word), kh, accent)
+    name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, col_w,
+                                         int(h * (0.16 if tall else 0.22)), int(h * (0.066 if tall else 0.082) * hm),
+                                         int(h * (0.032 if tall else 0.04)), max_lines=2, line_spacing=1.0)
+    ny = _draw_wrapped(draw, name_lines, col_x, col_w, ky + int(kh * 1.9), name_font, ink, align="left", line_spacing=1.0)
+    draw.rectangle((col_x, ny + int(h * 0.01), col_x + int(w * 0.10), ny + int(h * 0.01) + max(4, int(h * 0.01))), fill=accent)
+    ny += int(h * 0.045)
+    if spec.claim:
+        cf = _load_font(FONT_PATH_REGULAR, int(h * (0.021 if tall else 0.026)))
+        for line in _wrap_text(draw, spec.claim, cf, col_w, 1 if tall else 2):
+            b = draw.textbbox((0, 0), line, font=cf)
+            draw.text((col_x - b[0], ny - b[1]), line, fill=muted, font=cf)
+            ny += int((b[3] - b[1]) * 1.35)
+    ny += int(h * (0.012 if tall else 0.018))
+
+    meta_h = int(h * (0.030 if tall else 0.036))
+    if spec.old_price and not _is_event(spec):
+        of = _load_font(FONT_PATH_REGULAR, int(h * (0.022 if tall else 0.026)))
+        ot = f"statt {spec.old_price}"
+        ob = draw.textbbox((0, 0), ot, font=of)
+        draw.text((col_x - ob[0], ny - ob[1]), ot, fill=muted, font=of)
+        draw.line((col_x, ny + (ob[3] - ob[1]) * 0.55, col_x + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
+        ny += int(h * (0.035 if tall else 0.042))
+    avail = content_bottom - ny - meta_h - int(h * 0.012)
+    price_h = min(int(h * (0.130 if tall else 0.150) * min(pm, 1.12)), max(int(h * 0.075), avail))
+    _draw_price_value(draw, col_x, ny + price_h // 2, col_w, price_h, _offer_value(spec), price_color, align="left")
+    ny += int(price_h + h * 0.012)
+    meta = spec.validity.upper()
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        meta = f"{meta}   ·   −{discount}%"
+    mf = _load_font(FONT_PATH_SEMIBOLD, int(h * (0.017 if tall else 0.02)))
+    mb = draw.textbbox((0, 0), meta, font=mf)
+    draw.text((col_x - mb[0], ny - mb[1]), meta, fill=ink, font=mf)
+
+
+def _layout_frischemarkt(canvas, spec, fmt):
+    """Helle Frischemarkt-Optik: weiße Seite, frisches Grün, großes Produkt."""
+    _layout_market_block(
+        canvas, spec, fmt,
+        page=(244, 250, 243), block_a=_lighten((60, 150, 70), 0.28), block_b=(44, 120, 54),
+        accent=(40, 130, 48), ink=(28, 40, 32), muted=(120, 134, 120),
+        price_color=(34, 110, 46), kicker_word="Frische",
+        lock_block_color=(255, 255, 255), lock_page_color=(38, 96, 48), lock_halo=True,
+    )
+
+
+def _layout_bio(canvas, spec, fmt):
+    """Bio/Natur: Kraftpapier-Ton, naturgrüner Block und ein BIO-Siegel."""
+    _layout_market_block(
+        canvas, spec, fmt,
+        page=(236, 228, 208), block_a=(128, 152, 94), block_b=(84, 110, 58),
+        accent=(86, 112, 60), ink=(58, 52, 34), muted=(128, 116, 92),
+        price_color=(74, 102, 52), kicker_word="Bio · Natürlich",
+        lock_block_color=(255, 255, 255), lock_page_color=(74, 92, 52), seal="BIO", lock_halo=True,
+    )
+
+
+def _layout_markttafel(canvas, spec, fmt):
+    """Markt-Tafel: dunkle Schiefer-Optik mit cremefarbener Schrift, wie eine Markttafel."""
+    _layout_market_block(
+        canvas, spec, fmt,
+        page=(32, 36, 34), block_a=(48, 54, 50), block_b=(26, 30, 28),
+        accent=(226, 198, 96), ink=(244, 240, 230), muted=(172, 178, 168),
+        price_color=(232, 206, 110), kicker_word="Frisch vom Markt",
+        lock_block_color=(244, 240, 230), lock_page_color=(244, 240, 230), lock_halo=True,
+    )
+
+
+def _layout_prospekt(canvas, spec, fmt):
+    """Supermarkt-Prospekt: weißer Hintergrund, blaues Kopfband mit Marke, großes
+    Produkt und ein gelber Preis-Stern — direkt und verkaufsstark."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    tall = h / w > 1.12
+    pm, hm, am = _level_scale(spec)
+    blue = _hex_to_rgb(BRAND_BLUE)
+    yellow = _hex_to_rgb(BRAND_YELLOW)
+    ink = (28, 32, 38)
+    margin = int(w * 0.06)
+    canvas.paste(_vertical_gradient((w, h), (255, 255, 255), (236, 241, 248)), (0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    band_h = int(h * (0.13 if tall else 0.16))
+    draw.rectangle((0, 0, w, band_h), fill=blue)
+    draw.rectangle((0, band_h, w, band_h + max(3, int(h * 0.006))), fill=yellow)
+    bl = _draw_brand_lockup(canvas, margin, int(band_h * 0.5 - h * 0.045), int(h * (0.072 if tall else 0.084)),
+                            yellow, sub_color=(255, 255, 255), halo=True)
+    _draw_angebot_badge(canvas, int(w * 0.82), int(band_h * 0.5), int(h * (0.04 if tall else 0.05)), yellow, blue, _offer_label(spec))
+
+    if tall:
+        pz = Zone(margin, int(band_h + h * 0.03), int(w * 0.62), int(h * 0.40))
+        star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.43), int(w * 0.215 * min(pm, 1.05))
+        head_y = int(h * 0.66)
+    else:
+        pz = Zone(int(w * 0.02), int(band_h + h * 0.02), int(w * 0.50), int(h * 0.50))
+        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.47), int(w * 0.20 * min(pm, 1.05))
+        head_y = int(h * 0.72)
+
+    _draw_spotlight(canvas, pz.cx, pz.cy, int(pz.w * 0.5), (255, 255, 255), 90)
+    _draw_product_or_name(canvas, draw, spec, pz, ink)
+    _draw_context_tags(canvas, spec, margin, max(int(band_h + h * 0.025), bl + int(h * 0.015)), int(w * 0.05))
+
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, blue, yellow, rot_deg=-7)
+    discount = _discount_percent(spec.old_price or "", spec.price)
+    if discount:
+        if tall:
+            br = int(star_r * 0.42)
+            bx = min(int(star_cx + star_r * 0.55), w - margin - br)
+            _draw_discount_burst(canvas, discount, bx, int(star_cy - star_r * 0.70), br)
+        else:
+            _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.82), int(star_cy - star_r * 0.9), int(star_r * 0.5))
+    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.05), int(w * 0.05), yellow, blue)
+    _draw_headline_block(draw, spec, Zone(margin, head_y, int(w * 0.62), int(h * 0.13)), ink, align="left", claim_color=(110, 120, 135))
+
+
 @dataclass
 class StyleConfig:
     primary: tuple[int, int, int]
@@ -2766,12 +2936,14 @@ def compose_promotion(
         _layout_editorial(canvas, spec, format_type)
     elif style == "colorblock":
         _layout_colorblock(canvas, spec, format_type)
-    elif style == "lifestyle":
-        _layout_lifestyle(canvas, spec, format_type)
-    elif style == "magazine":
-        _layout_magazine(canvas, spec, format_type)
-    elif style == "retro":
-        _layout_retro(canvas, spec, format_type)
+    elif style == "frischemarkt":
+        _layout_frischemarkt(canvas, spec, format_type)
+    elif style == "prospekt":
+        _layout_prospekt(canvas, spec, format_type)
+    elif style == "markttafel":
+        _layout_markttafel(canvas, spec, format_type)
+    elif style == "bio":
+        _layout_bio(canvas, spec, format_type)
     else:
         # EDEKA Style: bold Knaller layout, fixed brand colours.
         primary = _hex_to_rgb(BRAND_ANTHRACITE)
