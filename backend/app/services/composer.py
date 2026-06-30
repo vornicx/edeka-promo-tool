@@ -824,8 +824,11 @@ def _draw_price_value(
     max_h: int,
     price: str,
     color: tuple[int, int, int],
+    align: str = "center",
 ):
-    """Big euros + superscript cents + small currency, centred on (cx, cy)."""
+    """Big euros + superscript cents + small currency. Anchored on (cx, cy):
+    centred by default, or left-/right-aligned to cx so columns can reuse the
+    same compact EDEKA-size price lockup."""
     euros, cents, cur = _split_price(price)
     size = max_h
     while size > 12:
@@ -846,7 +849,12 @@ def _draw_price_value(
             break
         size -= max(2, size // 24)
 
-    left = cx - group_w // 2
+    if align == "left":
+        left = cx
+    elif align == "right":
+        left = cx - group_w
+    else:
+        left = cx - group_w // 2
     top = cy - eh // 2
     # Euros (big)
     draw.text((left - eb[0], top - eb[1]), euros, fill=color, font=euros_font)
@@ -1480,8 +1488,8 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     # Price star (gold), the clear retail seal — bottom-right.
     ink_dark = (28, 26, 22)
-    scx, scy = int(w * 0.75), int(h * (0.54 if tall else 0.52))
-    sr = int(w * (0.165 if tall else 0.150) * min(pm, 1.05))
+    scx, scy = int(w * 0.77), int(h * (0.50 if tall else 0.52))
+    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05))
     _draw_price_star(canvas, spec, scx, scy, sr, ink_dark, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1552,8 +1560,8 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_context_tags(canvas, spec, margin, int(h * (0.135 if tall else 0.17)), int(w * 0.05))
 
     # Price star (product colour), the clear retail seal — bottom-right.
-    scx, scy = int(w * 0.77), int(h * (0.54 if tall else 0.56))
-    sr = int(w * (0.178 if tall else 0.160) * min(pm, 1.05))
+    scx, scy = int(w * 0.78), int(h * (0.50 if tall else 0.54))
+    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05))
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1633,13 +1641,10 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
             ny += int((b[3] - b[1]) * 1.35)
     ny += int(h * (0.014 if tall else 0.02))
 
-    # Price block: statt + big price + validity/discount.
-    old_h = int(h * (0.035 if tall else 0.042)) if spec.old_price and not _is_event(spec) else 0
-    price_h = int(h * (0.105 if tall else 0.135))
+    # Price block: statt + big EDEKA-size price (compact stacked lockup) + meta.
+    # Size the price to the room left below the claim so it stays big without ever
+    # colliding with the claim above or the footer below.
     meta_h = int(h * (0.030 if tall else 0.036))
-    price_block_h = old_h + price_h + meta_h
-    if ny + price_block_h > content_bottom:
-        ny = max(head_y + int(h * (0.17 if tall else 0.19)), content_bottom - price_block_h)
     if spec.old_price and not _is_event(spec):
         of = _load_font(FONT_PATH_REGULAR, int(h * (0.022 if tall else 0.026)))
         ot = f"statt {spec.old_price}"
@@ -1647,11 +1652,11 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         draw.text((col_x - ob[0], ny - ob[1]), ot, fill=muted, font=of)
         draw.line((col_x, ny + (ob[3] - ob[1]) * 0.55, col_x + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
         ny += int(h * (0.035 if tall else 0.042))
+    avail = content_bottom - ny - meta_h - int(h * 0.012)
+    price_h = min(int(h * (0.130 if tall else 0.150) * min(pm, 1.12)), max(int(h * 0.075), avail))
     value = _offer_value(spec)
-    pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, col_w, int(h * (0.088 if tall else 0.112) * pm), int(h * (0.050 if tall else 0.062)))
-    pb = draw.textbbox((0, 0), value, font=pf)
-    draw.text((col_x - pb[0], ny - pb[1]), value, fill=accent, font=pf)
-    ny += int((pb[3] - pb[1]) + h * (0.012 if tall else 0.02))
+    _draw_price_value(draw, col_x, ny + price_h // 2, col_w, price_h, value, accent, align="left")
+    ny += int(price_h + h * (0.012 if tall else 0.02))
 
     meta = spec.validity.upper()
     discount = _discount_percent(spec.old_price or "", spec.price)
@@ -1739,8 +1744,8 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.026), int(w * 0.58), int(h * 0.13)), ink, align="left", claim_color=muted)
 
     # Price star (warm), the clear retail seal — bottom-right.
-    scx, scy = int(w * 0.77), int(h * (0.55 if tall else 0.58))
-    sr = int(w * (0.168 if tall else 0.154) * min(pm, 1.05))
+    scx, scy = int(w * 0.78), int(h * (0.52 if tall else 0.56))
+    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05))
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1782,36 +1787,44 @@ def _layout_magazine(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     _paste_product(canvas, spec, pz, shadow=0, duotone=(deep, cream), name_color=deep)
 
-    # Oversized masthead headline.
+    # Price block, bottom-anchored above the global footer so a long headline can
+    # never push the now EDEKA-size price off the poster.
     hx = margin
     hw = int(w * (0.84 if tall else 0.40))
-    nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, hw, int(h * 0.24),
+    value = _offer_value(spec)
+    has_old = bool(spec.old_price and not _is_event(spec))
+    price_h = int(h * (0.135 if tall else 0.160) * min(pm, 1.12))
+    foot_top = h - int(h * 0.125)
+    old_gap = int(h * 0.05) if has_old else 0
+    block_h = old_gap + price_h + int(h * 0.022) + int(h * 0.02)
+    block_top = foot_top - block_h
+
+    # Oversized masthead headline, capped to the space above the price block.
+    head_cap = min(int(h * 0.24), max(int(h * 0.08), block_top - head_y - int(h * 0.03)))
+    nf, nl = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, hw, head_cap,
                           int(h * 0.10 * hm), int(h * 0.05), max_lines=2, line_spacing=0.98)
     ny = _draw_wrapped(draw, nl, hx, hw, head_y, nf, ink, align="left", line_spacing=0.98)
     if spec.claim:
         cf = _load_font(FONT_PATH_REGULAR, int(h * 0.026))
         for line in _wrap_text(draw, spec.claim, cf, hw, 2):
             b = draw.textbbox((0, 0), line, font=cf)
+            if ny + (b[3] - b[1]) > block_top - int(h * 0.02):
+                break
             draw.text((hx - b[0], ny + int(h * 0.012) - b[1]), line, fill=muted, font=cf)
             ny += int((b[3] - b[1]) * 1.3)
-    ny += int(h * 0.02)
 
-    # Price: big number + struck old price, magazine style.
-    if spec.old_price and not _is_event(spec):
+    py = block_top
+    if has_old:
         of = _load_font(FONT_PATH_REGULAR, int(h * 0.028))
         ot = f"statt {spec.old_price}"
         ob = draw.textbbox((0, 0), ot, font=of)
-        draw.text((hx - ob[0], ny - ob[1]), ot, fill=muted, font=of)
-        draw.line((hx, ny + (ob[3] - ob[1]) * 0.55, hx + (ob[2] - ob[0]), ny + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
-        ny += int(h * 0.045)
-    value = _offer_value(spec)
-    pf = _fit_font_width(draw, value, FONT_PATH_EXTRABOLD, hw, int(h * 0.13 * pm), int(h * 0.064))
-    pb = draw.textbbox((0, 0), value, font=pf)
-    draw.text((hx - pb[0], ny - pb[1]), value, fill=accent, font=pf)
-    # validity, small, under the price (footer is the global brand banner)
+        draw.text((hx - ob[0], py - ob[1]), ot, fill=muted, font=of)
+        draw.line((hx, py + (ob[3] - ob[1]) * 0.55, hx + (ob[2] - ob[0]), py + (ob[3] - ob[1]) * 0.55), fill=muted, width=max(2, h // 600))
+        py += old_gap
+    _draw_price_value(draw, hx, py + price_h // 2, hw, price_h, value, accent, align="left")
     vf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.02))
     vb = draw.textbbox((0, 0), spec.validity.upper(), font=vf)
-    draw.text((hx - vb[0], ny + int((pb[3] - pb[1]) * 1.2) - vb[1]), spec.validity.upper(), fill=muted, font=vf)
+    draw.text((hx - vb[0], py + price_h + int(h * 0.022) - vb[1]), spec.validity.upper(), fill=muted, font=vf)
 
 
 RETRO_ACCENTS = {
@@ -1846,11 +1859,11 @@ def _layout_retro(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
 
     if tall:
         pz = Zone(margin * 2, int(h * 0.13), w - margin * 4, int(h * 0.30))
-        star_cx, star_cy, star_r = int(w * 0.72), int(h * 0.56), int(w * 0.155 * min(pm, 1.05))
+        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.52), int(w * 0.210 * min(pm, 1.05))
         head_y = int(h * 0.66)
     else:
         pz = Zone(margin * 2, int(h * 0.14), int(w * 0.54), int(h * 0.42))
-        star_cx, star_cy, star_r = int(w * 0.78), int(h * 0.66), int(w * 0.135 * min(pm, 1.05))
+        star_cx, star_cy, star_r = int(w * 0.77), int(h * 0.60), int(w * 0.195 * min(pm, 1.05))
         head_y = int(h * 0.68)
 
     _paste_product(canvas, spec, pz, shadow=70, name_color=ink)
