@@ -19,38 +19,67 @@ IMAGE_MODEL_FALLBACKS = (
 )
 
 
-def _event_image_prompt(spec: PromotionSpec, direction: CreativeDirection) -> str:
-    components = []
-    for item in getattr(direction, "event_components", []) or []:
-        label = getattr(item, "label", "") or ""
-        description = getattr(item, "description", "") or ""
-        if label or description:
-            components.append(f"{label}: {description}".strip(": "))
-    component_text = "; ".join(components[:4]) or (spec.event_description or spec.claim or spec.product)
+def _event_scene_kind(text: str) -> str:
+    t = text.lower()
+    if any(k in t for k in ["wm", "world cup", "weltmeister", "fußball", "fussball", "football", "soccer", "europameister", " em "]):
+        return "football"
+    if any(k in t for k in ["schoko", "chocolate", "kakao", "praline"]):
+        return "chocolate"
+    if any(k in t for k in ["verkost", "tasting", "probier", "degust", "wein", "käse", "kaese"]):
+        return "tasting"
+    if any(k in t for k in ["sommer", "summer", "grill", "bbq", "garten"]):
+        return "summer"
+    return "generic"
 
-    title = spec.product.strip()
-    description = (spec.event_description or spec.claim or "").strip()
-    claim = (spec.claim or "").strip()
+
+_EVENT_SCENES = {
+    "football": (
+        "A lively outdoor public-viewing football party in front of a modern German neighbourhood "
+        "supermarket at golden hour. A happy crowd of friends and families cheering, a big softly "
+        "blurred screen in the background, warm string lights overhead, plain red-black-gold colour "
+        "accents on scarves and cheeks, cold drinks and grilled snacks, festive yet premium energy."
+    ),
+    "chocolate": (
+        "An elegant in-store chocolate tasting moment in a premium German supermarket. A wooden table "
+        "with assorted fine chocolates and cocoa textures, warm inviting light, a few people savouring "
+        "samples, rich brown and gold tones, artisanal and indulgent."
+    ),
+    "tasting": (
+        "A refined in-store tasting event in a German supermarket. A counter with regional specialities, "
+        "warm focused light, a friendly host offering samples to relaxed customers, authentic premium deli atmosphere."
+    ),
+    "summer": (
+        "A warm summer market and grill event in front of a German supermarket. Bright natural daylight, "
+        "fresh produce and a grill with smoke, relaxed people enjoying the day, fresh green and warm tones."
+    ),
+    "generic": (
+        "A welcoming community event at a German neighbourhood supermarket. Friendly people, warm natural "
+        "light and a festive but tasteful atmosphere that matches the occasion."
+    ),
+}
+
+
+def _event_image_prompt(spec: PromotionSpec, direction: CreativeDirection) -> str:
+    kind = _event_scene_kind(" ".join(filter(None, [spec.product, spec.event_description, spec.claim])))
+    scene = _EVENT_SCENES.get(kind, _EVENT_SCENES["generic"])
+    mood = (spec.event_description or spec.claim or "").strip()
     return (
-        "Create the main photorealistic promotional scene for a German EDEKA Mühlenbein event poster. "
-        "Interpret the event briefing literally and visually. The image must show the event world, not generic abstract cards. "
-        f"Event title written by the user: {title}. "
-        f"Event description from the form cells: {description}. "
-        f"Claim or mood from the form cells: {claim}. "
-        f"Date/time context: {spec.validity}. Location context: {spec.origin or 'EDEKA Mühlenbein Kassel'}. "
-        f"Creative direction: {direction.intent}. Components to include as visual cues: {component_text}. "
-        "If the title is WM Party, World Cup Party, Fußball Party, or similar: show a realistic supermarket celebration scene "
-        "with happy people/fans celebrating, football/soccer party atmosphere, tasteful flags/garlands, snacks, drinks, "
-        "green pitch-inspired lighting and big-screen viewing energy, but no official FIFA/World Cup logos or team crests. "
-        "If the title is Chocolate Party or Schoko Party: show a premium chocolate tasting/event scene with chocolates, "
-        "cocoa textures, dessert table, warm lighting, people enjoying the tasting if appropriate. "
-        "For any other event: create a realistic scene with the people, props, food, decorations, lighting and atmosphere "
-        "that naturally match the written event. "
-        "Use professional retail advertising photography, realistic people when relevant, cinematic supermarket lighting, "
-        "clear focal point, polished composition, premium but approachable. "
-        "Do not add readable text, letters, numbers, labels, posters, price tags, logos, QR codes, fake signage, or watermark. "
-        "Avoid cartoon, vector illustration, childish icons, flat clipart, stickers and UI components. "
-        "Leave clean negative space for overlaid German headline, event information and QR footer."
+        "Professional photorealistic advertising photograph — a real DSLR editorial scene, not a poster "
+        "and not a graphic. "
+        f"Scene: {scene} "
+        + (f"Honour these real-world details in the scene (as visuals only, never as written words): {mood}. " if mood else "")
+        + "Look: cinematic natural lighting, shallow depth of field, rich but realistic colour, polished "
+        "retail-advertising composition, candid authentic people, premium yet approachable. "
+        "Framing: place the main subjects in the upper and middle area and keep the lower third and the "
+        "top-left corner calm and uncluttered, so graphics can be overlaid there afterwards. "
+        # Hard constraint, stated forcefully and specifically because image models love to invent signage:
+        "CRITICAL — THE IMAGE MUST CONTAIN ABSOLUTELY NO TEXT. No words, letters, numbers, captions, "
+        "titles, headlines, event names, dates, price tags, menus, posters or banners with writing, "
+        "chalkboards with writing, shop signs, store-name lettering, brand logos, sponsor logos, football "
+        "team crests, tournament logos, QR codes or watermarks anywhere. Every sign, board, screen, banner "
+        "or label must be blank, abstract or softly out of focus with no legible characters. Specifically do "
+        "NOT render the words 'WM-PARTY', 'EDEKA', 'Mühlenbein', 'Grill station' or any date. "
+        "Photography only: no cartoon, no illustration, no 3D lettering, no clipart, no stickers, no UI."
     )
 
 

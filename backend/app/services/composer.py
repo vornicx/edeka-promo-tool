@@ -473,6 +473,21 @@ def _short_event_info(value: str | None) -> str:
     }
     for full, short in weekday_map.items():
         text = re.sub(rf"\b{full}\b", short, text)
+    # English dates can slip in from the AI form; the client is German-only, so
+    # translate weekday + month names and normalise ordinals to German style.
+    en_weekday = {
+        "MONDAY": "MO", "TUESDAY": "DI", "WEDNESDAY": "MI", "THURSDAY": "DO",
+        "FRIDAY": "FR", "SATURDAY": "SA", "SUNDAY": "SO",
+    }
+    for full, short in en_weekday.items():
+        text = re.sub(rf"\b{full}\b", short, text)
+    en_month = {
+        "JANUARY": "JANUAR", "FEBRUARY": "FEBRUAR", "MARCH": "MÄRZ", "MAY": "MAI",
+        "JUNE": "JUNI", "JULY": "JULI", "OCTOBER": "OKTOBER", "DECEMBER": "DEZEMBER",
+    }
+    for en, de in en_month.items():
+        text = re.sub(rf"\b{en}\b", de, text)
+    text = re.sub(r"\b(\d{1,2})(ST|ND|RD|TH)\b", r"\1.", text)
     text = text.replace("EDEKA MÜHLENBEIN KASSEL", "KASSEL")
     text = text.replace("EDEKA MÜHLENBEIN", "IM MARKT")
     text = re.sub(r"\s+", " ", text).strip()
@@ -1493,7 +1508,13 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     _draw_price_star(canvas, spec, scx, scy, sr, ink_dark, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+        if tall:
+            # Story / A4 / A5: percentage on the right of the seal, like EDEKA style.
+            br = int(sr * 0.42)
+            bx = min(int(scx + sr * 0.55), w - int(w * 0.05) - br)
+            _draw_discount_burst(canvas, discount, bx, int(scy - sr * 0.70), br)
+        else:
+            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
     _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, ink_dark)
 
 
@@ -1565,7 +1586,13 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+        if tall:
+            # Story / A4 / A5: percentage on the right of the seal, like EDEKA style.
+            br = int(sr * 0.42)
+            bx = min(int(scx + sr * 0.55), w - int(w * 0.05) - br)
+            _draw_discount_burst(canvas, discount, bx, int(scy - sr * 0.70), br)
+        else:
+            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
     _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, _contrast_text(accent))
 
     # Kicker + accent rule + oversized headline + claim.
@@ -1749,7 +1776,13 @@ def _layout_lifestyle(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+        if tall:
+            # Story / A4 / A5: percentage on the right of the seal, like EDEKA style.
+            br = int(sr * 0.42)
+            bx = min(int(scx + sr * 0.55), w - int(w * 0.05) - br)
+            _draw_discount_burst(canvas, discount, bx, int(scy - sr * 0.70), br)
+        else:
+            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
     _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, _contrast_text(accent))
 
 
@@ -2536,9 +2569,9 @@ def _compose_event(canvas: Image.Image, spec: PromotionSpec, primary, accent, ma
 
     gap = int(h * 0.016)
     strip_h = int(h * (0.092 if ratio >= 1.3 else 0.082))
-    pad_v = int(h * 0.026)
+    pad_v = int(h * 0.021)
     kick_h = int(h * 0.018)
-    title_cap = int(h * 0.062)
+    title_cap = int(h * 0.066)
     content_w = int(mod_w * 0.88)
     hf, hl, line_h, head_total, head_widest = _fit_headline(d, title, content_w, title_cap * 2, max_lines=2)
     header_h = pad_v + int(kick_h * 1.4) + int(gap * 0.7) + head_total + pad_v
