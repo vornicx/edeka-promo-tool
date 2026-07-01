@@ -53,10 +53,10 @@ const STYLES = [
 ];
 
 const TONES = [
-  { value: "fresco", label: "Frisch" },
-  { value: "premium", label: "Premium" },
-  { value: "atrevido", label: "Mutig" },
-  { value: "local", label: "Lokal" },
+  { value: "fresco", label: "Frisch", meta: "Klar & natürlich" },
+  { value: "premium", label: "Premium", meta: "Edel, Gold, ruhig" },
+  { value: "atrevido", label: "Mutig", meta: "Laut & kräftig" },
+  { value: "local", label: "Lokal", meta: "Warm, aus der Region" },
 ];
 
 const FORMATS = [
@@ -67,9 +67,9 @@ const FORMATS = [
 ];
 
 const LEVELS = [
-  { value: "bajo", label: "Dezent" },
-  { value: "medio", label: "Ausgewogen" },
-  { value: "alto", label: "Auffällig" },
+  { value: "bajo", label: "Dezent", meta: "Ruhig & klein" },
+  { value: "medio", label: "Ausgewogen", meta: "Standard" },
+  { value: "alto", label: "Auffällig", meta: "Großer Preis" },
 ];
 
 const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
@@ -710,6 +710,7 @@ export default function PromoForm({ onCreated }: Props) {
                     onClick={() => update("tone", tone.value)}
                   >
                     {tone.label}
+                    <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-slate-400">{tone.meta}</span>
                   </button>
                 ))}
               </div>
@@ -726,6 +727,7 @@ export default function PromoForm({ onCreated }: Props) {
                     onClick={() => update("differentiation_level", level.value)}
                   >
                     {level.label}
+                    <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-slate-400">{level.meta}</span>
                   </button>
                 ))}
               </div>

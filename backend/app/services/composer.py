@@ -1435,24 +1435,25 @@ def _center_text(draw, cx, y, text, font, fill) -> int:
     return y + (b[3] - b[1])
 
 
-def _draw_kicker(draw, x, y, text, height, color):
-    """Small uppercase, letter-spaced label (editorial kicker)."""
+def _draw_kicker(draw, x, y, text, height, color, tracking: float = 1.0):
+    """Small uppercase, letter-spaced label (editorial kicker). ``tracking``
+    scales the spacing so Tonalität can read as tight (Mutig) or wide (Premium)."""
     text = text.upper()
     font = _load_font(FONT_PATH_SEMIBOLD, height)
     cx = x
     for ch in text:
         b = draw.textbbox((0, 0), ch, font=font)
         draw.text((cx - b[0], y - b[1]), ch, fill=color, font=font)
-        cx += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22)))
+        cx += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22) * tracking))
     return cx
 
 
-def _kicker_width(draw, text, height) -> int:
+def _kicker_width(draw, text, height, tracking: float = 1.0) -> int:
     font = _load_font(FONT_PATH_SEMIBOLD, height)
     total = 0
     for ch in text.upper():
         b = draw.textbbox((0, 0), ch, font=font)
-        total += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22)))
+        total += (b[2] - b[0]) + max(2, int(height * (0.32 if ch == " " else 0.22) * tracking))
     return total
 
 
@@ -1464,6 +1465,7 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     tall = h / w > 1.12
     margin = int(w * 0.08)
     accent, ink, bg, glow = _kreativ_palette(spec)
+    tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
     accent = _hsv_adjust(accent, am, 1.0)
     muted = _mix(ink, bg, 0.5)
@@ -1501,10 +1503,10 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     # "ANGEBOT" kicker, top-right.
     kh = int(h * 0.02)
     label = _offer_label(spec)
-    _draw_kicker(draw, w - margin - _kicker_width(draw, label, kh), int(h * 0.07), label, kh, accent)
+    _draw_kicker(draw, w - margin - _kicker_width(draw, label, kh, tp.tracking), int(h * 0.07), label, kh, accent, tracking=tp.tracking)
 
     # Headline block, left: thin accent rule + product name + claim.
-    draw.rectangle((margin, head_y, margin + int(w * 0.085), head_y + max(3, int(h * 0.006))), fill=accent)
+    draw.rectangle((margin, head_y, margin + int(w * 0.085), head_y + max(2, int(h * 0.006 * tp.rule * lp.rule))), fill=accent)
     ny = head_y + int(h * 0.022)
     name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD,
                                          int(w * 0.55), int(h * 0.16), int(h * 0.066 * hm), int(h * 0.034),
@@ -1521,22 +1523,22 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     ctx = _context_tags(spec)
     if ctx:
         ck = int(h * 0.016)
-        _draw_kicker(draw, margin, ny + int(h * 0.02), ctx[0][0], ck, accent)
+        _draw_kicker(draw, margin, ny + int(h * 0.02), ctx[0][0], ck, accent, tracking=tp.tracking)
 
     # Price star (gold), the clear retail seal — bottom-right.
     ink_dark = (28, 26, 22)
     scx, scy = int(w * 0.77), int(h * (0.50 if tall else 0.52))
-    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05))
+    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05) * tp.seal * lp.seal)
     _draw_price_star(canvas, spec, scx, scy, sr, ink_dark, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         if tall:
             # Story / A4 / A5: percentage on the right of the seal, like EDEKA style.
-            br = int(sr * 0.42)
+            br = int(sr * 0.42 * lp.burst)
             bx = min(int(scx + sr * 0.55), w - int(w * 0.05) - br)
             _draw_discount_burst(canvas, discount, bx, int(scy - sr * 0.70), br)
         else:
-            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5 * lp.burst))
     _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, ink_dark)
 
 
@@ -1544,15 +1546,81 @@ def _product_accent(spec: PromotionSpec) -> tuple[int, int, int]:
     return _hsv_adjust(_product_dominant_color(_resolve_product_asset(spec)) or _hex_to_rgb("#1565C0"), 1.2, 0.95)
 
 
-def _level_scale(spec: PromotionSpec) -> tuple[float, float, float]:
-    """Kreativniveau -> (price size mul, headline size mul, accent saturation mul).
-    Applies to every style so 'Dezent/Ausgewogen/Auffällig' is always visible."""
+@dataclass(frozen=True)
+class ToneProfile:
+    """Tonalität (mood): how a design *feels*. Layered on top of every style so
+    the four tones read as clearly different moods, not just tiny colour tweaks."""
+    key: str
+    accent_mix: tuple[int, int, int]    # colour blended into the style accent
+    accent_mix_amt: float
+    sat: float                          # accent saturation ×
+    val: float                          # accent brightness ×
+    bg_tint: tuple[int, int, int]       # colour blended into backgrounds
+    bg_tint_amt: float
+    bg_light: float                     # + lightens / − darkens backgrounds
+    tracking: float                     # kicker / eyebrow letter-spacing ×
+    rule: float                         # rule / divider thickness ×
+    seal: float                         # price seal (star) size ×
+    force_region: bool
+
+
+def _tone_profile(spec: PromotionSpec) -> ToneProfile:
+    t = _enum_val(spec.tone)
+    if t == "premium":       # elegant, deep, gold accent, wide airy type
+        return ToneProfile("premium", (198, 162, 86), 0.26, 0.80, 0.98,
+                           (20, 24, 34), 0.06, -0.05, 1.75, 0.6, 0.95, False)
+    if t == "atrevido":      # Mutig: loud, saturated, heavy rules, big seal
+        return ToneProfile("atrevido", (0, 0, 0), 0.0, 1.55, 1.06,
+                           (255, 92, 20), 0.04, 0.0, 0.78, 1.75, 1.16, False)
+    if t == "local":         # warm, community, forces the region badge
+        return ToneProfile("local", (201, 120, 56), 0.26, 1.06, 1.0,
+                           (216, 150, 78), 0.08, 0.0, 1.12, 1.1, 1.0, True)
+    return ToneProfile("fresco", (255, 255, 255), 0.0, 1.18, 1.03,  # clean & bright
+                       (255, 255, 255), 0.05, 0.03, 1.0, 1.0, 1.0, False)
+
+
+@dataclass(frozen=True)
+class LevelProfile:
+    """Kreativniveau (intensity): how much visual *punch* a design carries.
+    Applied on every style so Dezent/Ausgewogen/Auffällig always changes a lot."""
+    key: str
+    price: float        # price size ×
+    headline: float     # headline size ×
+    sat: float          # accent saturation ×
+    rule: float         # rule / divider thickness ×
+    burst: float        # discount burst size ×
+    seal: float         # price seal size ×
+    depth: float        # shadow / spotlight intensity ×
+
+
+def _level_profile(spec: PromotionSpec) -> LevelProfile:
     lv = _enum_val(spec.differentiation_level)
-    if lv == "bajo":       # Dezent: restrained
-        return 0.82, 0.9, 0.78
-    if lv == "alto":       # Auffällig: bigger, bolder, more saturated
-        return 1.2, 1.12, 1.3
-    return 1.0, 1.0, 1.0   # Ausgewogen
+    if lv == "bajo":     # Dezent: restrained, airy, quiet
+        return LevelProfile("bajo", 0.80, 0.88, 0.76, 0.55, 0.75, 0.9, 0.65)
+    if lv == "alto":     # Auffällig: maximum impact
+        return LevelProfile("alto", 1.26, 1.15, 1.35, 1.8, 1.3, 1.12, 1.4)
+    return LevelProfile("medio", 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+
+
+def _level_scale(spec: PromotionSpec) -> tuple[float, float, float]:
+    """Back-compat shim: (price size mul, headline size mul, accent saturation mul)."""
+    lp = _level_profile(spec)
+    return lp.price, lp.headline, lp.sat
+
+
+def _themed_accent(spec: PromotionSpec, base: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Blend Tonalität colour character + Kreativniveau saturation into an accent."""
+    tp = _tone_profile(spec)
+    lp = _level_profile(spec)
+    a = _mix(base, tp.accent_mix, tp.accent_mix_amt)
+    return _hsv_adjust(a, tp.sat * lp.sat, tp.val)
+
+
+def _tone_bg(spec: PromotionSpec, color: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Tint + lighten/darken a background colour by the current Tonalität."""
+    tp = _tone_profile(spec)
+    c = _mix(color, tp.bg_tint, tp.bg_tint_amt)
+    return _lighten(c, tp.bg_light) if tp.bg_light >= 0 else _darken(c, -tp.bg_light)
 
 
 def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
@@ -1561,11 +1629,11 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
-    accent = _product_accent(spec)
+    tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    accent = _hsv_adjust(accent, am, 1.0)
+    accent = _themed_accent(spec, _product_accent(spec))
     ink = (32, 32, 36)
-    bg = _lighten(accent, 0.90)
+    bg = _tone_bg(spec, _lighten(accent, 0.90))
     muted = _mix(ink, bg, 0.42)
     white = (255, 255, 255)
     margin = int(w * 0.075)
@@ -1600,28 +1668,28 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     _draw_product_or_name(canvas, draw, spec, prod, ink)
 
     bl = _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * (0.074 if tall else 0.092)), ink, sub_color=muted, halo=False)
-    _draw_context_tags(canvas, spec, margin, max(int(h * (0.135 if tall else 0.17)), bl + int(h * 0.015)), int(w * 0.05))
+    _draw_context_tags(canvas, spec, margin, max(int(h * (0.135 if tall else 0.17)), bl + int(h * 0.015)), int(w * 0.05), force_region=tp.force_region)
 
     # Price star (product colour), the clear retail seal — bottom-right.
     scx, scy = int(w * 0.79), int(h * (0.46 if tall else 0.54))
-    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05))
+    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05) * tp.seal * lp.seal)
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         if tall:
             # Story / A4 / A5: percentage on the right of the seal, like EDEKA style.
-            br = int(sr * 0.42)
+            br = int(sr * 0.42 * lp.burst)
             bx = min(int(scx + sr * 0.55), w - int(w * 0.05) - br)
             _draw_discount_burst(canvas, discount, bx, int(scy - sr * 0.70), br)
         else:
-            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5))
+            _draw_discount_burst(canvas, discount, int(scx - sr * 0.82), int(scy - sr * 0.9), int(sr * 0.5 * lp.burst))
     _draw_validity_tag(canvas, spec, scx, int(scy + sr * 1.06), int(w * 0.05), accent, _contrast_text(accent))
 
     # Kicker + accent rule + oversized headline + claim.
     kh = int(h * 0.02)
-    _draw_kicker(draw, margin, head_y, (spec.category or "Aktion"), kh, accent)
+    _draw_kicker(draw, margin, head_y, (spec.category or "Aktion"), kh, accent, tracking=tp.tracking)
     bar_y = head_y + int(kh * 1.8)
-    draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.11), bar_y + max(4, int(h * 0.009))), radius=h // 220, fill=accent)
+    draw.rounded_rectangle((margin, bar_y, margin + int(w * 0.11), bar_y + max(3, int(h * 0.009 * tp.rule * lp.rule))), radius=h // 220, fill=accent)
     _draw_headline_block(draw, spec, Zone(margin, bar_y + int(h * 0.026), int(w * 0.60), int(h * 0.17)), ink, align="left", claim_color=muted)
     # (footer handled globally by the brand banner)
 
@@ -1632,13 +1700,13 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
-    accent = _product_accent(spec)
+    tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    accent = _hsv_adjust(accent, am, 1.0)
+    accent = _themed_accent(spec, _product_accent(spec))
     ink = (24, 24, 26)
     white = (255, 255, 255)
     muted = (120, 120, 126)
-    draw.rectangle((0, 0, w, h), fill=white)
+    draw.rectangle((0, 0, w, h), fill=_tone_bg(spec, (255, 255, 255)))
     content_bottom = h - int(h * 0.145)
 
     if tall:
@@ -1686,13 +1754,13 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         price_x = col_x
         price_w = col_w
 
-    _draw_kicker(draw, col_x, head_y, (spec.category or "Angebot"), kh, accent)
+    _draw_kicker(draw, col_x, head_y, (spec.category or "Angebot"), kh, accent, tracking=tp.tracking)
     name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD,
                                          left_w, int(h * (0.20 if tall else 0.22)),
                                          int(h * (0.072 if tall else 0.085) * hm),
                                          int(h * (0.034 if tall else 0.04)), max_lines=2, line_spacing=1.0)
     ny = _draw_wrapped(draw, name_lines, col_x, left_w, head_y + int(kh * 1.9), name_font, ink, align="left", line_spacing=1.0)
-    draw.rectangle((col_x, ny + int(h * 0.012), col_x + int(w * 0.10), ny + int(h * 0.012) + max(4, int(h * 0.01))), fill=accent)
+    draw.rectangle((col_x, ny + int(h * 0.012), col_x + int(w * 0.10), ny + int(h * 0.012) + max(3, int(h * 0.01 * tp.rule * lp.rule))), fill=accent)
     ny += int(h * 0.05)
     if spec.claim:
         cf = _load_font(FONT_PATH_REGULAR, int(h * (0.022 if tall else 0.026)))
@@ -1708,7 +1776,7 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         ot = f"statt {spec.old_price}"
         ob = draw.textbbox((0, 0), ot, font=of)
         draw.text((px - ob[0], py - ob[1]), ot, fill=muted, font=of)
-        draw.line((px, py + (ob[3] - ob[1]) * 0.55, px + (ob[2] - ob[0]), py + (ob[3] - ob[1]) * 0.55), fill=RED, width=max(3, h // 500))
+        draw.line((px, py + (ob[3] - ob[1]) * 0.55, px + (ob[2] - ob[0]), py + (ob[3] - ob[1]) * 0.55), fill=RED, width=max(2, int(h / 500 * lp.rule)))
         return py + int(h * 0.04)
 
     if tall:
@@ -1993,8 +2061,17 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
+    tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
     white = (255, 255, 255)
+    # Tonalität recolours the whole theme: accent character, price colour,
+    # colour-block vividness and the paper mood — so tones differ at a glance.
+    accent = _themed_accent(spec, accent)
+    price_color = _hsv_adjust(_mix(price_color, tp.accent_mix, tp.accent_mix_amt * 0.6), tp.sat, tp.val)
+    page = _tone_bg(spec, page)
+    _block_sat = 1 + (tp.sat - 1) * 0.6
+    block_a = _hsv_adjust(_mix(block_a, tp.accent_mix, tp.accent_mix_amt * 0.35), _block_sat, 1.0)
+    block_b = _hsv_adjust(_mix(block_b, tp.accent_mix, tp.accent_mix_amt * 0.35), _block_sat, 1.0)
     canvas.paste(_vertical_gradient((w, h), _lighten(page, 0.03), _darken(page, 0.03)), (0, 0))
     draw = ImageDraw.Draw(canvas)
     content_bottom = h - int(h * 0.145)
@@ -2021,7 +2098,7 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
     bl = _draw_brand_lockup(canvas, col_x, lock_y, int(h * (0.074 if tall else 0.084)), lock_color,
                             sub_color=_mix(lock_color, (128, 128, 128), 0.35), halo=lock_halo)
     if seal:
-        _draw_seal(canvas, int(w * (0.86 if tall else 0.40)), int(lock_y + h * 0.035), int(h * 0.05), seal)
+        _draw_seal(canvas, int(w * (0.86 if tall else 0.40)), int(lock_y + h * 0.035), int(h * 0.05 * tp.seal), seal)
 
     kh = int(h * (0.018 if tall else 0.02))
     ky = head_y if tall else max(head_y, bl + int(h * 0.02))
@@ -2043,12 +2120,12 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
         price_x = col_x
         price_w = col_w
 
-    _draw_kicker(draw, col_x, ky, (spec.category or kicker_word), kh, accent)
+    _draw_kicker(draw, col_x, ky, (spec.category or kicker_word), kh, accent, tracking=tp.tracking)
     name_font, name_lines = _fit_wrapped(draw, spec.product.upper(), FONT_PATH_EXTRABOLD, left_w,
                                          int(h * (0.20 if tall else 0.22)), int(h * (0.072 if tall else 0.082) * hm),
                                          int(h * (0.034 if tall else 0.04)), max_lines=2, line_spacing=1.0)
     ny = _draw_wrapped(draw, name_lines, col_x, left_w, ky + int(kh * 1.9), name_font, ink, align="left", line_spacing=1.0)
-    draw.rectangle((col_x, ny + int(h * 0.012), col_x + int(w * 0.10), ny + int(h * 0.012) + max(4, int(h * 0.01))), fill=accent)
+    draw.rectangle((col_x, ny + int(h * 0.012), col_x + int(w * 0.10), ny + int(h * 0.012) + max(3, int(h * 0.01 * tp.rule * lp.rule))), fill=accent)
     ny += int(h * 0.05)
     if spec.claim:
         cf = _load_font(FONT_PATH_REGULAR, int(h * (0.022 if tall else 0.026)))
@@ -2064,7 +2141,7 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
         ot = f"statt {spec.old_price}"
         ob = draw.textbbox((0, 0), ot, font=of)
         draw.text((px - ob[0], py - ob[1]), ot, fill=muted, font=of)
-        draw.line((px, py + (ob[3] - ob[1]) * 0.55, px + (ob[2] - ob[0]), py + (ob[3] - ob[1]) * 0.55), fill=RED, width=max(3, h // 500))
+        draw.line((px, py + (ob[3] - ob[1]) * 0.55, px + (ob[2] - ob[0]), py + (ob[3] - ob[1]) * 0.55), fill=RED, width=max(2, int(h / 500 * lp.rule)))
         return py + int(h * 0.04)
 
     if tall:
@@ -2130,43 +2207,44 @@ def _layout_prospekt(canvas, spec, fmt):
     w, h = canvas.size
     draw = ImageDraw.Draw(canvas)
     tall = h / w > 1.12
+    tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    blue = _hex_to_rgb(BRAND_BLUE)
-    yellow = _hex_to_rgb(BRAND_YELLOW)
+    blue = _tone_bg(spec, _hex_to_rgb(BRAND_BLUE))
+    yellow = _themed_accent(spec, _hex_to_rgb(BRAND_YELLOW))
     ink = (28, 32, 38)
     margin = int(w * 0.06)
-    canvas.paste(_vertical_gradient((w, h), (255, 255, 255), (236, 241, 248)), (0, 0))
+    canvas.paste(_vertical_gradient((w, h), _tone_bg(spec, (255, 255, 255)), _tone_bg(spec, (236, 241, 248))), (0, 0))
     draw = ImageDraw.Draw(canvas)
 
     band_h = int(h * (0.13 if tall else 0.16))
     draw.rectangle((0, 0, w, band_h), fill=blue)
-    draw.rectangle((0, band_h, w, band_h + max(3, int(h * 0.006))), fill=yellow)
+    draw.rectangle((0, band_h, w, band_h + max(3, int(h * 0.006 * tp.rule * lp.rule))), fill=yellow)
     bl = _draw_brand_lockup(canvas, margin, int(band_h * 0.5 - h * 0.045), int(h * (0.072 if tall else 0.084)),
                             yellow, sub_color=(255, 255, 255), halo=True)
     _draw_angebot_badge(canvas, int(w * 0.82), int(band_h * 0.5), int(h * (0.04 if tall else 0.05)), yellow, blue, _offer_label(spec))
 
     if tall:
         pz = Zone(margin, int(band_h + h * 0.03), int(w * 0.62), int(h * 0.40))
-        star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.43), int(w * 0.215 * min(pm, 1.05))
+        star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.43), int(w * 0.215 * min(pm, 1.05) * tp.seal * lp.seal)
         head_y = int(h * 0.66)
     else:
         pz = Zone(int(w * 0.02), int(band_h + h * 0.02), int(w * 0.50), int(h * 0.50))
-        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.47), int(w * 0.20 * min(pm, 1.05))
+        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.47), int(w * 0.20 * min(pm, 1.05) * tp.seal * lp.seal)
         head_y = int(h * 0.72)
 
     _draw_spotlight(canvas, pz.cx, pz.cy, int(pz.w * 0.5), (255, 255, 255), 90)
     _draw_product_or_name(canvas, draw, spec, pz, ink)
-    _draw_context_tags(canvas, spec, margin, max(int(band_h + h * 0.025), bl + int(h * 0.015)), int(w * 0.05))
+    _draw_context_tags(canvas, spec, margin, max(int(band_h + h * 0.025), bl + int(h * 0.015)), int(w * 0.05), force_region=tp.force_region)
 
     _draw_price_star(canvas, spec, star_cx, star_cy, star_r, blue, yellow, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
         if tall:
-            br = int(star_r * 0.42)
+            br = int(star_r * 0.42 * lp.burst)
             bx = min(int(star_cx + star_r * 0.55), w - margin - br)
             _draw_discount_burst(canvas, discount, bx, int(star_cy - star_r * 0.70), br)
         else:
-            _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.82), int(star_cy - star_r * 0.9), int(star_r * 0.5))
+            _draw_discount_burst(canvas, discount, int(star_cx - star_r * 0.82), int(star_cy - star_r * 0.9), int(star_r * 0.5 * lp.burst))
     _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.05), int(w * 0.05), yellow, blue)
     _draw_headline_block(draw, spec, Zone(margin, head_y, int(w * 0.62), int(h * 0.13)), ink, align="left", claim_color=(110, 120, 135))
 
@@ -2231,17 +2309,20 @@ def _build_style_config(
         bg_dark = 0.42
     # "fresco" keeps the defaults
 
-    # --- Kreativniveau: how much visual punch ---
+    # --- Kreativniveau: how much visual punch (drives the price-seal size,
+    #     glow depth and accent saturation so the three levels differ a lot) ---
     if level == "bajo":            # Dezent: clean, restrained
-        star_scale *= 0.90
-        halo = int(halo * 0.5)
-        spot = int(spot * 0.7)
+        star_scale *= 0.84
+        halo = int(halo * 0.45)
+        spot = int(spot * 0.68)
         vignette = int(vignette * 0.55)
-        bg_light += 0.04
+        bg_light += 0.05
     elif level == "alto":          # Auffällig: maximum impact without crowding
-        star_scale *= 1.02
-        halo = int(halo * 1.45)
-        spot = int(spot * 1.2)
+        star_scale *= 1.16
+        halo = int(halo * 1.5)
+        spot = int(spot * 1.25)
+        vignette = int(vignette * 1.1)
+    accent = _hsv_adjust(accent, _level_profile(spec).sat, 1.0)
 
     return StyleConfig(primary, secondary, accent, bg_light, bg_dark, vignette,
                        round(star_scale, 3), halo, spot, force_region)
