@@ -11,6 +11,7 @@ import {
   getMotifImageUrl,
   listMotifs,
 } from "@/lib/api";
+import { DesignPreset, useDesignPresets } from "@/lib/presets";
 
 interface Props {
   onCreated: (
@@ -197,6 +198,36 @@ export default function PromoForm({ onCreated }: Props) {
   const isAiMode = form.use_ai_planning;
   const accentIsPreset = ACCENT_PRESETS.some((c) => c.value.toLowerCase() === (form.accent_color || "").toLowerCase());
   const accentIsCustom = Boolean(form.accent_color) && !accentIsPreset;
+
+  const { presets, addPreset, removePreset } = useDesignPresets();
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState("");
+
+  const applyPreset = (p: DesignPreset) => {
+    setForm((previous) => ({
+      ...previous,
+      style: p.style,
+      tone: p.tone,
+      differentiation_level: p.differentiation_level,
+      accent_color: p.accent_color || "",
+      price_size: p.price_size || "auto",
+    }));
+  };
+
+  const saveCurrentPreset = () => {
+    const name = presetName.trim();
+    if (!name) return;
+    addPreset({
+      name,
+      style: form.style,
+      tone: form.tone,
+      differentiation_level: form.differentiation_level,
+      accent_color: form.accent_color || "",
+      price_size: form.price_size || "auto",
+    });
+    setPresetName("");
+    setSavingPreset(false);
+  };
 
   const update = useCallback((field: keyof PromotionData, value: string) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -650,6 +681,99 @@ export default function PromoForm({ onCreated }: Props) {
             </div>
 
             <div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="label mb-0">Design-Presets</label>
+                {!savingPreset && (
+                  <button
+                    type="button"
+                    onClick={() => setSavingPreset(true)}
+                    className="text-xs font-bold text-edeka-blue hover:underline"
+                  >
+                    + Aktuelles Design sichern
+                  </button>
+                )}
+              </div>
+
+              {savingPreset && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); saveCurrentPreset(); }
+                      if (e.key === "Escape") { setSavingPreset(false); setPresetName(""); }
+                    }}
+                    placeholder="Name des Presets"
+                    maxLength={28}
+                    className="input h-10 flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveCurrentPreset}
+                    disabled={!presetName.trim()}
+                    className="rounded-lg bg-edeka-blue px-3 py-2 text-xs font-extrabold text-white transition-opacity disabled:opacity-40"
+                  >
+                    Sichern
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSavingPreset(false); setPresetName(""); }}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {presets.length === 0 && (
+                  <p className="text-xs text-slate-400">Noch keine Presets — sichern Sie Ihr Lieblingsdesign.</p>
+                )}
+                {presets.map((p) => {
+                  const active =
+                    form.style === p.style &&
+                    form.tone === p.tone &&
+                    form.differentiation_level === p.differentiation_level &&
+                    (form.accent_color || "") === (p.accent_color || "") &&
+                    (form.price_size || "auto") === (p.price_size || "auto");
+                  return (
+                    <span
+                      key={p.id}
+                      className={`group inline-flex items-center rounded-pill border py-1 pl-1 pr-0.5 text-xs font-bold transition-colors ${
+                        active
+                          ? "border-edeka-blue bg-edeka-lightblue text-edeka-blue"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/40"
+                      }`}
+                    >
+                      <button type="button" onClick={() => applyPreset(p)} className="inline-flex items-center gap-1.5 pl-1.5 pr-1">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full border border-black/10"
+                          style={
+                            p.accent_color
+                              ? { backgroundColor: p.accent_color }
+                              : { background: "conic-gradient(from 90deg, #E2001A, #FFD600, #3C8C2E, #0EA5E9, #7A3E9D, #E2001A)" }
+                          }
+                        />
+                        {p.name}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${p.name} löschen`}
+                        onClick={() => removePreset(p.id)}
+                        className="grid h-5 w-5 place-items-center rounded-full text-slate-300 hover:bg-black/5 hover:text-red-600"
+                      >
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
               <label className="label">Designstil</label>
               {renderExampleCards(
                 STYLES,
@@ -696,15 +820,16 @@ export default function PromoForm({ onCreated }: Props) {
 
             <div>
               <label className="label">Akzentfarbe</label>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
+                  title="Automatisch aus dem Produkt"
+                  aria-label="Automatisch"
                   aria-pressed={!form.accent_color}
                   onClick={() => update("accent_color", "")}
-                  className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition-all ${!form.accent_color ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
-                >
-                  Auto
-                </button>
+                  className={`h-9 w-9 rounded-full border border-black/10 transition ${!form.accent_color ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
+                  style={{ background: "conic-gradient(from 90deg, #E2001A, #FFD600, #3C8C2E, #0EA5E9, #7A3E9D, #E2001A)" }}
+                />
                 {ACCENT_PRESETS.map((c) => {
                   const active = (form.accent_color || "").toLowerCase() === c.value.toLowerCase();
                   return (
@@ -715,18 +840,18 @@ export default function PromoForm({ onCreated }: Props) {
                       aria-label={c.label}
                       aria-pressed={active}
                       onClick={() => update("accent_color", c.value)}
-                      className={`h-9 w-9 rounded-full border-2 transition-transform hover:scale-105 ${active ? "ring-2 ring-edeka-blue/40 ring-offset-2" : ""}`}
-                      style={{ backgroundColor: c.value, borderColor: active ? "#004C96" : "rgba(0,0,0,0.12)" }}
+                      className={`h-9 w-9 rounded-full border border-black/10 transition ${active ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
+                      style={{ backgroundColor: c.value }}
                     />
                   );
                 })}
                 <label
-                  title="Eigene Farbe"
-                  className={`relative grid h-9 w-9 cursor-pointer place-items-center rounded-full border-2 transition-transform hover:scale-105 ${accentIsCustom ? "ring-2 ring-edeka-blue/40 ring-offset-2" : "border-dashed"}`}
-                  style={accentIsCustom ? { backgroundColor: form.accent_color, borderColor: "#004C96" } : { borderColor: "#cbd5e1" }}
+                  title="Eigene Farbe wählen"
+                  className={`relative grid h-9 w-9 cursor-pointer place-items-center rounded-full transition hover:scale-105 ${accentIsCustom ? "border border-black/10 ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "border-2 border-dashed border-slate-300 text-slate-400 hover:border-edeka-blue/50 hover:text-edeka-blue"}`}
+                  style={accentIsCustom ? { backgroundColor: form.accent_color } : undefined}
                 >
                   {!accentIsCustom && (
-                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" />
                     </svg>
                   )}
@@ -735,10 +860,16 @@ export default function PromoForm({ onCreated }: Props) {
                     value={form.accent_color || "#004C96"}
                     onChange={(e) => update("accent_color", e.target.value)}
                     className="absolute inset-0 cursor-pointer opacity-0"
+                    aria-label="Eigene Akzentfarbe"
                   />
                 </label>
+                <span className="ml-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  {form.accent_color ? form.accent_color.toUpperCase() : "Auto"}
+                </span>
               </div>
-              <p className="mt-1.5 text-[11px] leading-4 text-slate-500">Auto: Akzent kommt automatisch aus dem Produktfoto.</p>
+              <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                {form.accent_color ? "Diese Farbe überschreibt den Akzent in allen Stilen." : "Auto: Akzent kommt automatisch aus dem Produktfoto."}
+              </p>
             </div>
 
             <div>
