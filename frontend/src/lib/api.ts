@@ -18,6 +18,8 @@ export interface PromotionData {
   style: string;
   tone: string;
   differentiation_level: string;
+  accent_color?: string;
+  price_size?: string;
   use_ai_planning: boolean;
 }
 
@@ -235,6 +237,8 @@ export interface ExampleParams {
   origin?: string;
   category?: string;
   product_image?: string;
+  accent_color?: string;
+  price_size?: string;
 }
 
 // Cache-buster fixed per page load: each reload fetches fresh previews

@@ -72,6 +72,24 @@ const LEVELS = [
   { value: "alto", label: "Auffällig", meta: "Großer Preis" },
 ];
 
+const PRICE_SIZES = [
+  { value: "auto", label: "Auto", meta: "nach Niveau" },
+  { value: "s", label: "S", meta: "klein" },
+  { value: "m", label: "M", meta: "normal" },
+  { value: "l", label: "L", meta: "groß" },
+  { value: "xl", label: "XL", meta: "riesig" },
+];
+
+// Manual accent presets (EDEKA blue/yellow plus versatile retail tones).
+const ACCENT_PRESETS = [
+  { value: "#004C96", label: "Blau" },
+  { value: "#E2001A", label: "Rot" },
+  { value: "#3C8C2E", label: "Grün" },
+  { value: "#CEA74E", label: "Gold" },
+  { value: "#E8612C", label: "Orange" },
+  { value: "#7A3E9D", label: "Beere" },
+];
+
 const QUICK_STARTS: Array<{ label: string; data: Partial<PromotionData> }> = [
   {
     label: "Erdbeeren",
@@ -168,6 +186,8 @@ export default function PromoForm({ onCreated }: Props) {
     style: "edeka",
     tone: "fresco",
     differentiation_level: "medio",
+    accent_color: "",
+    price_size: "auto",
     use_ai_planning: false,
   });
 
@@ -175,6 +195,8 @@ export default function PromoForm({ onCreated }: Props) {
   const valid = Object.keys(errors).length === 0;
   const isEvent = form.campaign_kind === "event";
   const isAiMode = form.use_ai_planning;
+  const accentIsPreset = ACCENT_PRESETS.some((c) => c.value.toLowerCase() === (form.accent_color || "").toLowerCase());
+  const accentIsCustom = Boolean(form.accent_color) && !accentIsPreset;
 
   const update = useCallback((field: keyof PromotionData, value: string) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -233,6 +255,8 @@ export default function PromoForm({ onCreated }: Props) {
     origin: "",
     category: "",
     product_image: "",
+    accent_color: "",
+    price_size: "auto",
   });
   useEffect(() => {
     const t = setTimeout(() => {
@@ -246,10 +270,12 @@ export default function PromoForm({ onCreated }: Props) {
         origin: form.origin || "",
         category: form.category || "",
         product_image: form.product_image || "",
+        accent_color: form.accent_color || "",
+        price_size: form.price_size || "auto",
       });
     }, 220);
     return () => clearTimeout(t);
-  }, [form.campaign_kind, form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image]);
+  }, [form.campaign_kind, form.product, form.price, form.old_price, form.validity, form.claim, form.origin, form.category, form.product_image, form.accent_color, form.price_size]);
 
   const builtinMotifs = motifs.filter((m) => m.source === "builtin");
   const customMotifs = motifs.filter((m) => m.source === "custom");
@@ -654,6 +680,65 @@ export default function PromoForm({ onCreated }: Props) {
                 (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: v, format: "post" }),
                 "grid-cols-3",
               )}
+            </div>
+
+            <div>
+              <label className="label">Preisgröße</label>
+              {renderExampleCards(
+                PRICE_SIZES,
+                form.price_size || "auto",
+                (v) => update("price_size", v),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: form.differentiation_level, format: "post", price_size: v }),
+                "grid-cols-5",
+              )}
+              <p className="mt-1.5 text-[11px] leading-4 text-slate-500">Unabhängig vom Kreativniveau — steuert nur die Größe des Preises.</p>
+            </div>
+
+            <div>
+              <label className="label">Akzentfarbe</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  aria-pressed={!form.accent_color}
+                  onClick={() => update("accent_color", "")}
+                  className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition-all ${!form.accent_color ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                >
+                  Auto
+                </button>
+                {ACCENT_PRESETS.map((c) => {
+                  const active = (form.accent_color || "").toLowerCase() === c.value.toLowerCase();
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      title={c.label}
+                      aria-label={c.label}
+                      aria-pressed={active}
+                      onClick={() => update("accent_color", c.value)}
+                      className={`h-9 w-9 rounded-full border-2 transition-transform hover:scale-105 ${active ? "ring-2 ring-edeka-blue/40 ring-offset-2" : ""}`}
+                      style={{ backgroundColor: c.value, borderColor: active ? "#004C96" : "rgba(0,0,0,0.12)" }}
+                    />
+                  );
+                })}
+                <label
+                  title="Eigene Farbe"
+                  className={`relative grid h-9 w-9 cursor-pointer place-items-center rounded-full border-2 transition-transform hover:scale-105 ${accentIsCustom ? "ring-2 ring-edeka-blue/40 ring-offset-2" : "border-dashed"}`}
+                  style={accentIsCustom ? { backgroundColor: form.accent_color, borderColor: "#004C96" } : { borderColor: "#cbd5e1" }}
+                >
+                  {!accentIsCustom && (
+                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" />
+                    </svg>
+                  )}
+                  <input
+                    type="color"
+                    value={form.accent_color || "#004C96"}
+                    onChange={(e) => update("accent_color", e.target.value)}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                  />
+                </label>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-4 text-slate-500">Auto: Akzent kommt automatisch aus dem Produktfoto.</p>
             </div>
 
             <div>

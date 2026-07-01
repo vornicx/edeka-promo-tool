@@ -28,6 +28,14 @@ class CampaignKind(str, Enum):
     EVENT = "event"
 
 
+class PriceSize(str, Enum):
+    AUTO = "auto"
+    S = "s"
+    M = "m"
+    L = "l"
+    XL = "xl"
+
+
 class PromotionSpec(BaseModel):
     campaign_kind: CampaignKind = Field(default=CampaignKind.PRODUCT, description="Art der Promotion")
     product: str = Field(..., min_length=1, description="Produktname oder Eventtitel")
@@ -48,6 +56,14 @@ class PromotionSpec(BaseModel):
     differentiation_level: DifferentiationLevel = Field(
         default=DifferentiationLevel.MEDIO,
         description="Grad der visuellen Differenzierung",
+    )
+    accent_color: Optional[str] = Field(
+        None,
+        description="Manuelle Akzentfarbe als Hex (#RRGGBB); leer = automatisch aus dem Produkt",
+    )
+    price_size: PriceSize = Field(
+        default=PriceSize.AUTO,
+        description="Preisgröße unabhängig vom Kreativniveau (auto|s|m|l|xl)",
     )
 
 

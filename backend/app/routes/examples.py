@@ -14,6 +14,7 @@ from app.schemas.promotion import (
     DifferentiationLevel,
     EXPORT_FORMATS,
     FormatType,
+    PriceSize,
     PromotionSpec,
     ToneType,
 )
@@ -26,6 +27,7 @@ _TONES = {t.value for t in ToneType}
 _LEVELS = {d.value for d in DifferentiationLevel}
 _STYLES = {"edeka", "luxe", "editorial", "colorblock", "frischemarkt", "prospekt", "markttafel", "bio"}
 _FORMATS = {f.value for f in FormatType}
+_PRICE_SIZES = {p.value for p in PriceSize}
 
 _THUMB_LONG = 380  # render previews small (and fast); export keeps full quality
 _cache: dict[str, bytes] = {}
@@ -66,12 +68,15 @@ async def example(
     origin: str = "",
     category: str = "",
     product_image: str = "",
+    accent_color: str = "",
+    price_size: str = "auto",
 ):
     style = style.lower() if style.lower() in _STYLES else "edeka"
     tone = tone.lower() if tone.lower() in _TONES else "fresco"
     level = level.lower() if level.lower() in _LEVELS else "medio"
     fmt = FormatType(format) if format in _FORMATS else FormatType.POST
     campaign_kind = "event" if campaign_kind == "event" else "product"
+    price_size = price_size.lower() if price_size.lower() in _PRICE_SIZES else "auto"
 
     # Fall back to a representative sample when the briefing is still empty.
     if not product.strip():
@@ -98,12 +103,14 @@ async def example(
         tone=tone,
         differentiation_level=level,
         format=fmt,
+        accent_color=accent_color.strip() or None,
+        price_size=price_size,
     )
 
     key = "|".join([
         campaign_kind, style, tone, level, fmt.value, spec.product, spec.price, spec.old_price or "",
         spec.validity, spec.claim or "", spec.origin or "", spec.category or "",
-        spec.product_image or "",
+        spec.product_image or "", accent_color.strip(), price_size,
     ])
     if key not in _cache:
         if len(_cache) > 240:

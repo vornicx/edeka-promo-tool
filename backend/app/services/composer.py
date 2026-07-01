@@ -1467,7 +1467,7 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     accent, ink, bg, glow = _kreativ_palette(spec)
     tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    accent = _hsv_adjust(accent, am, 1.0)
+    accent = _custom_accent(spec) or _hsv_adjust(accent, am, 1.0)
     muted = _mix(ink, bg, 0.5)
 
     # Deep background with a faint product-tinted top and darker base + vignette.
@@ -1528,7 +1528,7 @@ def _layout_luxe(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     # Price star (gold), the clear retail seal — bottom-right.
     ink_dark = (28, 26, 22)
     scx, scy = int(w * 0.77), int(h * (0.50 if tall else 0.52))
-    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05) * tp.seal * lp.seal)
+    sr = int(w * (0.215 if tall else 0.200) * _seal_factor(spec, pm))
     _draw_price_star(canvas, spec, scx, scy, sr, ink_dark, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1623,6 +1623,46 @@ def _tone_bg(spec: PromotionSpec, color: tuple[int, int, int]) -> tuple[int, int
     return _lighten(c, tp.bg_light) if tp.bg_light >= 0 else _darken(c, -tp.bg_light)
 
 
+# --- Granular personalisation: manual accent colour + independent price size ---
+
+_PRICE_SIZE_MUL = {"s": 0.82, "m": 1.0, "l": 1.16, "xl": 1.32}
+
+
+def _price_size_mul(spec: PromotionSpec) -> float:
+    """Preisgröße, independent of Kreativniveau. 'auto' (default) returns 1.0 so
+    the price keeps following the level; S/M/L/XL scale it explicitly."""
+    ps = _enum_val(getattr(spec, "price_size", "auto")) or "auto"
+    return _PRICE_SIZE_MUL.get(ps, 1.0)
+
+
+def _custom_accent(spec: PromotionSpec) -> tuple[int, int, int] | None:
+    """A valid manual accent colour (#RRGGBB) if the user set one, else None."""
+    hexv = (getattr(spec, "accent_color", None) or "").strip()
+    return _hex_to_rgb(hexv, None) if hexv else None
+
+
+def _resolve_accent(spec: PromotionSpec, base: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Manual accent colour wins verbatim; otherwise blend tone+level into base."""
+    return _custom_accent(spec) or _themed_accent(spec, base)
+
+
+def _seal_factor(spec: PromotionSpec, pm: float) -> float:
+    """Combined price-seal size multiplier (level price × tone/level seal ×
+    Preisgröße), capped so the seal can never overflow the canvas."""
+    tp, lp = _tone_profile(spec), _level_profile(spec)
+    return min(min(pm, 1.05) * tp.seal * lp.seal * _price_size_mul(spec), 1.5)
+
+
+def _price_h_factor(spec: PromotionSpec, pm: float) -> float:
+    """Two-zone big-price height multiplier (market / colorblock), capped."""
+    return min(min(pm, 1.15) * _price_size_mul(spec), 1.4)
+
+
+def _legible_price(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Keep a (manual) accent readable when used as the big price on light paper."""
+    return _darken(color, 0.4) if _luminance(color) > 200 else color
+
+
 def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
     """Light editorial style: airy background, product on a big colour disc that
     bleeds off the corner, dark oversized headline, clean round price seal."""
@@ -1631,7 +1671,7 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
     tall = h / w > 1.12
     tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    accent = _themed_accent(spec, _product_accent(spec))
+    accent = _resolve_accent(spec, _product_accent(spec))
     ink = (32, 32, 36)
     bg = _tone_bg(spec, _lighten(accent, 0.90))
     muted = _mix(ink, bg, 0.42)
@@ -1672,7 +1712,7 @@ def _layout_editorial(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType)
 
     # Price star (product colour), the clear retail seal — bottom-right.
     scx, scy = int(w * 0.79), int(h * (0.46 if tall else 0.54))
-    sr = int(w * (0.215 if tall else 0.200) * min(pm, 1.05) * tp.seal * lp.seal)
+    sr = int(w * (0.215 if tall else 0.200) * _seal_factor(spec, pm))
     _draw_price_star(canvas, spec, scx, scy, sr, ink, accent, rot_deg=-7)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1702,7 +1742,7 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
     tall = h / w > 1.12
     tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
-    accent = _themed_accent(spec, _product_accent(spec))
+    accent = _resolve_accent(spec, _product_accent(spec))
     ink = (24, 24, 26)
     white = (255, 255, 255)
     muted = (120, 120, 126)
@@ -1780,12 +1820,12 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         return py + int(h * 0.04)
 
     if tall:
-        price_h = int(h * 0.175 * min(pm, 1.15))
+        price_h = int(h * 0.175 * _price_h_factor(spec, pm))
         val_h = int(h * 0.024)
         block_h = (int(h * 0.068) if has_old else 0) + price_h + int(h * 0.016) + val_h
         py = max(head_y, head_y + ((content_bottom - head_y) - block_h) // 2)
         py = _statt(price_x, py)
-        _draw_price_value(draw, price_x, py + price_h // 2, price_w, price_h, _offer_value(spec), accent, align="left")
+        _draw_price_value(draw, price_x, py + price_h // 2, price_w, price_h, _offer_value(spec), _legible_price(accent), align="left")
         py += price_h + int(h * 0.016)
         vf = _load_font(FONT_PATH_SEMIBOLD, val_h)
         vb = draw.textbbox((0, 0), meta, font=vf)
@@ -1795,8 +1835,8 @@ def _layout_colorblock(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType
         ny = _statt(col_x, ny)
         meta_h = int(h * 0.034)
         avail = content_bottom - ny - meta_h - int(h * 0.012)
-        price_h = min(int(h * 0.165 * min(pm, 1.15)), max(int(h * 0.09), avail))
-        _draw_price_value(draw, col_x, ny + price_h // 2, col_w, price_h, _offer_value(spec), accent, align="left")
+        price_h = min(int(h * 0.165 * _price_h_factor(spec, pm)), max(int(h * 0.09), avail))
+        _draw_price_value(draw, col_x, ny + price_h // 2, col_w, price_h, _offer_value(spec), _legible_price(accent), align="left")
         ny += price_h + int(h * 0.012)
         vf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.02))
         vb = draw.textbbox((0, 0), meta, font=vf)
@@ -2066,8 +2106,13 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
     white = (255, 255, 255)
     # Tonalität recolours the whole theme: accent character, price colour,
     # colour-block vividness and the paper mood — so tones differ at a glance.
-    accent = _themed_accent(spec, accent)
-    price_color = _hsv_adjust(_mix(price_color, tp.accent_mix, tp.accent_mix_amt * 0.6), tp.sat, tp.val)
+    ca = _custom_accent(spec)
+    accent = ca or _themed_accent(spec, accent)
+    if ca:
+        price_color = ca
+    else:
+        price_color = _hsv_adjust(_mix(price_color, tp.accent_mix, tp.accent_mix_amt * 0.6), tp.sat, tp.val)
+    price_color = _legible_price(price_color)
     page = _tone_bg(spec, page)
     _block_sat = 1 + (tp.sat - 1) * 0.6
     block_a = _hsv_adjust(_mix(block_a, tp.accent_mix, tp.accent_mix_amt * 0.35), _block_sat, 1.0)
@@ -2145,7 +2190,7 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
         return py + int(h * 0.04)
 
     if tall:
-        price_h = int(h * 0.175 * min(pm, 1.15))
+        price_h = int(h * 0.175 * _price_h_factor(spec, pm))
         val_h = int(h * 0.024)
         block_h = (int(h * 0.068) if has_old else 0) + price_h + int(h * 0.016) + val_h
         py = max(ky, head_y + ((content_bottom - head_y) - block_h) // 2)
@@ -2160,7 +2205,7 @@ def _layout_market_block(canvas, spec, fmt, *, page, block_a, block_b, accent, i
         ny = _statt(col_x, ny)
         meta_h = int(h * 0.034)
         avail = content_bottom - ny - meta_h - int(h * 0.012)
-        price_h = min(int(h * 0.165 * min(pm, 1.15)), max(int(h * 0.09), avail))
+        price_h = min(int(h * 0.165 * _price_h_factor(spec, pm)), max(int(h * 0.09), avail))
         _draw_price_value(draw, col_x, ny + price_h // 2, col_w, price_h, _offer_value(spec), price_color, align="left")
         ny += price_h + int(h * 0.012)
         vf = _load_font(FONT_PATH_SEMIBOLD, int(h * 0.02))
@@ -2210,7 +2255,7 @@ def _layout_prospekt(canvas, spec, fmt):
     tp, lp = _tone_profile(spec), _level_profile(spec)
     pm, hm, am = _level_scale(spec)
     blue = _tone_bg(spec, _hex_to_rgb(BRAND_BLUE))
-    yellow = _themed_accent(spec, _hex_to_rgb(BRAND_YELLOW))
+    yellow = _resolve_accent(spec, _hex_to_rgb(BRAND_YELLOW))
     ink = (28, 32, 38)
     margin = int(w * 0.06)
     canvas.paste(_vertical_gradient((w, h), _tone_bg(spec, (255, 255, 255)), _tone_bg(spec, (236, 241, 248))), (0, 0))
@@ -2225,11 +2270,11 @@ def _layout_prospekt(canvas, spec, fmt):
 
     if tall:
         pz = Zone(margin, int(band_h + h * 0.03), int(w * 0.62), int(h * 0.40))
-        star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.43), int(w * 0.215 * min(pm, 1.05) * tp.seal * lp.seal)
+        star_cx, star_cy, star_r = int(w * 0.73), int(h * 0.43), int(w * 0.215 * _seal_factor(spec, pm))
         head_y = int(h * 0.66)
     else:
         pz = Zone(int(w * 0.02), int(band_h + h * 0.02), int(w * 0.50), int(h * 0.50))
-        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.47), int(w * 0.20 * min(pm, 1.05) * tp.seal * lp.seal)
+        star_cx, star_cy, star_r = int(w * 0.74), int(h * 0.47), int(w * 0.20 * _seal_factor(spec, pm))
         head_y = int(h * 0.72)
 
     _draw_spotlight(canvas, pz.cx, pz.cy, int(pz.w * 0.5), (255, 255, 255), 90)
@@ -2322,7 +2367,10 @@ def _build_style_config(
         halo = int(halo * 1.5)
         spot = int(spot * 1.25)
         vignette = int(vignette * 1.1)
-    accent = _hsv_adjust(accent, _level_profile(spec).sat, 1.0)
+    ca = _custom_accent(spec)
+    accent = ca if ca else _hsv_adjust(accent, _level_profile(spec).sat, 1.0)
+    # Preisgröße scales the price seal independently of the level (capped).
+    star_scale = min(star_scale * _price_size_mul(spec), 1.45)
 
     return StyleConfig(primary, secondary, accent, bg_light, bg_dark, vignette,
                        round(star_scale, 3), halo, spot, force_region)
