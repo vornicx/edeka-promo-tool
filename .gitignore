@@ -17,10 +17,13 @@ __pycache__/
 # Generated promo samples
 test_outputs/
 
-# Temp source copied during build
-.next/
-src/
-public/
+# Temp source copied during build (root-level only; frontend/src stays tracked)
+/src/
+/public/
+/tsconfig.json
+/tailwind.config.ts
+/postcss.config.js
+/next-env.d.ts
 
 # PyInstaller spec (generado)
 *.spec
