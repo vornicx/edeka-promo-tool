@@ -26,6 +26,17 @@ class DifferentiationLevel(str, Enum):
 class CampaignKind(str, Enum):
     PRODUCT = "product"
     EVENT = "event"
+    MULTI = "multi"
+
+
+class PromoItem(BaseModel):
+    """Ein Angebot innerhalb eines Wochenangebote-Plakats."""
+
+    name: str = Field(..., min_length=1, description="Produktname")
+    price: str = Field(default="", description="Aktionspreis")
+    old_price: Optional[str] = Field(None, description="Vorheriger Preis (durchgestrichen)")
+    category: Optional[str] = Field(None, description="Kategorie für die Motivsuche")
+    product_image: Optional[str] = Field(None, description="Motivquelle wie bei PromotionSpec.product_image")
 
 
 class PriceSize(str, Enum):
@@ -64,6 +75,10 @@ class PromotionSpec(BaseModel):
     price_size: PriceSize = Field(
         default=PriceSize.AUTO,
         description="Preisgröße unabhängig vom Kreativniveau (auto|s|m|l|xl)",
+    )
+    items: list[PromoItem] = Field(
+        default_factory=list,
+        description="Nur bei Art=multi: die Angebote des Wochenangebote-Plakats (2-6 Stück)",
     )
 
 

@@ -78,13 +78,35 @@ def _trim_alpha(image: Image.Image) -> Image.Image:
     return image.crop(bbox) if bbox else image
 
 
+def _smart_cutout(img: Image.Image) -> Image.Image | None:
+    """AI cutout via rembg, if installed (optional dependency).
+
+    Used as a second attempt when the plain-background removal bails out on a
+    busy photo. Returns None when rembg is unavailable or fails, so uploads
+    keep working without it.
+    """
+    try:
+        from rembg import remove  # noqa: PLC0415 - heavy optional import
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        cut = remove(img.convert("RGBA"))
+        trimmed = _trim_alpha(cut)
+        if trimmed.getbbox() and trimmed.width >= img.width * 0.1 and trimmed.height >= img.height * 0.1:
+            return trimmed
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def _remove_background(img: Image.Image) -> Image.Image:
     """Make a plain (white/solid) background transparent.
 
     If the image already carries transparency it is kept as-is. Otherwise the
     background colour is sampled from the corners and pixels close to it become
     transparent. Works best for product photos on a plain/white backdrop;
-    transparent PNGs always work perfectly.
+    transparent PNGs always work perfectly. For busy backgrounds an optional
+    AI cutout (rembg) is tried before giving up.
     """
     img = img.convert("RGBA")
     alpha = img.getchannel("A")
@@ -109,10 +131,10 @@ def _remove_background(img: Image.Image) -> Image.Image:
     mask = mask.filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(1))
     img.putalpha(mask)
     trimmed = _trim_alpha(img)
-    # If removal nuked almost everything (busy/coloured background), keep the
-    # original image rather than returning a near-empty cutout.
+    # If removal nuked almost everything (busy/coloured background), try the
+    # optional AI cutout, then keep the original rather than a near-empty crop.
     if not trimmed.getbbox() or trimmed.width < w * 0.15 or trimmed.height < h * 0.15:
-        return img
+        return _smart_cutout(img) or img
     return trimmed
 
 

@@ -10,3 +10,6 @@ openai==1.82.0
 # Native desktop window (WebView2 on Windows, WKWebView on macOS, WebKitGTK on Linux)
 pywebview==5.4
 pythonnet==3.0.5; sys_platform == "win32"
+
+# Optional: KI-Freisteller für Produktfotos mit unruhigem Hintergrund
+# rembg[cpu]>=2.0

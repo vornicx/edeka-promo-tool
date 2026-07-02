@@ -30,4 +30,16 @@ def validate_and_create_spec(data: dict) -> PromotionSpec:
         data["old_price"] = None
     if "product" in data:
         data["product"] = normalize_product_name(data["product"])
+    if campaign_kind == "multi":
+        items = [i for i in (data.get("items") or []) if str((i or {}).get("name", "")).strip()]
+        if len(items) < 2:
+            raise ValueError("Ein Wochenangebote-Plakat braucht mindestens 2 Angebote")
+        for item in items[:6]:
+            item["name"] = normalize_product_name(str(item["name"]))
+            item["price"] = normalize_price(str(item.get("price") or ""))
+            if item.get("old_price"):
+                item["old_price"] = normalize_price(str(item["old_price"]))
+        data["items"] = items[:6]
+    else:
+        data["items"] = []
     return PromotionSpec(**data)
