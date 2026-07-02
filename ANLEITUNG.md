@@ -55,7 +55,9 @@ im Browser.
    - ein **integriertes Motiv** (Erdbeeren, Tomaten …) oder
    - ein **eigenes Foto** (siehe „Eigene Produkte“).
 4. **Designstil** wählen – jede Option zeigt ein Beispiel mit deinen Eingaben.
-   Dazu **Tonalität**, **Kreativniveau**, **Preisgröße** und **Akzentfarbe**.
+   Dazu **Tonalität** (Stimmung & Farben), **Kreativniveau** (Inszenierung:
+   Dezent = ruhig und flach, Auffällig = Deko, Glanz und Effekte),
+   **Preisgröße** (wie groß Preis & Siegel erscheinen) und **Akzentfarbe**.
    Ein Lieblings-Setup lässt sich als **Design-Preset** sichern.
 5. **Format** wählen: Post (1:1), Story (9:16), Plakat A4 oder A5.
 6. **„Promotion erstellen“** klicken → es erscheinen **drei Designvarianten**;

@@ -76,7 +76,7 @@ const STYLES = [
   { value: "luxe", label: "Dark Luxe", meta: "Premium" },
   { value: "editorial", label: "Editorial", meta: "Hell & klar" },
   { value: "colorblock", label: "Color Block", meta: "Grafisch" },
-  { value: "frischemarkt", label: "Frischemarkt", meta: "Frisch & klar" },
+  { value: "frischemarkt", label: "Frischemarkt", meta: "Marktstand" },
   { value: "prospekt", label: "Prospekt", meta: "Knüller" },
   { value: "markttafel", label: "Markt-Tafel", meta: "Tafel" },
   { value: "bio", label: "Bio / Natur", meta: "Natürlich" },
@@ -97,9 +97,9 @@ const FORMATS = [
 ];
 
 const LEVELS = [
-  { value: "bajo", label: "Dezent", meta: "Ruhig & klein" },
+  { value: "bajo", label: "Dezent", meta: "Ruhig & flach" },
   { value: "medio", label: "Ausgewogen", meta: "Standard" },
-  { value: "alto", label: "Auffällig", meta: "Großer Preis" },
+  { value: "alto", label: "Auffällig", meta: "Deko & Effekte" },
 ];
 
 const PRICE_SIZES = [
