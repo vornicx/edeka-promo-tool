@@ -548,17 +548,23 @@ def _event_detail_cards(spec: PromotionSpec, day: str, time_value: str) -> list[
     ]
 
 
+def _keyword_hit(keyword: str, haystack: str) -> bool:
+    """Word-boundary match so short keywords never hit inside other words
+    (e.g. 'eis' must not match 'fleisch')."""
+    return re.search(rf"(?<![a-zäöüß]){re.escape(keyword)}(?![a-zäöüß])", haystack) is not None
+
+
 def _resolve_builtin_asset(spec: PromotionSpec) -> Path | None:
     haystack = _normalize(f"{spec.product} {spec.category or ''}")
     for asset_name, keywords in PRODUCT_ASSETS.items():
-        if any(keyword in haystack for keyword in keywords):
+        if any(_keyword_hit(keyword, haystack) for keyword in keywords):
             path = PRODUCT_ASSET_DIR / f"{asset_name}.png"
             if path.exists():
                 return path
-    if any(word in haystack for word in FRUIT_WORDS):
+    if any(_keyword_hit(word, haystack) for word in FRUIT_WORDS):
         path = PRODUCT_ASSET_DIR / "mixed_fruit.png"
         return path if path.exists() else None
-    if any(word in haystack for word in VEGETABLE_WORDS):
+    if any(_keyword_hit(word, haystack) for word in VEGETABLE_WORDS):
         path = PRODUCT_ASSET_DIR / "mixed_vegetables.png"
         return path if path.exists() else None
     return None
@@ -892,6 +898,7 @@ def _draw_price_star(
     primary: tuple[int, int, int],
     accent: tuple[int, int, int],
     rot_deg: float = -8.0,
+    include_statt: bool = True,
 ):
     """The classic 'Knallerpreis' star seal with the big price inside."""
     draw = ImageDraw.Draw(canvas)
@@ -920,7 +927,7 @@ def _draw_price_star(
     inner = int(radius * 0.72)
     # "statt" struck-through old price at the upper area.
     top_cursor = cy - int(inner * 0.78)
-    if spec.old_price and not _is_event(spec):
+    if include_statt and spec.old_price and not _is_event(spec):
         old_text = f"statt {spec.old_price}"
         of = _fit_font_width(draw, old_text, FONT_PATH_BOLD, int(inner * 1.5), int(radius * 0.16), int(radius * 0.09))
         ob = draw.textbbox((0, 0), old_text, font=of)
@@ -1340,12 +1347,12 @@ def _draw_product_or_name(canvas, draw, spec, product_zone, name_color, fill_sca
         return False
 
 
-def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary):
+def _draw_validity_tag(canvas, spec, cx, cy, height, accent, primary, angle: float = -3.0):
     # Show the validity exactly as entered (e.g. "nur heute", "KW 24",
     # "bis 22.06.") — no automatic "nur" prefix.
     max_bottom = canvas.height - int(canvas.height * 0.125)
     max_w = int(canvas.width * 0.54)
-    _draw_tag(canvas, spec.validity, cx, cy, height, accent, primary, angle=-3.0, max_w=max_w, max_bottom=max_bottom)
+    _draw_tag(canvas, spec.validity, cx, cy, height, accent, primary, angle=angle, max_w=max_w, max_bottom=max_bottom)
 
 
 def _context_tags(spec: PromotionSpec) -> list[tuple[str, tuple[int, int, int], tuple[int, int, int]]]:
@@ -2376,93 +2383,121 @@ def _build_style_config(
                        round(star_scale, 3), halo, spot, force_region)
 
 
-def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
+def _knaller_statt(canvas, spec, cx, y, height, primary):
+    """Struck-through 'statt' price as its own line above the star — outside the
+    seal so the price inside can breathe."""
+    if not spec.old_price or _is_event(spec):
+        return
+    draw = ImageDraw.Draw(canvas)
+    text = f"statt {spec.old_price}"
+    font = _fit_font_height(draw, text, FONT_PATH_BOLD, height, height, int(height * 0.6))
+    b = draw.textbbox((0, 0), text, font=font)
+    tw, th = b[2] - b[0], b[3] - b[1]
+    x = cx - tw // 2
+    draw.text((x - b[0] + 2, y - b[1] + 2), text, fill=(0, 0, 0, 120), font=font)
+    draw.text((x - b[0], y - b[1]), text, fill=(226, 230, 238), font=font)
+    draw.line((x - th * 0.2, y + th * 0.58, x + tw + th * 0.2, y + th * 0.42), fill=RED, width=max(3, height // 8))
+
+
+def _layout_knaller(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
+    """EDEKA Style (Knaller): anthracite page, blue depth, yellow price star.
+
+    One structured composition for all formats: brand row on top, product hero
+    left with a clean neutral spotlight, price column right (statt → star →
+    validity), headline block with yellow kicker rule at the bottom.
+    """
     w, h = canvas.size
-    margin = int(w * 0.05)
+    ratio = h / w
+    tall = ratio > 1.12
+    margin = int(w * (0.06 if tall else 0.05))
     white = (255, 255, 255)
-    primary, accent = cfg.primary, cfg.accent
+    primary, accent, secondary = cfg.primary, cfg.accent, cfg.secondary
     _paint_background(canvas, cfg)
     draw = ImageDraw.Draw(canvas)
 
-    # Soft warm halo behind the star (intensity from Kreativniveau).
-    star_cx, star_cy, star_r = int(w * 0.77), int(h * 0.47), int(w * 0.22 * cfg.star_scale)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.7), _lighten(accent, 0.45), cfg.halo_alpha)
+    if ratio > 1.5:  # Story
+        brand_h, badge_y, badge_h = int(h * 0.080), int(h * 0.066), int(h * 0.040)
+        star_cx, star_cy, star_r = int(w * 0.68), int(h * 0.50), int(w * 0.24 * cfg.star_scale)
+        prod = Zone(int(w * 0.035), int(h * 0.165), int(w * 0.55), int(h * 0.42))
+        tag_y, tag_h = int(h * 0.145), int(w * 0.052)
+        head = Zone(margin, int(h * 0.68), int(w * 0.84), int(h * 0.135))
+    elif tall:  # Poster A4/A5
+        brand_h, badge_y, badge_h = int(h * 0.074), int(h * 0.052), int(h * 0.034)
+        star_cx, star_cy, star_r = int(w * 0.70), int(h * 0.475), int(w * 0.245 * cfg.star_scale)
+        prod = Zone(int(w * 0.035), int(h * 0.115), int(w * 0.58), int(h * 0.44))
+        tag_y, tag_h = int(h * 0.105), int(w * 0.046)
+        head = Zone(margin, int(h * 0.705), int(w * 0.76), int(h * 0.125))
+    else:  # Post 1:1
+        brand_h, badge_y, badge_h = int(h * 0.10), int(h * 0.085), int(h * 0.058)
+        star_cx, star_cy, star_r = int(w * 0.76), int(h * 0.46), int(w * 0.225 * cfg.star_scale)
+        prod = Zone(int(w * 0.04), int(h * 0.20), int(w * 0.46), int(h * 0.40))
+        tag_y, tag_h = int(h * 0.205), int(w * 0.052)
+        head = Zone(margin, int(h * 0.70), int(w * 0.62), int(h * 0.14))
 
-    bl = _draw_brand_lockup(canvas, margin, int(h * 0.05), int(h * 0.10), accent)
-    _draw_angebot_badge(canvas, int(w * 0.83), int(h * 0.085), int(h * 0.058), accent, primary, _offer_label(spec))
+    # Big seals (XL/auffällig) must never crowd the brand row: shift the star
+    # down as it grows instead of letting it collide with badge and lockup.
+    top_limit = badge_y + int(badge_h * 2.0)
+    star_cy = max(star_cy, top_limit + int(star_r * 1.04))
 
-    # Product hero on the left, lifted by a warm spotlight.
-    _draw_spotlight(canvas, int(w * 0.28), int(h * 0.42), int(w * 0.32), _lighten(accent, 0.5), cfg.spotlight_alpha)
-    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.04), int(h * 0.20), int(w * 0.46), int(h * 0.40)), white, fill_scale=1.02)
+    # Depth: a deep-blue glow anchors the price column, a neutral white
+    # spotlight lifts the product — no yellow washes that muddy the anthracite.
+    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 2.1), _lighten(secondary, 0.12), min(120, int(cfg.halo_alpha * 0.75)))
+    _draw_spotlight(canvas, prod.cx, prod.cy, int(prod.w * 0.62), (255, 255, 255), max(28, int(cfg.spotlight_alpha * 0.34)))
 
-    _draw_context_tags(canvas, spec, margin, max(int(h * 0.205), bl + int(h * 0.015)), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
+    bl = _draw_brand_lockup(canvas, margin, int(h * (0.04 if tall else 0.05)), brand_h, accent)
+    _draw_angebot_badge(canvas, int(w * (0.79 if tall else 0.83)), badge_y, badge_h, accent, primary, _offer_label(spec))
 
-    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
+    product = _load_product_image(spec, (int(prod.w * (1.02 if not tall else 1.04)), int(prod.h * (1.02 if not tall else 1.04))))
+    if product:
+        _draw_soft_shadow(canvas, prod.cx - int(prod.w * 0.26), int(prod.y + prod.h * 0.92), int(prod.w * 0.52), max(8, int(prod.h * 0.05)), blur=max(14, prod.w // 16), intensity=80)
+        _draw_product(canvas, product, prod.cx, prod.cy, angle=0.0)
+    else:
+        # No photo: the Waschbär becomes the hero — the headline below already
+        # carries the product name, so nothing is duplicated.
+        mascot = _load_mascot(int(prod.h * 0.78))
+        if mascot is not None:
+            _draw_soft_shadow(canvas, prod.cx - int(mascot.width * 0.32), prod.y + int(prod.h * 0.86), int(mascot.width * 0.64), max(8, int(prod.h * 0.05)), blur=max(14, prod.w // 16), intensity=70)
+            canvas.alpha_composite(mascot, (prod.cx - mascot.width // 2, prod.cy - mascot.height // 2))
+        else:
+            _draw_product_or_name(canvas, draw, spec, prod, white)
+
+    _draw_context_tags(canvas, spec, margin, max(tag_y, bl + int(h * 0.015)), tag_h, angle=0.0,
+                       force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
+
+    # Price column: statt above, star with the pure price, validity below.
+    # If the seal grew so large that the statt line has no room, it moves back
+    # inside the star instead of colliding with the brand row.
+    statt_y = int(star_cy - star_r * 1.30)
+    statt_outside = bool(spec.old_price) and not _is_event(spec) and statt_y > top_limit
+    if statt_outside:
+        _knaller_statt(canvas, spec, star_cx, statt_y, int(star_r * 0.17), primary)
+    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, secondary, accent, include_statt=not statt_outside)
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
-        _draw_discount_burst_colored(canvas, discount, int(star_cx - star_r * 0.78), int(star_cy - star_r * 0.88), int(star_r * 0.46), cfg.secondary, accent)
-    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.0), int(w * 0.052), accent, primary)
+        _draw_discount_burst_colored(canvas, discount, int(star_cx - star_r * 0.86), int(star_cy - star_r * 0.80), int(star_r * 0.38), secondary, accent)
+    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.12), tag_h, accent, primary, angle=0.0)
 
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.70), int(w * 0.62), int(h * 0.14)), white, align="left", claim_color=CLAIM_LIGHT)
+    # Headline with a yellow kicker rule for clear hierarchy.
+    kicker = (spec.category or spec.origin or "").strip()
+    if kicker:
+        kh = max(10, int(h * 0.018))
+        _draw_kicker(draw, head.x, head.y - int(kh * 2.6), kicker.upper(), kh, accent)
+    rule_y = head.y - int(h * 0.004)
+    draw.rectangle((head.x, rule_y, head.x + int(w * 0.10), rule_y + max(3, int(h * 0.006))), fill=accent)
+    _draw_headline_block(draw, spec, Zone(head.x, head.y + int(h * 0.014), head.w, head.h), white, align="left", claim_color=CLAIM_LIGHT)
     # (footer handled globally by the brand banner)
+
+
+def _layout_post(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
+    _layout_knaller(canvas, spec, cfg)
 
 
 def _layout_story(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
-    w, h = canvas.size
-    margin = int(w * 0.06)
-    white = (255, 255, 255)
-    primary, accent = cfg.primary, cfg.accent
-    _paint_background(canvas, cfg)
-    draw = ImageDraw.Draw(canvas)
-
-    # Vertical formats keep the square-post logic: product fills the left side,
-    # while the price dominates the right-middle instead of floating alone.
-    star_cx, star_cy, star_r = int(w * 0.68), int(h * 0.49), int(w * 0.235 * cfg.star_scale)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.8), _lighten(accent, 0.45), cfg.halo_alpha)
-
-    bl = _draw_brand_lockup(canvas, margin, int(h * 0.04), int(h * 0.080), accent)
-    _draw_angebot_badge(canvas, int(w * 0.78), int(h * 0.066), int(h * 0.04), accent, primary, _offer_label(spec))
-
-    _draw_spotlight(canvas, int(w * 0.34), int(h * 0.365), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
-    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.035), int(h * 0.165), int(w * 0.68), int(h * 0.43)), white, fill_scale=1.04)
-    _draw_context_tags(canvas, spec, margin, max(int(h * 0.145), bl + int(h * 0.015)), int(w * 0.052), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
-
-    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    if discount:
-        _draw_discount_burst_colored(canvas, discount, int(star_cx + star_r * 0.70), int(star_cy - star_r * 0.78), int(star_r * 0.35), cfg.secondary, accent)
-
-    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.04), int(w * 0.052), accent, primary)
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.68), int(w * 0.84), int(h * 0.14)), white, align="left", claim_color=CLAIM_LIGHT)
-    # (footer handled globally by the brand banner)
+    _layout_knaller(canvas, spec, cfg)
 
 
 def _layout_poster(canvas: Image.Image, spec: PromotionSpec, cfg: StyleConfig):
-    w, h = canvas.size
-    margin = int(w * 0.06)
-    white = (255, 255, 255)
-    primary, accent = cfg.primary, cfg.accent
-    _paint_background(canvas, cfg)
-    draw = ImageDraw.Draw(canvas)
-
-    star_cx, star_cy, star_r = int(w * 0.69), int(h * 0.475), int(w * 0.238 * cfg.star_scale)
-    _draw_spotlight(canvas, star_cx, star_cy, int(star_r * 1.9), _lighten(accent, 0.45), cfg.halo_alpha)
-
-    bl = _draw_brand_lockup(canvas, margin, int(h * 0.035), int(h * 0.074), accent)
-    _draw_angebot_badge(canvas, int(w * 0.80), int(h * 0.052), int(h * 0.034), accent, primary, _offer_label(spec))
-
-    _draw_spotlight(canvas, int(w * 0.34), int(h * 0.35), int(w * 0.45), _lighten(accent, 0.5), cfg.spotlight_alpha)
-    _draw_product_or_name(canvas, draw, spec, Zone(int(w * 0.02), int(h * 0.115), int(w * 0.70), int(h * 0.455)), white, fill_scale=1.04)
-    _draw_context_tags(canvas, spec, margin, max(int(h * 0.105), bl + int(h * 0.015)), int(w * 0.046), force_region=cfg.force_region, brand_bg=accent, brand_fg=primary)
-
-    _draw_price_star(canvas, spec, star_cx, star_cy, star_r, cfg.secondary, accent)
-    discount = _discount_percent(spec.old_price or "", spec.price)
-    if discount:
-        _draw_discount_burst_colored(canvas, discount, int(star_cx + star_r * 0.70), int(star_cy - star_r * 0.78), int(star_r * 0.35), cfg.secondary, accent)
-
-    _draw_validity_tag(canvas, spec, star_cx, int(star_cy + star_r * 1.05), int(w * 0.046), accent, primary)
-    _draw_headline_block(draw, spec, Zone(margin, int(h * 0.705), int(w * 0.76), int(h * 0.13)), white, align="left", claim_color=CLAIM_LIGHT)
-    # (footer handled globally by the brand banner)
+    _layout_knaller(canvas, spec, cfg)
 
 
 def _auto_ai_style(spec: PromotionSpec, direction: CreativeDirection) -> str:
@@ -3094,6 +3129,133 @@ def _layout_ai(canvas: Image.Image, spec: PromotionSpec, direction: CreativeDire
 
 
 # ---------------------------------------------------------------------------
+# Wochenangebote: mehrere Angebote als Prospekt-Raster
+# ---------------------------------------------------------------------------
+
+def _draw_multi_card(canvas, spec, item, zone, accent, blue, ink, muted):
+    """Eine Angebotskarte im Wochenangebote-Raster: Motiv, Name, Preis, Rabatt."""
+    draw = ImageDraw.Draw(canvas)
+    radius = max(8, int(zone.h * 0.05))
+    _solid_panel(
+        canvas, (zone.x, zone.y, zone.x + zone.w, zone.y + zone.h), radius,
+        (255, 255, 255), (250, 251, 253),
+        top_accent=accent, accent_h=max(4, int(zone.h * 0.014)),
+    )
+    pad = int(zone.w * 0.07)
+    img_zone = Zone(zone.x + pad, zone.y + pad + int(zone.h * 0.015), zone.w - pad * 2, int(zone.h * 0.42))
+    mini = spec.model_copy(update={
+        "product": item.name,
+        "category": item.category,
+        "product_image": item.product_image,
+        "claim": None,
+        "origin": None,
+    })
+    _draw_soft_shadow(
+        canvas, img_zone.cx - int(img_zone.w * 0.24), int(img_zone.y + img_zone.h * 0.88),
+        int(img_zone.w * 0.48), max(6, int(img_zone.h * 0.07)), blur=12, intensity=55,
+    )
+    _draw_product_or_name(canvas, draw, mini, img_zone, blue)
+
+    discount = _discount_percent(item.old_price or "", item.price)
+    if discount:
+        _draw_discount_burst(
+            canvas, discount,
+            zone.x + zone.w - int(zone.w * 0.14), zone.y + int(zone.w * 0.14),
+            max(14, int(zone.w * 0.105)),
+        )
+
+    ty = zone.y + int(zone.h * 0.50)
+    nf, nlines = _fit_wrapped(
+        draw, item.name.upper(), FONT_PATH_EXTRABOLD, zone.w - pad * 2,
+        int(zone.h * 0.17), int(zone.h * 0.072), int(zone.h * 0.042),
+        max_lines=2, line_spacing=1.0,
+    )
+    ty = _draw_wrapped(draw, nlines, zone.x + pad, zone.w - pad * 2, ty, nf, ink, align="left", line_spacing=1.0)
+
+    py = ty + int(zone.h * 0.025)
+    if item.old_price:
+        of = _load_font(FONT_PATH_BOLD, int(zone.h * 0.05))
+        ot = f"statt {item.old_price}"
+        ob = draw.textbbox((0, 0), ot, font=of)
+        draw.text((zone.x + pad - ob[0], py - ob[1]), ot, fill=muted, font=of)
+        strike_y = py + (ob[3] - ob[1]) * 0.55
+        draw.line(
+            (zone.x + pad, strike_y, zone.x + pad + (ob[2] - ob[0]), strike_y),
+            fill=RED, width=max(2, zone.h // 200),
+        )
+        py += int((ob[3] - ob[1]) * 1.45)
+    price_h = min(int(zone.h * 0.17), (zone.y + zone.h - pad) - py)
+    if item.price and price_h > int(zone.h * 0.055):
+        _draw_price_value(draw, zone.x + pad, py + price_h // 2, zone.w - pad * 2, price_h, item.price, RED, align="left")
+
+
+def _layout_multi(canvas: Image.Image, spec: PromotionSpec, fmt: FormatType):
+    """Wochenangebote-Plakat: blaues Kopfband, Titel mit Zeitraum und ein
+    Prospekt-Raster aus 2-6 Angebotskarten. Der Footer kommt wie immer aus
+    compose_promotion."""
+    w, h = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    ratio = h / w
+    blue = _hex_to_rgb(BRAND_BLUE)
+    yellow = _resolve_accent(spec, _hex_to_rgb(BRAND_YELLOW))
+    ink = (28, 32, 38)
+    muted = (108, 118, 130)
+    white = (255, 255, 255)
+    margin = int(w * 0.05)
+
+    canvas.paste(_vertical_gradient((w, h), (255, 255, 255), (236, 242, 249)), (0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    band_h = int(h * (0.105 if ratio > 1.3 else 0.135))
+    draw.rectangle((0, 0, w, band_h), fill=blue)
+    draw.rectangle((0, band_h, w, band_h + max(3, int(h * 0.005))), fill=yellow)
+    _draw_brand_lockup(
+        canvas, margin, int(band_h * 0.5 - h * 0.04),
+        int(h * (0.058 if ratio > 1.3 else 0.072)), yellow, sub_color=white, halo=True,
+    )
+    _draw_angebot_badge(
+        canvas, int(w * 0.86), int(band_h * 0.52),
+        int(h * (0.034 if ratio > 1.3 else 0.044)), yellow, blue, "ANGEBOTE",
+    )
+
+    ty = band_h + int(h * 0.02)
+    tf, tlines = _fit_wrapped(
+        draw, spec.product.upper(), FONT_PATH_EXTRABOLD, w - margin * 2,
+        int(h * 0.085), int(h * 0.046), int(h * 0.026), max_lines=2, line_spacing=1.0,
+    )
+    ty = _draw_wrapped(draw, tlines, margin, w - margin * 2, ty, tf, ink, align="left", line_spacing=1.0)
+    rule_y = ty + int(h * 0.008)
+    draw.rectangle((margin, rule_y, margin + int(w * 0.12), rule_y + max(3, int(h * 0.008))), fill=yellow)
+    vf = _load_font(FONT_PATH_BOLD, int(h * 0.019))
+    vt = spec.validity.upper()
+    vb = draw.textbbox((0, 0), vt, font=vf)
+    vy = ty + int(h * 0.022)
+    draw.text((margin - vb[0], vy - vb[1]), vt, fill=muted, font=vf)
+    grid_top = vy + (vb[3] - vb[1]) + int(h * 0.022)
+
+    content_bottom = h - int(h * 0.125) - int(h * 0.015)
+    items = (spec.items or [])[:6]
+    if ratio > 1.6:
+        cols = 1 if len(items) <= 3 else 2
+    else:
+        cols = 2 if len(items) <= 4 else 3
+    rows = max(1, math.ceil(len(items) / cols))
+    gap = int(w * 0.025)
+    grid_w = w - margin * 2
+    grid_h = max(1, content_bottom - grid_top)
+    cell_w = (grid_w - gap * (cols - 1)) // cols
+    cell_h = (grid_h - gap * (rows - 1)) // rows
+
+    for idx, item in enumerate(items):
+        r, c = divmod(idx, cols)
+        in_row = cols if r < rows - 1 else (len(items) - r * cols)
+        row_w = in_row * cell_w + (in_row - 1) * gap
+        x0 = margin + (grid_w - row_w) // 2 + c * (cell_w + gap)
+        y0 = grid_top + r * (cell_h + gap)
+        _draw_multi_card(canvas, spec, item, Zone(x0, y0, cell_w, cell_h), yellow, blue, ink, muted)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -3113,7 +3275,9 @@ def compose_promotion(
     canvas = Image.new("RGBA", (cw, ch), (255, 255, 255, 255))
 
     style = (getattr(spec, "style", None) or "edeka").lower()
-    if style == "ai":
+    if spec.campaign_kind.value == "multi":
+        _layout_multi(canvas, spec, format_type)
+    elif style == "ai":
         _layout_ai(canvas, spec, direction, format_type, event_background=event_background)
     elif style == "luxe":
         _layout_luxe(canvas, spec, format_type)
