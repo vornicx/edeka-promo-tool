@@ -101,11 +101,11 @@ La API key se configura desde el botón **Ajustes IA** en la interfaz.
 
 ## Flujo de uso
 
-1. El usuario llena el formulario con los datos del producto
-2. La IA genera 3 direcciones creativas
-3. El usuario elige 1 dirección
-4. El sistema compone la promoción sobre una plantilla
-5. Se puede exportar en 4 formatos: Post, Story, A4, A5
+1. El usuario elige el tipo de creación: Einzelangebot (plantillas), Wochenangebote (2-6 productos en un cartel tipo folleto) o KI-Design
+2. Llena el formulario con los datos del producto/evento
+3. El sistema compone 3 variantes de diseño y el usuario elige una visualmente
+4. Puede ajustar el briefing sin perder datos ("Anpassen") o recuperar una promoción anterior desde "Meine Aktionen" (historial local)
+5. Exporta el formato elegido en PNG 4K, todos los formatos en un ZIP, o PDF a 300 dpi para imprimir A4/A5; en móvil puede compartir directamente
 
 ## Estructura del proyecto
 

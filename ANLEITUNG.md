@@ -43,19 +43,36 @@ im Browser.
 
 ## 2. Benutzung
 
-1. **Briefing ausfüllen**: Produkt, Preis, optional „statt“-Preis,
-   Aktionszeitraum (z. B. „nur heute“, „KW 24“, „bis 22.06.“), Herkunft, Claim.
-2. **Produktbild / Motiv** wählen:
+1. **Erstellungsart wählen**:
+   - **Einzelangebot** – ein Produkt mit Preis (Vorlagen, ohne KI),
+   - **Wochenangebote** – 2–6 Produkte mit Preisen auf einem Prospekt-Plakat,
+   - **KI-Design** – KI-gestaltete Produktplakate und Event-/Marktaktionen.
+2. **Briefing ausfüllen**: Produkt, Preis, optional „statt“-Preis (der Rabatt
+   in % wird automatisch berechnet und angezeigt), Aktionszeitraum (per
+   Schnellauswahl „Nur heute“, „Mo–Sa“ … oder mit Datumsauswahl), Herkunft, Claim.
+3. **Produktbild / Motiv** wählen:
    - *Automatisch* (nach Produktname),
    - ein **integriertes Motiv** (Erdbeeren, Tomaten …) oder
    - ein **eigenes Foto** (siehe „Eigene Produkte“).
-3. **Designstil** wählen – jede Option zeigt ein Beispiel mit deinen Eingaben:
-   EDEKA Style, Dark Luxe, Editorial, Color Block, Foto Lifestyle, Magazin, Retro.
-4. **Tonalität** (Stimmung) und **Kreativniveau** (Intensität) einstellen.
+4. **Designstil** wählen – jede Option zeigt ein Beispiel mit deinen Eingaben.
+   Dazu **Tonalität**, **Kreativniveau**, **Preisgröße** und **Akzentfarbe**.
+   Ein Lieblings-Setup lässt sich als **Design-Preset** sichern.
 5. **Format** wählen: Post (1:1), Story (9:16), Plakat A4 oder A5.
-6. **„Promotion erstellen & exportieren“** klicken → die fertige Promotion
-   erscheint.
-7. Mit **„Als … herunterladen“** das Bild im gewählten Format speichern (4K, PNG).
+6. **„Promotion erstellen“** klicken → es erscheinen **drei Designvarianten**;
+   die schönste einfach anklicken.
+7. Herunterladen:
+   - **„Als … herunterladen“** – das Bild im gewählten Format (4K, PNG),
+   - **„Alle Formate (ZIP)“** – Post + Story + A4 + A5 auf einmal,
+   - **„Druck-PDF“** – druckfertiges PDF mit 300 dpi für A4/A5,
+   - **„Teilen“** (am Handy) – direkt an Instagram & Co. senden.
+8. **„Anpassen“** bringt dich mit allen Eingaben zurück ins Briefing;
+   **„Neue Aktion“** beginnt leer.
+
+### Meine Aktionen (Historie)
+- Oben auf **„Meine Aktionen“** klicken: dort liegen die zuletzt erstellten
+  Promotions mit Vorschaubild.
+- **„Wiederverwenden“** übernimmt alle Angaben ins Briefing — ideal, um z. B.
+  nur den Preis zu ändern und neu zu exportieren.
 
 ### Eigene Produkte hochladen
 - Oben rechts auf **„Produkte“** klicken.
