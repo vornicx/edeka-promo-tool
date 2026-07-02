@@ -3,8 +3,16 @@ const API_ROOT = API_BASE.replace(/\/api\/promo\/?$/, "");
 const SETTINGS_API_BASE = `${API_ROOT}/api/settings`;
 const PRODUCTS_API_BASE = `${API_ROOT}/api/products`;
 
+export interface PromoItemData {
+  name: string;
+  price: string;
+  old_price?: string;
+  category?: string;
+  product_image?: string;
+}
+
 export interface PromotionData {
-  campaign_kind: "product" | "event";
+  campaign_kind: "product" | "event" | "multi";
   product: string;
   category?: string;
   price: string;
@@ -20,6 +28,7 @@ export interface PromotionData {
   differentiation_level: string;
   accent_color?: string;
   price_size?: string;
+  items?: PromoItemData[];
   use_ai_planning: boolean;
 }
 
@@ -138,16 +147,54 @@ export async function composePromo(
   }
 }
 
-export async function exportPromo(
-  sessionId: string,
-  format: string
-): Promise<Blob> {
-  let res: Response;
+export interface PromoVariant {
+  index: number;
+  label: string;
+  image_url: string;
+}
+
+export interface ComposeAllResponse {
+  session_id: string;
+  selected: number;
+  variants: PromoVariant[];
+}
+
+export async function composeAllPromo(sessionId: string): Promise<ComposeAllResponse> {
   try {
-    res = await fetch(`${API_BASE}/export`, {
+    const res = await fetch(`${API_BASE}/compose_all`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, format }),
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    return handleResponse<ComposeAllResponse>(res, "Promotion konnte nicht gestaltet werden");
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(getNetworkErrorMessage());
+    }
+    throw error;
+  }
+}
+
+export async function selectVariant(sessionId: string, index: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/select_variant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, index }),
+  });
+  await handleResponse<{ selected: number }>(res, "Variante konnte nicht gewählt werden");
+}
+
+export function getVariantImageUrl(sessionId: string, index: number): string {
+  return `${API_BASE}/image/${sessionId}/variant/${index}`;
+}
+
+async function fetchBlob(path: string, body: Record<string, unknown>, errorMsg: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof TypeError) {
@@ -156,7 +203,7 @@ export async function exportPromo(
     throw error;
   }
   if (!res.ok) {
-    let detail = "Export konnte nicht erstellt werden";
+    let detail = errorMsg;
     try {
       const err = await res.json();
       detail = err.detail || err.message || detail;
@@ -166,6 +213,18 @@ export async function exportPromo(
     throw new Error(detail);
   }
   return res.blob();
+}
+
+export async function exportPromo(sessionId: string, format: string): Promise<Blob> {
+  return fetchBlob("/export", { session_id: sessionId, format }, "Export konnte nicht erstellt werden");
+}
+
+export async function exportPromoZip(sessionId: string): Promise<Blob> {
+  return fetchBlob("/export_zip", { session_id: sessionId }, "ZIP-Export konnte nicht erstellt werden");
+}
+
+export async function exportPromoPdf(sessionId: string, format: string): Promise<Blob> {
+  return fetchBlob("/export_pdf", { session_id: sessionId, format }, "PDF-Export konnte nicht erstellt werden");
 }
 
 export function getImageUrl(sessionId: string): string {

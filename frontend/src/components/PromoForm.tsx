@@ -5,6 +5,7 @@ import { showToast } from "@/components/Toast";
 import {
   CreativeDirection,
   Motif,
+  PromoItemData,
   PromotionData,
   createPromo,
   exampleImageUrl,
@@ -19,9 +20,37 @@ interface Props {
     directions: CreativeDirection[],
     mode: string,
     note: string,
-    format: string,
-    product: string,
+    form: PromotionData,
   ) => void;
+  prefill?: { data: Partial<PromotionData>; nonce: number } | null;
+}
+
+const MULTI_DEFAULT_TITLE = "Unsere Wochenangebote";
+
+function emptyItem(): PromoItemData {
+  return { name: "", price: "", old_price: "", category: "", product_image: "" };
+}
+
+function parsePrice(value: string | undefined): number | null {
+  if (!value) return null;
+  const match = value.replace(",", ".").match(/\d+(?:\.\d+)?/);
+  return match ? parseFloat(match[0]) : null;
+}
+
+function discountPercent(oldPrice: string | undefined, price: string | undefined): number | null {
+  const o = parsePrice(oldPrice);
+  const n = parsePrice(price);
+  if (!o || n === null || n >= o) return null;
+  const pct = Math.round((1 - n / o) * 100);
+  return pct >= 5 ? pct : null;
+}
+
+const VALIDITY_CHIPS = ["Nur heute", "Nur diese Woche", "Mo–Sa", "Solange der Vorrat reicht"];
+
+function formatShortDate(value: string): string {
+  const [y, m, d] = value.split("-");
+  if (!y || !m || !d) return "";
+  return `${d}.${m}.`;
 }
 
 const CATEGORIES = [
@@ -161,14 +190,18 @@ const CATEGORY_BY_LABEL = new Map(CATEGORIES.map((c) => [c.label, c.value]));
 function validate(f: PromotionData) {
   const e: Record<string, string> = {};
   const isEvent = f.campaign_kind === "event";
-  if (!f.product.trim()) e.product = isEvent ? "Titel eintragen" : "Produkt eintragen";
-  if (!isEvent && !f.price.trim()) e.price = "Preis eintragen";
-  else if (!isEvent && !/^[\d,.\s€$]+$/.test(f.price)) e.price = "Bitte ein gültiges Preisformat verwenden";
+  const isMulti = f.campaign_kind === "multi";
+  if (!f.product.trim()) e.product = isEvent || isMulti ? "Titel eintragen" : "Produkt eintragen";
+  if (!isEvent && !isMulti && !f.price.trim()) e.price = "Preis eintragen";
+  else if (!isEvent && !isMulti && !/^[\d,.\s€$]+$/.test(f.price)) e.price = "Bitte ein gültiges Preisformat verwenden";
   if (!f.validity.trim()) e.validity = "Aktionszeitraum eintragen";
+  if (isMulti && (f.items || []).filter((i) => i.name.trim()).length < 2) {
+    e.items = "Mindestens 2 Angebote mit Namen eintragen";
+  }
   return e;
 }
 
-export default function PromoForm({ onCreated }: Props) {
+export default function PromoForm({ onCreated, prefill }: Props) {
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [motifs, setMotifs] = useState<Motif[]>([]);
@@ -189,12 +222,25 @@ export default function PromoForm({ onCreated }: Props) {
     differentiation_level: "medio",
     accent_color: "",
     price_size: "auto",
+    items: [],
     use_ai_planning: false,
   });
+
+  // Übernahme aus Historie/Wiederverwendung: Briefing komplett einsetzen.
+  useEffect(() => {
+    if (!prefill) return;
+    setForm((previous) => ({
+      ...previous,
+      ...prefill.data,
+      items: prefill.data.items?.length ? prefill.data.items : previous.items,
+    }));
+    setTouched(new Set());
+  }, [prefill]);
 
   const errors = useMemo(() => validate(form), [form]);
   const valid = Object.keys(errors).length === 0;
   const isEvent = form.campaign_kind === "event";
+  const isMulti = form.campaign_kind === "multi";
   const isAiMode = form.use_ai_planning;
   const accentIsPreset = ACCENT_PRESETS.some((c) => c.value.toLowerCase() === (form.accent_color || "").toLowerCase());
   const accentIsCustom = Boolean(form.accent_color) && !accentIsPreset;
@@ -239,15 +285,55 @@ export default function PromoForm({ onCreated }: Props) {
       campaign_kind: "product",
       use_ai_planning: false,
       style: previous.style === "ai" ? "edeka" : previous.style,
+      product: previous.product === MULTI_DEFAULT_TITLE ? "" : previous.product,
+    }));
+  };
+
+  const chooseMultiMode = () => {
+    setForm((previous) => ({
+      ...previous,
+      campaign_kind: "multi",
+      use_ai_planning: false,
+      style: previous.style === "ai" ? "edeka" : previous.style,
+      product: previous.product.trim() && previous.campaign_kind === "multi" ? previous.product : MULTI_DEFAULT_TITLE,
+      items: previous.items?.length ? previous.items : [emptyItem(), emptyItem()],
     }));
   };
 
   const chooseAiMode = () => {
     setForm((previous) => ({
       ...previous,
+      campaign_kind: previous.campaign_kind === "multi" ? "product" : previous.campaign_kind,
       use_ai_planning: true,
       style: "ai",
       tone: previous.tone || "local",
+      product: previous.product === MULTI_DEFAULT_TITLE ? "" : previous.product,
+    }));
+  };
+
+  const updateItem = (index: number, field: keyof PromoItemData, value: string) => {
+    setForm((previous) => {
+      const items = [...(previous.items || [])];
+      items[index] = { ...items[index], [field]: value };
+      if (field === "product_image" && value) {
+        const motif = motifs.find((m) => m.value === value);
+        if (motif && !items[index].name.trim()) items[index] = { ...items[index], name: motif.name };
+      }
+      return { ...previous, items };
+    });
+  };
+
+  const addItem = () => {
+    setForm((previous) => ({
+      ...previous,
+      items: [...(previous.items || []), emptyItem()].slice(0, 6),
+    }));
+  };
+
+  const removeItem = (index: number) => {
+    setForm((previous) => ({
+      ...previous,
+      items: (previous.items || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -292,7 +378,8 @@ export default function PromoForm({ onCreated }: Props) {
   useEffect(() => {
     const t = setTimeout(() => {
       setExampleCtx({
-        campaign_kind: form.campaign_kind,
+        // Beispiel-Thumbnails gibt es nur für Einzelangebote; multi zeigt keine.
+        campaign_kind: form.campaign_kind === "event" ? "event" : "product",
         product: form.product,
         price: form.price,
         old_price: form.old_price || "",
@@ -390,11 +477,67 @@ export default function PromoForm({ onCreated }: Props) {
     setTouched((previous) => new Set(previous).add(field));
   };
 
+  const accentPicker = (
+    <div>
+      <label className="label">Akzentfarbe</label>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button
+          type="button"
+          title="Automatisch aus dem Produkt"
+          aria-label="Automatisch"
+          aria-pressed={!form.accent_color}
+          onClick={() => update("accent_color", "")}
+          className={`h-9 w-9 rounded-full border border-black/10 transition ${!form.accent_color ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
+          style={{ background: "conic-gradient(from 90deg, #E2001A, #FFD600, #3C8C2E, #0EA5E9, #7A3E9D, #E2001A)" }}
+        />
+        {ACCENT_PRESETS.map((c) => {
+          const active = (form.accent_color || "").toLowerCase() === c.value.toLowerCase();
+          return (
+            <button
+              key={c.value}
+              type="button"
+              title={c.label}
+              aria-label={c.label}
+              aria-pressed={active}
+              onClick={() => update("accent_color", c.value)}
+              className={`h-9 w-9 rounded-full border border-black/10 transition ${active ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
+              style={{ backgroundColor: c.value }}
+            />
+          );
+        })}
+        <label
+          title="Eigene Farbe wählen"
+          className={`relative grid h-9 w-9 cursor-pointer place-items-center rounded-full transition hover:scale-105 ${accentIsCustom ? "border border-black/10 ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "border-2 border-dashed border-slate-300 text-slate-400 hover:border-edeka-blue/50 hover:text-edeka-blue"}`}
+          style={accentIsCustom ? { backgroundColor: form.accent_color } : undefined}
+        >
+          {!accentIsCustom && (
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" />
+            </svg>
+          )}
+          <input
+            type="color"
+            value={form.accent_color || "#004C96"}
+            onChange={(e) => update("accent_color", e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-label="Eigene Akzentfarbe"
+          />
+        </label>
+        <span className="ml-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          {form.accent_color ? form.accent_color.toUpperCase() : "Auto"}
+        </span>
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-slate-500">
+        {form.accent_color ? "Diese Farbe überschreibt den Akzent in allen Stilen." : "Auto: Akzent kommt automatisch aus dem Produktfoto."}
+      </p>
+    </div>
+  );
+
   const inputClass = (field: keyof PromotionData) => `input${touched.has(field) && errors[field] ? " input-error" : ""}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched(new Set(["product", "price", "validity"]));
+    setTouched(new Set(["product", "price", "validity", "items"]));
     if (!valid) {
       showToast("error", "Bitte Pflichtfelder prüfen");
       return;
@@ -402,8 +545,12 @@ export default function PromoForm({ onCreated }: Props) {
 
     setLoading(true);
     try {
-      const res = await createPromo(form);
-      onCreated(res.session_id, res.directions, res.generation_mode, res.generation_note, form.format, form.product);
+      const payload: PromotionData = {
+        ...form,
+        items: isMulti ? (form.items || []).filter((i) => i.name.trim()) : [],
+      };
+      const res = await createPromo(payload);
+      onCreated(res.session_id, res.directions, res.generation_mode, res.generation_note, payload);
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : "Promotion konnte nicht erstellt werden");
     } finally {
@@ -421,16 +568,18 @@ export default function PromoForm({ onCreated }: Props) {
         <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-2xl font-extrabold text-slate-950">
-              {isEvent ? "Event eintragen" : "Angebot eintragen"}
+              {isEvent ? "Event eintragen" : isMulti ? "Wochenangebote eintragen" : "Angebot eintragen"}
             </h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               {isEvent
                 ? "Für Events reichen Titel, Termin und ein kurzer Hinweis. Die KI plant daraus ein klares Markt-Plakat."
-                : "Nur drei Angaben sind nötig: Produkt, Preis und Zeitraum. Alles andere ist optional."}
+                : isMulti
+                  ? "Titel, Zeitraum und 2-6 Angebote mit Preis — fertig ist das Prospekt-Plakat."
+                  : "Nur drei Angaben sind nötig: Produkt, Preis und Zeitraum. Alles andere ist optional."}
             </p>
           </div>
           <span className="rounded-lg bg-edeka-lightblue px-3 py-2 text-xs font-bold text-edeka-blue">
-            {Object.keys(errors).length === 0 ? "Briefing vollständig" : isEvent ? "2 Pflichtfelder" : "3 Pflichtfelder"}
+            {Object.keys(errors).length === 0 ? "Briefing vollständig" : isEvent ? "2 Pflichtfelder" : isMulti ? "Titel, Zeitraum + 2 Angebote" : "3 Pflichtfelder"}
           </span>
         </div>
       </div>
@@ -462,21 +611,37 @@ export default function PromoForm({ onCreated }: Props) {
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Erstellungsart</p>
             <p className="mt-1 text-sm font-semibold text-slate-700">Wähle zuerst, wie das Motiv entstehen soll.</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <button
               type="button"
-              className={`rounded-lg border p-4 text-left transition-all ${!isAiMode ? "border-edeka-blue bg-edeka-lightblue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white hover:border-edeka-blue/35"}`}
+              className={`rounded-lg border p-4 text-left transition-all ${!isAiMode && !isMulti ? "border-edeka-blue bg-edeka-lightblue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white hover:border-edeka-blue/35"}`}
               onClick={chooseTemplateMode}
-              aria-pressed={!isAiMode}
+              aria-pressed={!isAiMode && !isMulti}
             >
               <span className="flex items-center gap-2 text-sm font-extrabold text-edeka-blue">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-2a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
                 </svg>
-                Vorlagen
+                Einzelangebot
               </span>
               <span className="mt-2 block text-xs leading-5 text-slate-600">
-                Für Produktangebote. Schnell, zuverlässig und ohne KI-Abhängigkeit.
+                Ein Produkt, ein Preis. Schnell, zuverlässig und ohne KI-Abhängigkeit.
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`rounded-lg border p-4 text-left transition-all ${isMulti ? "border-edeka-blue bg-edeka-lightblue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white hover:border-edeka-blue/35"}`}
+              onClick={chooseMultiMode}
+              aria-pressed={isMulti}
+            >
+              <span className="flex items-center gap-2 text-sm font-extrabold text-edeka-blue">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h7v7H4V5zm9 0h7v7h-7V5zM4 14h7v5H4v-5zm9 0h7v5h-7v-5z" />
+                </svg>
+                Wochenangebote
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-slate-600">
+                2-6 Produkte mit Preisen auf einem Plakat — wie im Prospekt.
               </span>
             </button>
             <button
@@ -489,7 +654,7 @@ export default function PromoForm({ onCreated }: Props) {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 3.104v5.469a4.5 4.5 0 01-1.348 3.677C5.62 15.032 3 17.613 3 20.75c0 1.325.219 2.59.622 3.75h16.756A9.75 9.75 0 0021 20.75c0-3.137-2.62-5.718-5.402-8.5A4.5 4.5 0 0114.25 8.573V3.104" />
                 </svg>
-                IA
+                KI-Design
               </span>
               <span className="mt-2 block text-xs leading-5 text-slate-600">
                 Für KI-gestaltete Produktplakate, Marktaktionen und Veranstaltungen.
@@ -513,11 +678,11 @@ export default function PromoForm({ onCreated }: Props) {
 
         <section className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="label" htmlFor="product">{isEvent ? "Titel *" : "Produkt *"}</label>
+            <label className="label" htmlFor="product">{isEvent || isMulti ? "Titel *" : "Produkt *"}</label>
             <input
               id="product"
               className={inputClass("product")}
-              placeholder={isEvent ? "z. B. Sommerfest im Markt" : "z. B. Erdbeeren aus der Region"}
+              placeholder={isEvent ? "z. B. Sommerfest im Markt" : isMulti ? "z. B. Unsere Wochenangebote" : "z. B. Erdbeeren aus der Region"}
               value={form.product}
               onChange={(e) => update("product", e.target.value)}
               onBlur={() => markTouched("product")}
@@ -525,7 +690,7 @@ export default function PromoForm({ onCreated }: Props) {
             {touched.has("product") && errors.product && <p className="field-error">{errors.product}</p>}
           </div>
 
-          {!isEvent && (
+          {!isEvent && !isMulti && (
           <div className="md:col-span-2">
             <label className="label" htmlFor="motif">Produktbild / Motiv</label>
             <div className="flex items-center gap-3">
@@ -567,6 +732,7 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
           )}
 
+          {!isMulti && (
           <div>
             <label className="label" htmlFor="category">{isEvent ? "Art der Aktion" : "Kategorie"}</label>
             <select
@@ -581,7 +747,9 @@ export default function PromoForm({ onCreated }: Props) {
               ))}
             </select>
           </div>
+          )}
 
+          {!isMulti && (
           <div>
             <label className="label" htmlFor="price">{isEvent ? "Hinweis / Highlight" : "Preis *"}</label>
             <input
@@ -594,8 +762,9 @@ export default function PromoForm({ onCreated }: Props) {
             />
             {touched.has("price") && errors.price && <p className="field-error">{errors.price}</p>}
           </div>
+          )}
 
-          {!isEvent && (
+          {!isEvent && !isMulti && (
           <div>
             <label className="label" htmlFor="old-price">Alter Preis</label>
             <input
@@ -605,10 +774,15 @@ export default function PromoForm({ onCreated }: Props) {
               value={form.old_price}
               onChange={(e) => update("old_price", e.target.value)}
             />
+            {discountPercent(form.old_price, form.price) && (
+              <p className="mt-1 text-xs font-bold text-emerald-600">
+                = −{discountPercent(form.old_price, form.price)} % — wird als Rabatt-Badge angezeigt
+              </p>
+            )}
           </div>
           )}
 
-          <div>
+          <div className={isMulti ? "md:col-span-2" : undefined}>
             <label className="label" htmlFor="validity">{isEvent ? "Termin / Zeitraum *" : "Aktionszeitraum *"}</label>
             <input
               id="validity"
@@ -619,8 +793,51 @@ export default function PromoForm({ onCreated }: Props) {
               onBlur={() => markTouched("validity")}
             />
             {touched.has("validity") && errors.validity && <p className="field-error">{errors.validity}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {VALIDITY_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  className={`rounded-pill border px-2.5 py-1 text-xs font-bold transition-colors ${
+                    form.validity === chip
+                      ? "border-edeka-blue bg-edeka-lightblue text-edeka-blue"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-edeka-blue/40"
+                  }`}
+                  onClick={() => update("validity", chip)}
+                >
+                  {chip}
+                </button>
+              ))}
+              <span className="ml-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-400">
+                oder
+                <input
+                  type="date"
+                  aria-label="Von"
+                  className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs font-semibold text-slate-600"
+                  onChange={(e) => {
+                    const from = formatShortDate(e.target.value);
+                    if (!from) return;
+                    const to = form.validity.match(/–\s*(\d{2}\.\d{2}\.)$/)?.[1];
+                    update("validity", to ? `${from} – ${to}` : `ab ${from}`);
+                  }}
+                />
+                –
+                <input
+                  type="date"
+                  aria-label="Bis"
+                  className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs font-semibold text-slate-600"
+                  onChange={(e) => {
+                    const to = formatShortDate(e.target.value);
+                    if (!to) return;
+                    const from = form.validity.match(/^(?:ab\s*)?(\d{2}\.\d{2}\.)/)?.[1];
+                    update("validity", from ? `${from} – ${to}` : `bis ${to}`);
+                  }}
+                />
+              </span>
+            </div>
           </div>
 
+          {!isMulti && (
           <div>
             <label className="label" htmlFor="origin">{isEvent ? "Ort / Bereich" : "Herkunft"}</label>
             <input
@@ -631,9 +848,104 @@ export default function PromoForm({ onCreated }: Props) {
               onChange={(e) => update("origin", e.target.value)}
             />
           </div>
+          )}
         </section>
 
+        {isMulti && (
+        <section className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Angebote ({(form.items || []).length}/6)</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Produktname und Preis je Angebot. Das Motiv wird automatisch gefunden oder kann gewählt werden.</p>
+            </div>
+            {(form.items || []).length < 6 && (
+              <button type="button" className="btn-ghost w-auto whitespace-nowrap" onClick={addItem}>
+                + Angebot
+              </button>
+            )}
+          </div>
+          {errors.items && touched.has("items") && <p className="field-error">{errors.items}</p>}
+          <div className="grid gap-2.5">
+            {(form.items || []).map((item, index) => {
+              const pct = discountPercent(item.old_price, item.price);
+              return (
+                <div key={index} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_110px_110px_150px_auto] sm:items-end">
+                  <div>
+                    <label className="label text-xs" htmlFor={`item-name-${index}`}>Produkt {index + 1}</label>
+                    <input
+                      id={`item-name-${index}`}
+                      className="input"
+                      placeholder="z. B. Erdbeeren"
+                      value={item.name}
+                      onChange={(e) => updateItem(index, "name", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-xs" htmlFor={`item-price-${index}`}>Preis</label>
+                    <input
+                      id={`item-price-${index}`}
+                      className="input"
+                      placeholder="2,99 €"
+                      value={item.price}
+                      onChange={(e) => updateItem(index, "price", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-xs" htmlFor={`item-old-${index}`}>Statt {pct ? `(−${pct} %)` : ""}</label>
+                    <input
+                      id={`item-old-${index}`}
+                      className="input"
+                      placeholder="3,99 €"
+                      value={item.old_price || ""}
+                      onChange={(e) => updateItem(index, "old_price", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-xs" htmlFor={`item-motif-${index}`}>Motiv</label>
+                    <select
+                      id={`item-motif-${index}`}
+                      className="input"
+                      value={item.product_image || ""}
+                      onChange={(e) => updateItem(index, "product_image", e.target.value)}
+                      onFocus={loadMotifs}
+                    >
+                      <option value="">Automatisch</option>
+                      {builtinMotifs.length > 0 && (
+                        <optgroup label="Integrierte Motive">
+                          {builtinMotifs.map((m) => (
+                            <option key={m.value} value={m.value}>{m.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {customMotifs.length > 0 && (
+                        <optgroup label="Eigene Fotos">
+                          {customMotifs.map((m) => (
+                            <option key={m.value} value={m.value}>{m.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn mb-0.5 justify-self-end"
+                    aria-label={`Angebot ${index + 1} entfernen`}
+                    onClick={() => removeItem(index)}
+                    disabled={(form.items || []).length <= 2}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 7h12M9 7V5h6v2m-7 0v12a1 1 0 001 1h6a1 1 0 001-1V7" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        )}
+
         <section className="grid gap-4 border-t border-slate-200 pt-6">
+          {!isMulti && (
           <div>
             <div className="flex items-center justify-between gap-3">
               <label className="label mb-0" htmlFor="claim">Kurzer Werbesatz</label>
@@ -649,6 +961,7 @@ export default function PromoForm({ onCreated }: Props) {
               }}
             />
           </div>
+          )}
 
           {isEvent && (
           <div>
@@ -671,7 +984,33 @@ export default function PromoForm({ onCreated }: Props) {
           </div>
           )}
 
-          {!isAiMode ? (
+          {isMulti ? (
+          <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Wochenangebote nutzen ein festes Prospekt-Layout im EDEKA-Look. Akzentfarbe und Format können Sie anpassen.
+              </p>
+            </div>
+            {accentPicker}
+            <div>
+              <label className="label">Format</label>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {FORMATS.map((format) => (
+                  <button
+                    key={format.value}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-left text-sm font-extrabold transition-all ${form.format === format.value ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
+                    onClick={() => update("format", format.value)}
+                  >
+                    {format.label}
+                    <span className="block text-xs font-semibold text-slate-500">{format.meta}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          ) : !isAiMode ? (
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-edeka-blue">Design und Ausgabe</p>
@@ -818,59 +1157,7 @@ export default function PromoForm({ onCreated }: Props) {
               <p className="mt-1.5 text-[11px] leading-4 text-slate-500">Unabhängig vom Kreativniveau — steuert nur die Größe des Preises.</p>
             </div>
 
-            <div>
-              <label className="label">Akzentfarbe</label>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  type="button"
-                  title="Automatisch aus dem Produkt"
-                  aria-label="Automatisch"
-                  aria-pressed={!form.accent_color}
-                  onClick={() => update("accent_color", "")}
-                  className={`h-9 w-9 rounded-full border border-black/10 transition ${!form.accent_color ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
-                  style={{ background: "conic-gradient(from 90deg, #E2001A, #FFD600, #3C8C2E, #0EA5E9, #7A3E9D, #E2001A)" }}
-                />
-                {ACCENT_PRESETS.map((c) => {
-                  const active = (form.accent_color || "").toLowerCase() === c.value.toLowerCase();
-                  return (
-                    <button
-                      key={c.value}
-                      type="button"
-                      title={c.label}
-                      aria-label={c.label}
-                      aria-pressed={active}
-                      onClick={() => update("accent_color", c.value)}
-                      className={`h-9 w-9 rounded-full border border-black/10 transition ${active ? "ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "hover:scale-105"}`}
-                      style={{ backgroundColor: c.value }}
-                    />
-                  );
-                })}
-                <label
-                  title="Eigene Farbe wählen"
-                  className={`relative grid h-9 w-9 cursor-pointer place-items-center rounded-full transition hover:scale-105 ${accentIsCustom ? "border border-black/10 ring-2 ring-edeka-blue ring-offset-2 ring-offset-slate-50" : "border-2 border-dashed border-slate-300 text-slate-400 hover:border-edeka-blue/50 hover:text-edeka-blue"}`}
-                  style={accentIsCustom ? { backgroundColor: form.accent_color } : undefined}
-                >
-                  {!accentIsCustom && (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" />
-                    </svg>
-                  )}
-                  <input
-                    type="color"
-                    value={form.accent_color || "#004C96"}
-                    onChange={(e) => update("accent_color", e.target.value)}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                    aria-label="Eigene Akzentfarbe"
-                  />
-                </label>
-                <span className="ml-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                  {form.accent_color ? form.accent_color.toUpperCase() : "Auto"}
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                {form.accent_color ? "Diese Farbe überschreibt den Akzent in allen Stilen." : "Auto: Akzent kommt automatisch aus dem Produktfoto."}
-              </p>
-            </div>
+            {accentPicker}
 
             <div>
               <label className="label">Format</label>
@@ -981,7 +1268,7 @@ export default function PromoForm({ onCreated }: Props) {
               Wird erstellt
             </span>
           ) : (
-            isEvent ? "Event-Plakat erstellen" : isAiMode ? "KI-Promotion erstellen" : "Promotion erstellen"
+            isEvent ? "Event-Plakat erstellen" : isMulti ? "Wochenangebote erstellen" : isAiMode ? "KI-Promotion erstellen" : "Promotion erstellen"
           )}
         </button>
       </div>

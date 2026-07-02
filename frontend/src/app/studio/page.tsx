@@ -3,12 +3,21 @@
 import { useRef, useState } from "react";
 import Confetti from "@/components/Confetti";
 import ExportPanel from "@/components/ExportPanel";
+import HistoryPanel from "@/components/HistoryPanel";
 import PreviewPanel from "@/components/PreviewPanel";
 import PromoForm from "@/components/PromoForm";
 import ProductLibraryPanel from "@/components/ProductLibraryPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import ToastContainer, { showToast } from "@/components/Toast";
-import { CreativeDirection, composePromo } from "@/lib/api";
+import {
+  CreativeDirection,
+  PromoVariant,
+  PromotionData,
+  composeAllPromo,
+  getVariantImageUrl,
+  selectVariant,
+} from "@/lib/api";
+import { makeThumbnail, saveHistoryEntry } from "@/lib/history";
 
 const STEPS = [
   {
@@ -28,18 +37,8 @@ const STEPS = [
   },
 ];
 
-function Icon({ d, className = "h-4 w-4" }: { d: string; className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d={d} />
-    </svg>
-  );
-}
-
 export default function Home() {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [directions, setDirections] = useState<CreativeDirection[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [composed, setComposed] = useState(false);
   const [composeVersion, setComposeVersion] = useState(0);
   const [composing, setComposing] = useState(false);
@@ -51,31 +50,48 @@ export default function Home() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [variants, setVariants] = useState<PromoVariant[]>([]);
+  const [selectedVariant, setSelectedVariant] = useState(0);
+  const [switchingVariant, setSwitchingVariant] = useState(false);
+  // Das Formular bleibt gemountet (nur versteckt), damit „Anpassen" alle
+  // Eingaben behält. Ein neuer key setzt es bei „Neue Aktion" zurück.
+  const [formKey, setFormKey] = useState(0);
+  const [prefill, setPrefill] = useState<{ data: Partial<PromotionData>; nonce: number } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const step = !sessionId ? 1 : !composed ? 2 : 3;
 
-  // Direct flow: after the briefing we compose immediately and go to export —
-  // no separate "choose direction/colours" page.
-  const handleCreated = async (sid: string, dirs: CreativeDirection[], mode: string, note: string, format: string, product: string) => {
+  // Direct flow: after the briefing we compose all design variants immediately
+  // and let the user pick one visually — no separate parameter page.
+  const handleCreated = async (sid: string, _dirs: CreativeDirection[], mode: string, note: string, form: PromotionData) => {
     setSessionId(sid);
-    setDirections(dirs);
-    setSelectedIndex(0);
     setComposed(false);
     setGenerationMode(mode);
     setGenerationNote(note);
-    setExportFormat(format);
-    setProductName(product);
+    setExportFormat(form.format);
+    setProductName(form.product);
     setError("");
     setComposing(true);
+    setVariants([]);
+    setSelectedVariant(0);
     setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     try {
-      await composePromo(sid, 0);
+      const res = await composeAllPromo(sid);
+      setVariants(res.variants);
+      setSelectedVariant(res.selected);
       setComposed(true);
       setComposeVersion((v) => v + 1);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2500);
       showToast("success", "Promotion ist bereit");
+      // Aktion in die lokale Historie schreiben (best effort).
+      try {
+        const thumb = await makeThumbnail(`${getVariantImageUrl(sid, res.selected)}?v=${Date.now()}`);
+        saveHistoryEntry(form, thumb);
+      } catch {
+        /* Historie ist optional — Fehler hier nie dem Nutzer zeigen */
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Promotion konnte nicht gestaltet werden";
       setError(msg);
@@ -85,16 +101,45 @@ export default function Home() {
     }
   };
 
-  const handleReset = () => {
+  const handlePickVariant = async (index: number) => {
+    if (!sessionId || index === selectedVariant || switchingVariant) return;
+    setSwitchingVariant(true);
+    try {
+      await selectVariant(sessionId, index);
+      setSelectedVariant(index);
+      setComposeVersion((v) => v + 1);
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "Variante konnte nicht gewählt werden");
+    } finally {
+      setSwitchingVariant(false);
+    }
+  };
+
+  const backToBriefing = () => {
     setSessionId(null);
-    setDirections([]);
-    setSelectedIndex(null);
     setComposed(false);
     setComposing(false);
     setError("");
     setGenerationMode("");
     setGenerationNote("");
+    setVariants([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // „Anpassen": zurück zum Briefing mit allen Eingaben.
+  const handleEdit = () => backToBriefing();
+
+  // „Neue Aktion": Briefing leeren (Formular wird neu gemountet).
+  const handleReset = () => {
+    setFormKey((k) => k + 1);
+    setPrefill(null);
+    backToBriefing();
+  };
+
+  const handleReuse = (data: PromotionData) => {
+    setPrefill({ data, nonce: Date.now() });
+    backToBriefing();
+    showToast("success", "Aktion ins Briefing übernommen");
   };
 
   const handleLogout = async () => {
@@ -108,6 +153,7 @@ export default function Home() {
       <ToastContainer />
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ProductLibraryPanel open={productsOpen} onClose={() => setProductsOpen(false)} />
+      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onReuse={handleReuse} />
 
       <header className="header-brand text-white shadow-brand">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
@@ -128,6 +174,14 @@ export default function Home() {
                 Neue Aktion
               </button>
             )}
+            <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setHistoryOpen(true)}>
+              Meine Aktionen
+            </button>
+            <button type="button" className="icon-btn-header md:hidden" aria-label="Meine Aktionen öffnen" onClick={() => setHistoryOpen(true)}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
             <button type="button" className="btn-header hidden md:inline-flex" onClick={() => setProductsOpen(true)}>
               Eigene Produkte
             </button>
@@ -234,11 +288,9 @@ export default function Home() {
             </section>
           )}
 
-          {step === 1 && (
-            <section className="animate-slide-up">
-              <PromoForm onCreated={handleCreated} />
-            </section>
-          )}
+          <section className={step === 1 ? "animate-slide-up" : "hidden"}>
+            <PromoForm key={formKey} onCreated={handleCreated} prefill={prefill} />
+          </section>
 
           {sessionId && !composed && composing && (
             <section className="panel flex items-center gap-3 p-6 animate-slide-up">
@@ -255,7 +307,55 @@ export default function Home() {
 
           {composed && (
             <section className="animate-slide-up space-y-5">
-              <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion} />
+              {variants.length > 1 && sessionId && (
+                <div className="panel p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-edeka-blue">Designvarianten</p>
+                  <p className="mt-1 text-sm font-medium text-slate-600">
+                    Wählen Sie mit einem Klick das Design, das Ihnen am besten gefällt.
+                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    {variants.map((variant) => {
+                      const active = variant.index === selectedVariant;
+                      return (
+                        <button
+                          key={variant.index}
+                          type="button"
+                          aria-pressed={active}
+                          disabled={switchingVariant}
+                          onClick={() => handlePickVariant(variant.index)}
+                          className={`group overflow-hidden rounded-xl border text-left transition-all ${
+                            active
+                              ? "border-edeka-blue ring-2 ring-edeka-blue/25 shadow-brand"
+                              : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-edeka-blue/40 hover:shadow-card"
+                          }`}
+                        >
+                          <div className="relative aspect-square w-full bg-slate-100">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`${getVariantImageUrl(sessionId, variant.index)}?v=${composeVersion}`}
+                              alt={variant.label}
+                              loading="lazy"
+                              className="h-full w-full object-contain"
+                            />
+                            {active && (
+                              <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-edeka-blue text-white shadow-brand ring-2 ring-white">
+                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
+                          <div className={`px-2.5 py-2 ${active ? "bg-edeka-lightblue" : "bg-white"}`}>
+                            <p className={`text-xs font-bold ${active ? "text-edeka-blue" : "text-slate-900"}`}>{variant.label}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <PreviewPanel sessionId={sessionId} composed={composed} version={composeVersion + selectedVariant * 1000} />
 
               <div className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -264,7 +364,10 @@ export default function Home() {
                     Ihre Promotion ist bereit zum Herunterladen.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <button type="button" className="btn-ghost sm:w-auto" onClick={handleEdit}>
+                    Anpassen
+                  </button>
                   <button type="button" className="btn-ghost sm:w-auto" onClick={handleReset}>
                     Neue Aktion
                   </button>
