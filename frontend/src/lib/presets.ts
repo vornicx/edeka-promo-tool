@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 // A saved design preset: a reusable combination of the look controls
-// (style + tone + level + accent colour + price size). Persisted locally.
+// (style + tone + accent colour + price size). Persisted locally.
 export interface DesignPreset {
   id: string;
   name: string;
   style: string;
   tone: string;
-  differentiation_level: string;
   accent_color: string;
   price_size: string;
 }
@@ -16,11 +15,11 @@ const KEY = "edeka_design_presets_v1";
 
 // Starter presets that showcase the look controls; users can edit/delete them.
 const DEFAULT_PRESETS: DesignPreset[] = [
-  { id: "seed-knaller", name: "EDEKA Knaller", style: "edeka", tone: "atrevido", differentiation_level: "alto", accent_color: "", price_size: "xl" },
-  { id: "seed-premium", name: "Premium Gold", style: "luxe", tone: "premium", differentiation_level: "medio", accent_color: "#CEA74E", price_size: "l" },
-  { id: "seed-frisch", name: "Frische Grün", style: "frischemarkt", tone: "fresco", differentiation_level: "medio", accent_color: "", price_size: "m" },
-  { id: "seed-bio", name: "Bio Natur", style: "bio", tone: "local", differentiation_level: "medio", accent_color: "", price_size: "m" },
-  { id: "seed-tafel", name: "Markt-Tafel", style: "markttafel", tone: "premium", differentiation_level: "medio", accent_color: "", price_size: "l" },
+  { id: "seed-knaller", name: "EDEKA Knaller", style: "edeka", tone: "atrevido", accent_color: "", price_size: "xl" },
+  { id: "seed-premium", name: "Premium Gold", style: "luxe", tone: "premium", accent_color: "#CEA74E", price_size: "l" },
+  { id: "seed-frisch", name: "Frische Grün", style: "frischemarkt", tone: "fresco", accent_color: "", price_size: "m" },
+  { id: "seed-bio", name: "Bio Natur", style: "bio", tone: "local", accent_color: "", price_size: "m" },
+  { id: "seed-tafel", name: "Markt-Tafel", style: "markttafel", tone: "premium", accent_color: "", price_size: "l" },
 ];
 
 function loadPresets(): DesignPreset[] {

@@ -96,11 +96,7 @@ def _product_family(spec: PromotionSpec) -> str:
 
 
 def _energy(spec: PromotionSpec) -> str:
-    if spec.differentiation_level.value == "alto":
-        return "high"
-    if spec.differentiation_level.value == "bajo":
-        return "medium_low"
-    return "medium"
+    return "high" if spec.tone.value == "atrevido" else "medium"
 
 
 def _style(spec: PromotionSpec) -> str:
@@ -247,7 +243,7 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
                 composition="Zentrale Headline in XXL-Type, Termin und Ort klar darunter, EDEKA-Farben als dominante Flächen.",
                 palette=["#003B79", "#FFD600", "#D71920", "#FFFFFF"],
                 text_safe_area="center",
-                boldness="high" if spec.differentiation_level.value == "alto" else "medium",
+                boldness="high" if spec.tone.value == "atrevido" else "medium",
                 waschbaer_presence="featured",
                 event_components=component_set,
             ),
@@ -279,7 +275,7 @@ def build_local_plan(spec: PromotionSpec) -> tuple[EnrichmentSpec, list[Creative
             composition="Gelbe Preis-Fläche als Eyecatcher über volle Breite, Produkt zentral mit Spot, Claim als Abschlusszeile.",
             palette=["#003B79", "#FFD600", "#D71920", "#FFFFFF"],
             text_safe_area="top_left",
-            boldness="high" if spec.differentiation_level.value == "alto" else "medium",
+            boldness="high" if spec.tone.value == "atrevido" else "medium",
             waschbaer_presence="none",
         ),
     ]
@@ -297,7 +293,6 @@ def _build_user_prompt(spec: PromotionSpec) -> str:
         lines.append(f"Termin: {spec.validity}")
         lines.append(f"Format: {spec.format.value}")
         lines.append(f"Tonalität: {spec.tone.value}")
-        lines.append(f"Kreativniveau: {spec.differentiation_level.value}")
     else:
         lines += [
             f"Kategorie: {spec.category or 'nicht angegeben'}",
@@ -308,7 +303,6 @@ def _build_user_prompt(spec: PromotionSpec) -> str:
             f"Claim: {spec.claim or 'nicht angegeben'}",
             f"Format: {spec.format.value}",
             f"Tonalität: {spec.tone.value}",
-            f"Kreativniveau: {spec.differentiation_level.value}",
         ]
     return "\n".join(lines)
 

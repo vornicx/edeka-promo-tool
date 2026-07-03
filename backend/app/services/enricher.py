@@ -36,7 +36,6 @@ def build_user_prompt(spec: PromotionSpec) -> str:
     if spec.claim:
         parts.append(f"Claim: {spec.claim}")
     parts.append(f"Tonalitaet: {spec.tone.value}")
-    parts.append(f"Differenzierungsgrad: {spec.differentiation_level.value}")
     return "\n".join(parts)
 
 

@@ -66,7 +66,7 @@ class PromotionSpec(BaseModel):
     tone: ToneType = Field(default=ToneType.FRESCO, description="Visuelle Tonalität")
     differentiation_level: DifferentiationLevel = Field(
         default=DifferentiationLevel.MEDIO,
-        description="Grad der visuellen Differenzierung",
+        description="Veraltet — wird ignoriert (Kreativniveau wurde entfernt); bleibt nur für alte Historien/Presets erhalten",
     )
     accent_color: Optional[str] = Field(
         None,
@@ -74,7 +74,7 @@ class PromotionSpec(BaseModel):
     )
     price_size: PriceSize = Field(
         default=PriceSize.AUTO,
-        description="Preisgröße unabhängig vom Kreativniveau (auto|s|m|l|xl)",
+        description="Preisgröße (auto|s|m|l|xl)",
     )
     items: list[PromoItem] = Field(
         default_factory=list,

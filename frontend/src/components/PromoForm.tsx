@@ -96,12 +96,6 @@ const FORMATS = [
   { value: "poster_a5", label: "A5", meta: "Plakat" },
 ];
 
-const LEVELS = [
-  { value: "bajo", label: "Dezent", meta: "Ruhig & flach" },
-  { value: "medio", label: "Ausgewogen", meta: "Standard" },
-  { value: "alto", label: "Auffällig", meta: "Deko & Effekte" },
-];
-
 const PRICE_SIZES = [
   { value: "auto", label: "Auto", meta: "nach Niveau" },
   { value: "s", label: "S", meta: "klein" },
@@ -219,7 +213,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
     format: "post",
     style: "edeka",
     tone: "fresco",
-    differentiation_level: "medio",
     accent_color: "",
     price_size: "auto",
     items: [],
@@ -254,7 +247,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
       ...previous,
       style: p.style,
       tone: p.tone,
-      differentiation_level: p.differentiation_level,
       accent_color: p.accent_color || "",
       price_size: p.price_size || "auto",
     }));
@@ -267,7 +259,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
       name,
       style: form.style,
       tone: form.tone,
-      differentiation_level: form.differentiation_level,
       accent_color: form.accent_color || "",
       price_size: form.price_size || "auto",
     });
@@ -418,7 +409,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
       ...previous,
       product_image: "",
       format: "post",
-      differentiation_level: "medio",
       ...data,
     }));
     setTouched(new Set());
@@ -1073,7 +1063,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                   const active =
                     form.style === p.style &&
                     form.tone === p.tone &&
-                    form.differentiation_level === p.differentiation_level &&
                     (form.accent_color || "") === (p.accent_color || "") &&
                     (form.price_size || "auto") === (p.price_size || "auto");
                   return (
@@ -1118,7 +1107,7 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                 STYLES,
                 form.style,
                 (v) => update("style", v),
-                (v) => exampleImageUrl({ ...exampleCtx, style: v, tone: form.tone, level: form.differentiation_level, format: "post" }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: v, tone: form.tone, format: "post" }),
                 "grid-cols-2 sm:grid-cols-4",
               )}
             </div>
@@ -1129,19 +1118,8 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                 TONES,
                 form.tone,
                 (v) => update("tone", v),
-                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: v, level: form.differentiation_level, format: "post" }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: v, format: "post" }),
                 "grid-cols-2 sm:grid-cols-4",
-              )}
-            </div>
-
-            <div>
-              <label className="label">Kreativniveau</label>
-              {renderExampleCards(
-                LEVELS,
-                form.differentiation_level,
-                (v) => update("differentiation_level", v),
-                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: v, format: "post" }),
-                "grid-cols-3",
               )}
             </div>
 
@@ -1151,10 +1129,9 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                 PRICE_SIZES,
                 form.price_size || "auto",
                 (v) => update("price_size", v),
-                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: form.differentiation_level, format: "post", price_size: v }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, format: "post", price_size: v }),
                 "grid-cols-5",
               )}
-              <p className="mt-1.5 text-[11px] leading-4 text-slate-500">Unabhängig vom Kreativniveau — steuert nur die Größe des Preises.</p>
             </div>
 
             {accentPicker}
@@ -1165,7 +1142,7 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                 FORMATS,
                 form.format,
                 (v) => update("format", v),
-                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, level: form.differentiation_level, format: v }),
+                (v) => exampleImageUrl({ ...exampleCtx, style: form.style, tone: form.tone, format: v }),
                 "grid-cols-2 sm:grid-cols-4",
                 "contain",
               )}
@@ -1214,23 +1191,6 @@ export default function PromoForm({ onCreated, prefill }: Props) {
                   >
                     {tone.label}
                     <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-slate-400">{tone.meta}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="label">Ausdruck</label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {LEVELS.map((level) => (
-                  <button
-                    key={level.value}
-                    type="button"
-                    className={`rounded-lg border px-3 py-2 text-sm font-extrabold transition-all ${form.differentiation_level === level.value ? "border-edeka-blue bg-white text-edeka-blue ring-2 ring-edeka-blue/20" : "border-slate-200 bg-white text-slate-700 hover:border-edeka-blue/35"}`}
-                    onClick={() => update("differentiation_level", level.value)}
-                  >
-                    {level.label}
-                    <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-slate-400">{level.meta}</span>
                   </button>
                 ))}
               </div>

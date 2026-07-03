@@ -11,7 +11,6 @@ from fastapi import APIRouter, Response
 
 from app.schemas.promotion import (
     CreativeDirection,
-    DifferentiationLevel,
     EXPORT_FORMATS,
     FormatType,
     PriceSize,
@@ -24,7 +23,6 @@ from app.services.intake import normalize_price
 router = APIRouter(prefix="/api/examples", tags=["examples"])
 
 _TONES = {t.value for t in ToneType}
-_LEVELS = {d.value for d in DifferentiationLevel}
 _STYLES = {"edeka", "luxe", "editorial", "colorblock", "frischemarkt", "prospekt", "markttafel", "bio"}
 _FORMATS = {f.value for f in FormatType}
 _PRICE_SIZES = {p.value for p in PriceSize}
@@ -58,7 +56,6 @@ async def example(
     campaign_kind: str = "product",
     style: str = "edeka",
     tone: str = "fresco",
-    level: str = "medio",
     format: str = "post",
     product: str = "",
     price: str = "",
@@ -73,7 +70,6 @@ async def example(
 ):
     style = style.lower() if style.lower() in _STYLES else "edeka"
     tone = tone.lower() if tone.lower() in _TONES else "fresco"
-    level = level.lower() if level.lower() in _LEVELS else "medio"
     fmt = FormatType(format) if format in _FORMATS else FormatType.POST
     campaign_kind = "event" if campaign_kind == "event" else "product"
     price_size = price_size.lower() if price_size.lower() in _PRICE_SIZES else "auto"
@@ -101,14 +97,13 @@ async def example(
         product_image=product_image.strip() or None,
         style=style,
         tone=tone,
-        differentiation_level=level,
         format=fmt,
         accent_color=accent_color.strip() or None,
         price_size=price_size,
     )
 
     key = "|".join([
-        campaign_kind, style, tone, level, fmt.value, spec.product, spec.price, spec.old_price or "",
+        campaign_kind, style, tone, fmt.value, spec.product, spec.price, spec.old_price or "",
         spec.validity, spec.claim or "", spec.origin or "", spec.category or "",
         spec.product_image or "", accent_color.strip(), price_size,
     ])

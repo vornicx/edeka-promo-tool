@@ -25,7 +25,6 @@ export interface PromotionData {
   format: string;
   style: string;
   tone: string;
-  differentiation_level: string;
   accent_color?: string;
   price_size?: string;
   items?: PromoItemData[];
@@ -286,7 +285,6 @@ export interface ExampleParams {
   campaign_kind?: "product" | "event";
   style: string;
   tone: string;
-  level: string;
   format?: string;
   product?: string;
   price?: string;
