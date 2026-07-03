@@ -908,29 +908,35 @@ def _draw_price_star(
     accent: tuple[int, int, int],
     rot_deg: float = -8.0,
     include_statt: bool = True,
+    flat: bool = False,
 ):
-    """The classic 'Knallerpreis' star seal with the big price inside."""
+    """The classic 'Knallerpreis' star seal with the big price inside.
+    ``flat`` renders the Dezent variant: no shadow, gloss or gradient —
+    a crisp two-colour star, same metrics."""
     draw = ImageDraw.Draw(canvas)
     white = (255, 255, 255)
     rot = math.radians(rot_deg)
     n = 15
 
-    # Soft shadow under the star.
-    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(sh)
-    sd.ellipse((cx - radius, cy - radius + int(radius * 0.18), cx + radius, cy + radius + int(radius * 0.18)),
-               fill=(0, 20, 50, 70))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
+    if not flat:
+        # Soft shadow under the star.
+        sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh)
+        sd.ellipse((cx - radius, cy - radius + int(radius * 0.18), cx + radius, cy + radius + int(radius * 0.18)),
+                   fill=(0, 20, 50, 70))
+        canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
 
-    # Layered star: blue rim -> white -> gradient-yellow core (depth).
     _aa_polygon(canvas, _star_points(cx, cy, radius, radius * 0.80, n, rot), fill=primary)
-    _aa_polygon(canvas, _star_points(cx, cy, radius * 0.93, radius * 0.74, n, rot), fill=white)
-    _fill_gradient_shape(
-        canvas, _star_points(cx, cy, radius * 0.86, radius * 0.68, n, rot),
-        top=_lighten(accent, 0.30), bottom=_darken(accent, 0.18),
-    )
-    # Inner glossy highlight (upper third) for a 3D pop.
-    _draw_spotlight(canvas, cx, cy - int(radius * 0.22), int(radius * 0.55), (255, 255, 255), 90, falloff=1.6)
+    if flat:
+        _aa_polygon(canvas, _star_points(cx, cy, radius * 0.90, radius * 0.715, n, rot), fill=accent)
+    else:
+        # Layered star: rim -> white -> gradient core, plus a glossy highlight.
+        _aa_polygon(canvas, _star_points(cx, cy, radius * 0.93, radius * 0.74, n, rot), fill=white)
+        _fill_gradient_shape(
+            canvas, _star_points(cx, cy, radius * 0.86, radius * 0.68, n, rot),
+            top=_lighten(accent, 0.30), bottom=_darken(accent, 0.18),
+        )
+        _draw_spotlight(canvas, cx, cy - int(radius * 0.22), int(radius * 0.55), (255, 255, 255), 90, falloff=1.6)
     draw = ImageDraw.Draw(canvas)
 
     inner = int(radius * 0.72)
@@ -966,24 +972,28 @@ def _draw_price_disc(
     primary: tuple[int, int, int],
     accent: tuple[int, int, int],
     include_statt: bool = True,
+    flat: bool = False,
 ):
     """Round market price plate — the Frischemarkt twin of the price star.
-    ``primary`` fills the plate, ``accent`` is the price ink."""
+    ``primary`` fills the plate, ``accent`` is the price ink; ``flat`` drops
+    shadow and gloss for the Dezent variant."""
     draw = ImageDraw.Draw(canvas)
     white = (255, 255, 255)
 
-    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(sh)
-    sd.ellipse((cx - radius, cy - radius + int(radius * 0.16), cx + radius, cy + radius + int(radius * 0.16)),
-               fill=(0, 30, 14, 70))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
+    if not flat:
+        sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh)
+        sd.ellipse((cx - radius, cy - radius + int(radius * 0.16), cx + radius, cy + radius + int(radius * 0.16)),
+                   fill=(0, 30, 14, 70))
+        canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
 
     # Plate with a thin inner ring, like a chalk price plate on a market stall.
     _aa_polygon(canvas, _star_points(cx, cy, radius, radius, 60, 0), fill=primary)
     d = ImageDraw.Draw(canvas, "RGBA")
     ring = int(radius * 0.90)
     d.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=white, width=max(2, radius // 28))
-    _draw_spotlight(canvas, cx, cy - int(radius * 0.30), int(radius * 0.60), (255, 255, 255), 55, falloff=1.7)
+    if not flat:
+        _draw_spotlight(canvas, cx, cy - int(radius * 0.30), int(radius * 0.60), (255, 255, 255), 55, falloff=1.7)
     draw = ImageDraw.Draw(canvas)
 
     inner = int(radius * 0.74)
@@ -1007,27 +1017,40 @@ def _draw_price_disc(
     _draw_price_value(draw, cx, price_cy, int(inner * 1.8), price_h, _offer_value(spec), accent)
 
 
-def _draw_seal_echo(canvas: Image.Image, cx: int, cy: int, r: int,
-                    color: tuple[int, int, int], rings: int):
-    """Concentric rings radiating from the price seal — the Auffällig staging."""
-    if rings <= 0:
-        return
+def _draw_seal_rays(canvas: Image.Image, cx: int, cy: int, r: int,
+                    color: tuple[int, int, int], avoid=None,
+                    alpha: int = 120, rays: int = 22):
+    """Sunburst rays radiating from the price seal, fading out with distance —
+    the classic Knaller staging for Auffällig. ``avoid`` boxes (product photo,
+    badges, headline) are cut out of the rays so they never sit on content."""
+    R = int(r * 2.05)
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    for i in range(1, rings + 1):
-        rr = int(r * (1.14 + 0.20 * i))
-        d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr),
-                  outline=(*color, max(26, 92 - 32 * i)), width=max(2, int(r * 0.030)))
+    step = math.pi / rays
+    for i in range(rays):
+        a0 = 2 * step * i + 0.10
+        a1 = a0 + step * 0.60          # slim rays with clear gaps
+        d.polygon([(cx, cy),
+                   (cx + R * math.cos(a0), cy + R * math.sin(a0)),
+                   (cx + R * math.cos(a1), cy + R * math.sin(a1))], fill=(*color, alpha))
+    # Radial fade: strong at the seal, gone at the tips (small mask, resized).
+    fade = _radial_alpha(240, 255, 0, falloff=1.15).resize((R * 2, R * 2))
+    full = Image.new("L", canvas.size, 0)
+    full.paste(fade, (cx - R, cy - R))
+    fd = ImageDraw.Draw(full)
+    for b in (avoid or []):
+        if b:
+            fd.rectangle(b, fill=0)
+    layer.putalpha(ImageChops.multiply(layer.getchannel("A"), full))
     canvas.alpha_composite(layer)
 
 
 def _draw_sparkles(canvas: Image.Image, cx: int, cy: int, r: int,
                    color: tuple[int, int, int], count: int, avoid=None):
-    """Small four-point sparkles around the offer — the Auffällig staging.
-    Deterministic (no RNG) so re-renders stay identical; lateral angles keep
-    them off the statt line above and the validity pill below the seal, and
-    candidates that would land on an ``avoid`` box (product photo, badges)
-    are skipped in favour of the next free spot."""
+    """Chunky confetti around the offer — the Auffällig staging: a mix of
+    four-point sparkles and solid dots in two tones. Deterministic (no RNG)
+    so re-renders stay identical; candidates that would land on an ``avoid``
+    box (product photo, badges, burst) are skipped for the next free spot."""
     if count <= 0:
         return
     w, h = canvas.size
@@ -1035,23 +1058,31 @@ def _draw_sparkles(canvas: Image.Image, cx: int, cy: int, r: int,
     boxes = [b for b in (avoid or []) if b]
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    spots = [(196, 1.34), (348, 1.42), (158, 1.52), (14, 1.30), (212, 1.58), (332, 1.24),
-             (170, 1.30), (8, 1.52)]
+    bright = _lighten(color, 0.45)
+    #        angle, dist,  size,  star?
+    spots = [(196, 1.30, 0.110, True), (348, 1.44, 0.085, True), (158, 1.50, 0.065, False),
+             (14, 1.28, 0.095, True), (212, 1.56, 0.070, False), (332, 1.22, 0.060, False),
+             (170, 1.32, 0.090, True), (8, 1.55, 0.065, False), (152, 1.24, 0.075, True),
+             (24, 1.46, 0.060, False), (188, 1.62, 0.080, True), (340, 1.66, 0.070, False)]
     placed = 0
-    for i, (ang, dist) in enumerate(spots):
+    for i, (ang, dist, size, star) in enumerate(spots):
         if placed >= count:
             break
         a = math.radians(ang)
         sx, sy = cx + r * dist * math.cos(a), cy + r * dist * math.sin(a)
-        sr = r * (0.075 + 0.030 * (i % 3))
+        sr = r * size
         if not (pad + sr < sx < w - pad - sr and pad + sr < sy < h - pad - sr):
             continue
         if any(not (sx + sr < b[0] or sx - sr > b[2] or sy + sr < b[1] or sy - sr > b[3]) for b in boxes):
             continue
-        wj = sr * 0.34
-        d.polygon([(sx, sy - sr), (sx + wj, sy - wj), (sx + sr, sy), (sx + wj, sy + wj),
-                   (sx, sy + sr), (sx - wj, sy + wj), (sx - sr, sy), (sx - wj, sy - wj)],
-                  fill=(*color, 230))
+        c = color if placed % 2 == 0 else bright
+        if star:
+            wj = sr * 0.36
+            d.polygon([(sx, sy - sr), (sx + wj, sy - wj), (sx + sr, sy), (sx + wj, sy + wj),
+                       (sx, sy + sr), (sx - wj, sy + wj), (sx - sr, sy), (sx - wj, sy - wj)],
+                      fill=(*c, 240))
+        else:
+            d.ellipse((sx - sr * 0.62, sy - sr * 0.62, sx + sr * 0.62, sy + sr * 0.62), fill=(*c, 225))
         placed += 1
     canvas.alpha_composite(layer)
 
@@ -1365,6 +1396,14 @@ def _offer_column(
                 statt_outside = False
                 break
 
+    # Kreativniveau staging: at Auffällig a pool of light and sunburst rays
+    # sit behind the whole offer axis — under the statt line, seal and pill —
+    # while Dezent renders the seal flat and perfectly straight. The rays
+    # respect every reserved box (photo, badges, headline).
+    if lp and lp.rays:
+        _draw_spotlight(canvas, cx, cy, int(r * 1.85), _lighten(deco_color or rim, 0.35), 70)
+        _draw_seal_rays(canvas, cx, cy, r, deco_color or rim, avoid=avoid)
+
     if statt_outside:
         text = f"statt {spec.old_price}"
         b = draw.textbbox((0, 0), text, font=statt_font)
@@ -1376,16 +1415,14 @@ def _offer_column(
             (sx - th * 0.25, sy + th * 0.60, sx + tw + th * 0.25, sy + th * 0.40),
             fill=strike_color or RED, width=max(3, r // 40),
         )
-
-    # Kreativniveau staging: echo rings radiate from the seal at Auffällig,
-    # and the seal's tilt follows the level (Dezent stands perfectly straight).
-    if lp and lp.echo:
-        _draw_seal_echo(canvas, cx, cy, r, deco_color or rim, lp.echo)
+    flat = bool(lp and lp.flat)
     if disc:
-        _draw_price_disc(canvas, spec, cx, cy, r, rim, core, include_statt=not statt_outside)
+        _draw_price_disc(canvas, spec, cx, cy, r, rim, core,
+                         include_statt=not statt_outside, flat=flat)
     else:
         _draw_price_star(canvas, spec, cx, cy, r, rim, core,
-                         rot_deg=(lp.tilt if lp else -7.0), include_statt=not statt_outside)
+                         rot_deg=(lp.tilt if lp else -7.0), include_statt=not statt_outside,
+                         flat=flat)
 
     discount = _discount_percent(spec.old_price or "", spec.price)
     if discount:
@@ -1412,8 +1449,8 @@ def _offer_column(
         avoid = avoid + [(bx - br, by - br, bx + br, by + br)]  # keep sparkles off the badge
 
     _draw_validity_tag(canvas, spec, cx, int(cy + r + tag_h * 1.25), tag_h, tag_bg, tag_fg, angle=0.0)
-    if lp and lp.sparkle:
-        _draw_sparkles(canvas, cx, cy, r, deco_color or rim, lp.sparkle, avoid=avoid)
+    if lp and lp.confetti:
+        _draw_sparkles(canvas, cx, cy, r, deco_color or rim, lp.confetti, avoid=avoid)
     return cy
 
 
@@ -1886,17 +1923,18 @@ class LevelProfile:
     burst: float        # discount burst size ×
     depth: float        # shadow / spotlight / vignette intensity ×
     tilt: float         # price-seal tilt in degrees (0 = perfectly straight)
-    echo: int           # concentric echo rings behind the price seal
-    sparkle: int        # sparkle accents around the offer
+    flat: bool          # Dezent: flat seal & plate — no shadow, gloss, gradient
+    rays: bool          # Auffällig: sunburst rays + light pool behind the seal
+    confetti: int       # Auffällig: confetti accents around the offer
 
 
 def _level_profile(spec: PromotionSpec) -> LevelProfile:
     lv = _enum_val(spec.differentiation_level)
-    if lv == "bajo":     # Dezent: flat, calm, perfectly straight
-        return LevelProfile("bajo", 0.78, 0.55, 0.75, 0.35, 0.0, 0, 0)
-    if lv == "alto":     # Auffällig: staged — tilt, echo rings, sparkles, glow
-        return LevelProfile("alto", 1.32, 1.8, 1.25, 1.55, -10.0, 2, 4)
-    return LevelProfile("medio", 1.0, 1.0, 1.0, 1.0, -7.0, 0, 0)
+    if lv == "bajo":     # Dezent: flat design — calm, crisp, perfectly straight
+        return LevelProfile("bajo", 0.78, 0.55, 0.75, 0.30, 0.0, True, False, 0)
+    if lv == "alto":     # Auffällig: showtime — rays, confetti, tilt, deep glow
+        return LevelProfile("alto", 1.35, 1.8, 1.28, 1.60, -10.0, False, True, 5)
+    return LevelProfile("medio", 1.0, 1.0, 1.0, 1.0, -7.0, False, False, 0)
 
 
 def _themed_accent(spec: PromotionSpec, base: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -2802,11 +2840,11 @@ def _build_style_config(
 
     # --- Kreativniveau: staging only — glow depth, vignette and paper mood.
     #     Sizes (price, seal) belong exclusively to Preisgröße. ---
-    if level == "bajo":            # Dezent: flat, calm, airy
-        halo = int(halo * 0.40)
-        spot = int(spot * 0.60)
-        vignette = int(vignette * 0.45)
-        bg_light += 0.05
+    if level == "bajo":            # Dezent: flat design — calm, crisp, airy
+        halo = int(halo * 0.25)
+        spot = int(spot * 0.45)
+        vignette = int(vignette * 0.20)
+        bg_light += 0.06
     elif level == "alto":          # Auffällig: deep glow, heavy vignette
         halo = int(halo * 1.55)
         spot = int(spot * 1.30)
