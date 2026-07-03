@@ -956,6 +956,18 @@ def _draw_price_star(
                       int(price_h * (0.5 + 0.5 * pinch)), _offer_value(spec), primary)
 
 
+def _scallop_points(cx: int, cy: int, r: int, petals: int = 18,
+                    depth: float = 0.075, steps: int = 540) -> list[tuple[float, float]]:
+    """Outline of a scallop-edged disc: ``petals`` rounded bumps whose cusps
+    sit ``depth`` inside the outer radius — the classic market price plate."""
+    pts = []
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        rho = r * (1 - depth + depth * abs(math.cos(petals * t / 2)) ** 0.8)
+        pts.append((cx + rho * math.cos(t), cy + rho * math.sin(t)))
+    return pts
+
+
 def _draw_price_disc(
     canvas: Image.Image,
     spec: PromotionSpec,
@@ -966,8 +978,10 @@ def _draw_price_disc(
     accent: tuple[int, int, int],
     include_statt: bool = True,
 ):
-    """Round market price plate — the Frischemarkt twin of the price star.
-    ``primary`` fills the plate, ``accent`` is the price ink."""
+    """Scallop-edged market price plate — the Frischemarkt twin of the price
+    star, layered with the same care: die-cut white sticker rim, gradient
+    plate, thin inner ring and a glossy top light. The scalloped edge echoes
+    the awning valance. ``primary`` fills the plate, ``accent`` is the ink."""
     draw = ImageDraw.Draw(canvas)
     white = (255, 255, 255)
 
@@ -977,12 +991,16 @@ def _draw_price_disc(
                fill=(0, 30, 14, 70))
     canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(radius=max(8, radius // 12))))
 
-    # Plate with a thin inner ring, like a chalk price plate on a market stall.
-    _aa_polygon(canvas, _star_points(cx, cy, radius, radius, 60, 0), fill=primary)
+    # Die-cut sticker: white scalloped underlay -> gradient plate -> inner ring.
+    _aa_polygon(canvas, _scallop_points(cx, cy, int(radius * 1.045)), fill=white)
+    _fill_gradient_shape(
+        canvas, _scallop_points(cx, cy, radius),
+        top=_lighten(primary, 0.18), bottom=_darken(primary, 0.16),
+    )
     d = ImageDraw.Draw(canvas, "RGBA")
-    ring = int(radius * 0.90)
-    d.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=white, width=max(2, radius // 28))
-    _draw_spotlight(canvas, cx, cy - int(radius * 0.30), int(radius * 0.60), (255, 255, 255), 55, falloff=1.7)
+    ring = int(radius * 0.82)
+    d.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=white, width=max(2, radius // 24))
+    _draw_spotlight(canvas, cx, cy - int(radius * 0.30), int(radius * 0.62), (255, 255, 255), 65, falloff=1.7)
     draw = ImageDraw.Draw(canvas)
 
     inner = int(radius * 0.74)
