@@ -142,11 +142,6 @@ export default function Home() {
     showToast("success", "Aktion ins Briefing übernommen");
   };
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
-  };
-
   return (
     <div className="min-h-screen bg-app">
       <Confetti active={showConfetti} />
@@ -204,14 +199,6 @@ export default function Home() {
                 {sessionId ? `Schritt ${step}/${STEPS.length}` : "Bereit"}
               </span>
             </div>
-            <button type="button" className="btn-header hidden md:inline-flex" onClick={handleLogout}>
-              Abmelden
-            </button>
-            <button type="button" className="icon-btn-header md:hidden" aria-label="Abmelden" onClick={handleLogout}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 7l5 5-5 5M20 12H9m1-8H6a2 2 0 00-2 2v12a2 2 0 002 2h4" />
-              </svg>
-            </button>
           </div>
         </div>
       </header>
