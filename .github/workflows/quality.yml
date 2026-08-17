@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python tests/smoke.py 2>&1 | tee smoke.log
+          PYTHONPATH=. python tests/smoke.py 2>&1 | tee smoke.log
           status=${PIPESTATUS[0]}
           exit $status
       - name: Upload smoke diagnostics
