@@ -4,7 +4,7 @@ Herramienta web de creación de promociones con IA para EDEKA Mühlenbein.
 
 ## Despliegue web con login
 
-El despliegue público sirve la landing en `/` y protege el estudio web en `/studio` con contraseña. La landing habla de la herramienta y lleva a `/login?next=/studio`; no debe presentarse como descarga desktop.
+El despliegue público sirve la landing en `/` y protege el estudio web en `/studio` con contraseña. La landing lleva a `/login?next=/studio`; el resto de páginas y APIs quedan detrás de la cookie de sesión.
 
 Variables en Vercel:
 
@@ -13,12 +13,34 @@ Variables en Vercel:
 
 La sesión dura 12 horas. Para desarrollo local puedes poner esas variables en `frontend/.env.local`.
 
+La API de ajustes nunca devuelve el API key completo al navegador: solo indica si existe y muestra una versión enmascarada.
+
+## Persistencia en Railway
+
+Los datos mutables del servicio se guardan bajo `PROMO_DATA_DIR`. En Railway, si no se define la variable, el valor por defecto es:
+
+```text
+/data/edeka-promo-tool
+```
+
+Para que ajustes de IA, productos subidos y recursos generados sobrevivan a reinicios y despliegues, monta un **Railway Volume en `/data`**. También puedes definir `PROMO_DATA_DIR` si prefieres otro punto de montaje.
+
+Para limitar el backend a los frontends esperados puedes usar:
+
+```text
+PROMO_ALLOWED_ORIGINS=https://edekamuhlenbein.vercel.app
+```
+
+Se pueden añadir varios orígenes separados por comas.
+
 ## Uso del cliente
+
+El flujo habitual está pensado para ser rápido: producto, precio, periodo, imagen y generación. El formulario conserva opciones de diseño, formatos, campañas múltiples y KI-Design cuando hacen falta, sin cambiar el flujo básico que ya usa el cliente.
 
 El cliente no necesita instalar Python ni Node.js si recibe el `.exe` generado.
 
 1. Ejecutar `edeka-promo-tool.exe`
-2. Abrir el apartado **Ajustes IA**
+2. Abrir el apartado **Ajustes IA** si quiere usar IA
 3. Pegar su API key
 4. Elegir proveedor/modelo
 5. Guardar y crear promociones
@@ -93,6 +115,20 @@ cd .. && bash start.sh
 
 La API key se configura desde el botón **Ajustes IA** en la interfaz.
 
+## Calidad
+
+El workflow `Quality checks` valida en cada pull request:
+
+- build de producción del frontend Next.js;
+- arranque del backend;
+- que el API key no se exponga;
+- creación de una promoción local;
+- composición y selección de variantes;
+- recuperación de la imagen generada;
+- exportación final.
+
+También se ejecuta al hacer push a `main`.
+
 ## URLs
 
 - Frontend: http://localhost:3001
@@ -109,7 +145,7 @@ La API key se configura desde el botón **Ajustes IA** en la interfaz.
 
 ## Estructura del proyecto
 
-```
+```text
 edeka-promo-tool/
 ├── backend/          # Python FastAPI
 ├── frontend/         # Next.js + TypeScript
