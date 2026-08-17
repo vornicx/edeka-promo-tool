@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # ---------------------------------------------------------------------------
 
 class SettingsResponse(BaseModel):
+    # Kept for frontend backwards compatibility, but never contains the secret.
     api_key: str = ""
     selected_model: str = DEFAULT_MODEL
     image_model: str = DEFAULT_IMAGE_MODEL
@@ -63,7 +64,7 @@ async def list_models() -> list[ModelInfo]:
 async def get_settings() -> SettingsResponse:
     effective = get_effective_ai_settings()
     return SettingsResponse(
-        api_key=effective.api_key,
+        api_key="",
         selected_model=effective.selected_model,
         image_model=effective.image_model,
         enabled=effective.enabled,
@@ -87,9 +88,9 @@ async def update_settings(request: SaveSettingsRequest) -> SettingsResponse:
     if not selected_model:
         raise HTTPException(status_code=400, detail="Modell auswählen")
 
-    # Validate model exists in catalog
+    # Validate model exists in catalog. Custom OpenRouter model IDs remain
+    # accepted for backwards compatibility.
     if not get_model_by_id(selected_model):
-        # Allow any model ID, just warn
         pass
 
     image_model = request.image_model.strip() or previous.image_model or DEFAULT_IMAGE_MODEL
@@ -97,7 +98,7 @@ async def update_settings(request: SaveSettingsRequest) -> SettingsResponse:
     save_user_settings(next_settings)
 
     return SettingsResponse(
-        api_key=next_settings.api_key,
+        api_key="",
         selected_model=next_settings.selected_model,
         image_model=next_settings.image_model,
         enabled=next_settings.enabled,

@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI
@@ -9,6 +10,18 @@ from app.routes.settings import router as settings_router
 from app.routes.products import router as products_router
 from app.routes.examples import router as examples_router
 
+
+def _allowed_origins() -> list[str]:
+    configured = os.environ.get("PROMO_ALLOWED_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    return [
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "https://edekamuhlenbein.vercel.app",
+    ]
+
+
 app = FastAPI(
     title="EDEKA Mühlenbein Promo Tool",
     description="Tool zur Erstellung professioneller EDEKA-Aktionsmotive",
@@ -17,10 +30,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(promo_router)

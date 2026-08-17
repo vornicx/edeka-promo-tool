@@ -38,7 +38,7 @@ const features = [
 ];
 
 const steps = [
-  { number: "1", title: "Studio öffnen", text: "Direkt ohne Anmeldung im Studio starten." },
+  { number: "1", title: "Anmelden", text: "Mit dem Zugangscode sicher ins Promo Studio starten." },
   { number: "2", title: "Angebot eintragen", text: "Produkt, Preis, Zeitraum und Format auswählen." },
   { number: "3", title: "Motiv speichern", text: "Promotion prüfen und als fertige PNG-Datei exportieren." },
 ];
@@ -74,8 +74,8 @@ export default function LandingPage() {
           </span>
         </Link>
 
-        <Link href="/studio" className="btn-primary w-auto px-4">
-          <span>Zum Studio</span>
+        <Link href="/login?next=/studio" className="btn-primary w-auto px-4">
+          <span>Anmelden</span>
         </Link>
       </header>
 
@@ -89,8 +89,8 @@ export default function LandingPage() {
             Das Promo Studio macht aus Produkt, Preis und Aktionszeitraum ein fertiges EDEKA-Motiv für Social Media oder Plakat. Alles läuft in drei einfachen Schritten.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/studio" className="btn-primary sm:w-auto">
-              <span>Zum Studio</span>
+            <Link href="/login?next=/studio" className="btn-primary sm:w-auto">
+              <span>Zum geschützten Studio</span>
               <ArrowIcon />
             </Link>
             <a href="#beispiele" className="btn-ghost sm:w-auto">

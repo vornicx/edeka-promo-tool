@@ -1,16 +1,12 @@
 import json
 import logging
-import os
-import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-
-APP_NAME = "EDEKA Promo Tool"
 
 FREE_FALLBACK_MODELS = [
     "openrouter/free",                        # auto-selects best free model
@@ -46,16 +42,10 @@ def _clean_text(value: Any, fallback: str = "") -> str:
 
 
 def get_user_config_dir() -> Path:
-    if bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER")):
-        p = Path("/tmp/data") / "edeka-promo-tool"
-        p.mkdir(parents=True, exist_ok=True)
-        return p
-    if sys.platform.startswith("win"):
-        root = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(root) / APP_NAME
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / APP_NAME
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "edeka-promo-tool"
+    # Keep settings beside the rest of the mutable application data. On
+    # Railway this resolves to /data/edeka-promo-tool by default, so attaching
+    # a volume at /data makes API settings and uploaded products persistent.
+    return settings.data_dir
 
 
 def get_settings_path() -> Path:
