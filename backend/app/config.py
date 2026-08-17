@@ -4,7 +4,12 @@ from pathlib import Path
 
 
 def _is_cloud() -> bool:
-    return bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("VERCEL") == "1" or os.environ.get("RENDER"))
+    return bool(
+        os.environ.get("PROMO_DATA_DIR")
+        or os.environ.get("RAILWAY_ENVIRONMENT")
+        or os.environ.get("VERCEL") == "1"
+        or os.environ.get("RENDER")
+    )
 
 
 _APP_DIR = Path(__file__).resolve().parent
