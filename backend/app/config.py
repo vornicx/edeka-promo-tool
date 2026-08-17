@@ -12,14 +12,30 @@ _APP_DIR = Path(__file__).resolve().parent
 
 def _user_data_dir() -> Path:
     app_name = "EDEKA Promo Tool"
-    if _is_cloud():
-        return Path("/tmp/data") / "edeka-promo-tool"
     if sys.platform.startswith("win"):
         root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         return Path(root or Path.home() / "AppData" / "Local") / app_name
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / app_name
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "edeka-promo-tool"
+
+
+def _cloud_data_dir() -> Path:
+    configured = os.environ.get("PROMO_DATA_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+
+    # Railway volumes can be mounted at /data. Keeping all mutable app state
+    # below this path makes settings and uploaded products survive deploys once
+    # a volume is attached. Without a volume the app still works, but the
+    # container filesystem remains ephemeral.
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        return Path("/data") / "edeka-promo-tool"
+
+    # Vercel/Render serverless filesystems are ephemeral and only /tmp is
+    # guaranteed writable. The web app remains functional there, while durable
+    # state should live on Railway (or another persistent service).
+    return Path("/tmp/data") / "edeka-promo-tool"
 
 
 class Settings(BaseSettings):
@@ -41,13 +57,14 @@ class Settings(BaseSettings):
         return _APP_DIR.parent
 
     @property
+    def data_dir(self) -> Path:
+        p = _cloud_data_dir() if _is_cloud() else _user_data_dir()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
     def output_dir(self) -> Path:
-        if _is_cloud():
-            p = Path("/tmp/output")
-        else:
-            # Always use the per-user data directory (also in dev) so uploaded
-            # products and settings live outside the repo and persist safely.
-            p = _user_data_dir() / "output"
+        p = self.data_dir / "output"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -58,7 +75,7 @@ class Settings(BaseSettings):
     @property
     def backgrounds_dir(self) -> Path:
         if _is_cloud():
-            p = Path("/tmp/backgrounds")
+            p = self.data_dir / "backgrounds"
         else:
             p = self.assets_dir / "backgrounds"
         p.mkdir(parents=True, exist_ok=True)
